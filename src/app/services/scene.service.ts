@@ -125,6 +125,9 @@ export class SceneService {
     if (this.host) return;
     const host = new SceneHost(container);
     this.host = host;
+    // The canvas must fill its container: three.js' default style is "display:block" without width/height, so on
+    // HiDPI screens it renders at device pixels and covers only a top-left part of the page — the rest stays black.
+    Object.assign(host.canvas.style, { position: 'absolute', inset: '0', width: '100%', height: '100%' } as CSSStyleDeclaration);
     this.xray = new XRay(host.site);
     this.xray.enabled = this.view.xray();
     this.sim.world = host.site.collider;
@@ -294,7 +297,12 @@ export class SceneService {
       placeCamera(vp.camera, vp.type, vp.state, subject, opts, dt);
       host.renderToCanvas(vp.camera, vp.type, ctx, vp.canvas, w, h, PANEL_MAX_PIXELS);
     }
-    if (this.view.mainSource() === '3d') host.renderMain(this.view.cameraView(), ctx);
+    if (this.view.mainSource() === '3d') {
+      // The panels above drew into *corners* of the shared canvas and copied out; the full-page view must then be
+      // redrawn at full size, or whatever was in the corner last frame stays stretched over the page (black screen).
+      host.resizeMain(innerWidth, innerHeight);
+      host.renderMain(this.view.cameraView(), ctx);
+    }
   }
 
   private makeViewport(type: ViewportType): Viewport {

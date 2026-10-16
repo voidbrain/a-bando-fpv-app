@@ -23,7 +23,9 @@ import { PANEL_BY_ID, type PanelId } from '../panel-defs';
     '[style.right.px]': 'state().x === null ? (def().anchor.right ?? null) : null',
     '[style.bottom.px]': 'state().y === null ? (def().anchor.bottom ?? null) : null',
     '[style.width.px]': 'panelWidth()',
-    '[style.height.px]': 'panelHeight()',
+    // collapsed: drop the remembered height so the box hugs the title bar instead of staying big over the page;
+    // expanded (or ghost-collapsed): exactly the remembered / default height — never the transient content height.
+    '[style.height]': 'state().minimized ? "auto" : panelHeight()',
     '(pointerdown)': 'raise()',
   },
   template: `
@@ -103,6 +105,10 @@ import { PANEL_BY_ID, type PanelId } from '../panel-defs';
     :host(.min) .body {
       display: none;
     }
+    /* collapsed panels are not resizable (the remembered expanded size must survive untouched) */
+    :host(.min.resizable) {
+      resize: none;
+    }
     :host(.min) .grip {
       border-bottom: 0;
     }
@@ -126,12 +132,15 @@ export class Panel {
 
   /**
    * Height: always explicit for resizable panels so a re-opened one gets exactly its saved height back — never the
-   * transient content height of the first frames after un-hiding. Collapsed panels keep their size (CSS hides the body).
+   * transient content height of the first frames after un-hiding. The template overrides it with "auto" while collapsed.
    */
   protected panelHeight(): number | null {
     const d = this.def();
     if (!d.resizable) return null;
-    return this.state().h ?? d.height ?? null;
+    // never restore a size recorded while the panel was collapsed (a few px high): reopen at the default instead
+    const h = this.state().h;
+    if (h !== null && h < 100) return d.height ?? null;
+    return h ?? d.height ?? null;
   }
 
   constructor() {
@@ -141,6 +150,8 @@ export class Panel {
       const el = this.host.nativeElement;
       let first = true;
       let prevHidden = el.hidden;
+      /** True when the body is hidden by CSS: the panel is collapsed or fully transparent in ghost mode. */
+      const chromeHidden = (): boolean => el.classList.contains('min') || el.classList.contains('ghost');
       const ro = new ResizeObserver(() => {
         if (el.hidden) {
           prevHidden = true;
@@ -148,26 +159,29 @@ export class Panel {
         }
         const justReopened = prevHidden;
         prevHidden = false;
+        const s = untracked(() => this.state());
+        // While collapsed (or ghosted with no visible body) the measured height is only the title bar. It must NEVER
+        // be adopted into the remembered expanded size — that is what made panels reopen at the wrong height.
+        if (chromeHidden()) return;
         if (first && !justReopened) {
           first = false;
           return;
         }
         const w = Math.round(el.offsetWidth);
         const h = Math.round(el.offsetHeight);
-        const s = untracked(() => this.state());
         const savedW = s.w ?? this.def().width;
         const savedH = s.h ?? this.def().height;
         // Re-opening a panel reports transient sizes for a frame or two (the browser lays it out before the saved
-        // inline styles settle), and collapsing / expanding changes the measured height for the same reason. Never
-        // persist those: re-check after two frames and only then, if the element really disagrees with the saved
-        // size, adopt what the user sees.
+        // inline styles settle). Never persist those: re-check after two frames — and only if the element is still
+        // expanded and really disagrees with the saved size — adopt what the user sees.
         if (justReopened || (savedW !== undefined && savedH !== undefined && w > 0 && h > 0 && (Math.abs(w - savedW) > 2 || Math.abs(h - savedH) > 2) && !this.dragging)) {
           requestAnimationFrame(() =>
             requestAnimationFrame(() => {
-              if (el.hidden) return;
+              if (el.hidden || chromeHidden() || this.dragging) return; // collapsed mid-flight: never store the title-bar height
               const w2 = Math.round(el.offsetWidth);
               const h2 = Math.round(el.offsetHeight);
-              if (w2 <= 0 || h2 <= 0) return;
+              // a collapsed panel measures ~one title bar: refuse anything below the sane minimum instead of saving it
+              if (w2 < 60 || h2 < 100) return;
               if (savedW !== undefined && savedH !== undefined && Math.abs(w2 - savedW) <= 2 && Math.abs(h2 - savedH) <= 2) return; // settled back to the saved size
               this.layout.resizeTo(this.id(), w2, h2);
             }),
@@ -176,7 +190,6 @@ export class Panel {
           return;
         }
         first = false;
-        if (s.minimized) return; // collapsed: any measured height is the title bar, never save it
         if (w > 0 && h > 0 && (Math.abs(w - (s.w ?? this.def().width ?? 0)) > 1 || Math.abs(h - (s.h ?? this.def().height ?? 0)) > 1)) this.layout.resizeTo(this.id(), w, h);
       });
       ro.observe(el);
