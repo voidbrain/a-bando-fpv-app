@@ -57,6 +57,13 @@
           },
           "defaultConfiguration": "production"
         },
+        "deploy": {
+          "builder": "angular-cli-ghpages:deploy",
+          "options": {
+            "browserCache": 3600,
+            "noSilent": true
+          }
+        },
         "serve": {
           "builder": "@angular/build:dev-server",
           "configurations": {
