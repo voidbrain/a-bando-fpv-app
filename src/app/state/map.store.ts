@@ -1,9 +1,13 @@
 import { patchState, signalStore, withComputed, withHooks, withMethods, withState } from '@ngrx/signals';
-import { computed } from '@angular/core';
+import { computed, inject } from '@angular/core';
 import { siteOrigin } from '../core/constants';
-import { persistState, savedState } from './persist';
+import { StorageService } from '../services/storage.service';
+import { persistState } from './persist';
 
 export type MapBackground = 'img' | 'goog' | 'osm' | 'none';
+
+/** Backgrounds with a live map tile source (as opposed to the static satellite screenshot). */
+export const isLiveBackground = (b: MapBackground): boolean => b === 'goog' || b === 'osm';
 
 export interface MapState {
   background: MapBackground;
@@ -28,7 +32,20 @@ export const osmUrlFor = (lat: number, lon: number): string => {
   return `https://www.openstreetmap.org/export/embed.html?bbox=${(lon - dLon).toFixed(6)}%2C${(lat - dLat).toFixed(6)}%2C${(lon + dLon).toFixed(6)}%2C${(lat + dLat).toFixed(6)}&layer=mapnik&marker=${lat.toFixed(6)}%2C${lon.toFixed(6)}`;
 };
 const KEY = 'abando-ng-map';
-const DEFAULTS: MapState = { background: 'img', overlayOpacity: 0.6, align: false, scale: { ...MAP_DEFAULT_SCALE }, rotation: 0, dx: 0, dz: 0, googleUrl: googleUrlFor(45.528698, 12.133305) };
+/** Fresh installs start on the live OpenStreetMap backdrop, not the shipped satellite screenshot. */
+const DEFAULTS: MapState = { background: 'osm', overlayOpacity: 0.6, align: false, scale: { ...MAP_DEFAULT_SCALE }, rotation: 0, dx: 0, dz: 0, googleUrl: googleUrlFor(45.528698, 12.133305) };
+
+/**
+ * Merge a persisted snapshot with the defaults. Older builds persisted `background: 'img'` (the fixed screenshot),
+ * which would otherwise keep overriding the new live-map default across reloads; those get migrated to 'osm'.
+ * A deliberate choice of Google or 3D-only is respected as-is.
+ */
+export function mergeMapState(saved: Partial<MapState> | null | undefined): MapState {
+  const s = saved ?? {};
+  const merged: MapState = { ...DEFAULTS, ...s, scale: { ...DEFAULTS.scale, ...(s.scale ?? {}) } };
+  if (merged.background === 'img') merged.background = 'osm';
+  return merged;
+}
 
 /** Accepts an embed URL or the whole `<iframe ...>` snippet; returns a clean Google Maps URL or null. */
 export function parseGoogleEmbed(input: string): string | null {
@@ -41,7 +58,18 @@ export function parseGoogleEmbed(input: string): string | null {
 
 export const MapStore = signalStore(
   { providedIn: 'root' },
-  withState(() => savedState(KEY, DEFAULTS)),
+  withState(() => {
+    // Not savedState(): old builds persisted background 'img' (the fixed screenshot); mergeMapState migrates that
+    // to the live OpenStreetMap backdrop while keeping every other saved alignment value.
+    const raw = inject(StorageService).readRaw(KEY);
+    let saved: Partial<MapState> | null = null;
+    try {
+      saved = raw ? (JSON.parse(raw) as Partial<MapState>) : null;
+    } catch {
+      saved = null;
+    }
+    return mergeMapState(saved);
+  }),
   withMethods((store) => ({
     setBackground: (background: MapBackground) => patchState(store, { background }),
     setOverlayOpacity: (overlayOpacity: number) => patchState(store, { overlayOpacity }),
