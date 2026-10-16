@@ -1,13 +1,26 @@
+import { computed, signal } from '@angular/core';
 import type { Calibration, GeoPoint } from './models';
 
 export const GRAVITY = 9.81;
 /** Altitude above sea level assumed for the simulator's GPS log, metres. */
 export const SIM_BASE_ALT = 8;
 
-/** Geographic origin of the local frame (centre of the store). */
-export const SITE_ORIGIN: GeoPoint = { lat: 45.528698, lon: 12.133305 };
+/** Geographic origin of the local frame. Default: centre of the shipped site model (the abandoned store). */
+export const DEFAULT_SITE_ORIGIN: GeoPoint = { lat: 45.528698, lon: 12.133305 };
 export const METRES_PER_DEG_LAT = 111132;
-export const METRES_PER_DEG_LON = 111320 * Math.cos((SITE_ORIGIN.lat * Math.PI) / 180);
+
+/**
+ * The geographic origin of the *active* site. {@link SiteService} writes it whenever a generated / stored site is
+ * loaded, so geo conversions, GPS logs and map URLs follow the site instead of being hard-coded to one address.
+ */
+const originSignal = signal<GeoPoint>(DEFAULT_SITE_ORIGIN);
+export const siteOrigin = computed(() => originSignal());
+export const setSiteOrigin = (p: GeoPoint): void => originSignal.set({ lat: p.lat, lon: p.lon });
+
+/** @deprecated the live origin is {@link siteOrigin}; kept for the shipped default site. */
+export const SITE_ORIGIN: GeoPoint = DEFAULT_SITE_ORIGIN;
+/** @deprecated use {@link metresPerDegLon}(lat) from core/geo. */
+export const METRES_PER_DEG_LON = 111320 * Math.cos((DEFAULT_SITE_ORIGIN.lat * Math.PI) / 180);
 
 /**
  * Default calibration, solved from two real corners (greenhouse NW and store SE) so that logged GPS paths

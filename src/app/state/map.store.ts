@@ -1,4 +1,6 @@
-import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
+import { patchState, signalStore, withComputed, withHooks, withMethods, withState } from '@ngrx/signals';
+import { computed } from '@angular/core';
+import { siteOrigin } from '../core/constants';
 import { persistState, savedState } from './persist';
 
 export type MapBackground = 'img' | 'goog' | 'osm' | 'none';
@@ -19,10 +21,14 @@ export interface MapState {
 }
 
 export const MAP_DEFAULT_SCALE: Record<MapBackground, number> = { img: 0.205, goog: 0.42, osm: 0.42, none: 0.6 };
-export const GOOGLE_DEFAULT_URL = 'https://maps.google.com/maps?q=45.528698,12.133305&t=k&z=18&output=embed';
-export const OSM_URL = 'https://www.openstreetmap.org/export/embed.html?bbox=12.1305%2C45.5262%2C12.1362%2C45.5312&layer=mapnik';
+/** Live-map URLs follow the *active* site origin (generated sites move; the builtin one keeps the old numbers). */
+export const googleUrlFor = (lat: number, lon: number): string => `https://maps.google.com/maps?q=${lat},${lon}&t=k&z=18&output=embed`;
+export const osmUrlFor = (lat: number, lon: number): string => {
+  const dLat = 0.0025, dLon = 0.0028;
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${(lon - dLon).toFixed(6)}%2C${(lat - dLat).toFixed(6)}%2C${(lon + dLon).toFixed(6)}%2C${(lat + dLat).toFixed(6)}&layer=mapnik&marker=${lat.toFixed(6)}%2C${lon.toFixed(6)}`;
+};
 const KEY = 'abando-ng-map';
-const DEFAULTS: MapState = { background: 'img', overlayOpacity: 0.6, align: false, scale: { ...MAP_DEFAULT_SCALE }, rotation: 0, dx: 0, dz: 0, googleUrl: GOOGLE_DEFAULT_URL };
+const DEFAULTS: MapState = { background: 'img', overlayOpacity: 0.6, align: false, scale: { ...MAP_DEFAULT_SCALE }, rotation: 0, dx: 0, dz: 0, googleUrl: googleUrlFor(45.528698, 12.133305) };
 
 /** Accepts an embed URL or the whole `<iframe ...>` snippet; returns a clean Google Maps URL or null. */
 export function parseGoogleEmbed(input: string): string | null {
@@ -46,7 +52,16 @@ export const MapStore = signalStore(
     nudge: (dx: number, dz: number) => patchState(store, (s) => ({ dx: s.dx + dx, dz: s.dz + dz })),
     setOffset: (dx: number, dz: number) => patchState(store, { dx, dz }),
     setGoogleUrl: (googleUrl: string) => patchState(store, { googleUrl }),
+    /** Point both live backgrounds at a new location (used when a generated site is loaded). */
+    locate: (lat: number, lon: number) => patchState(store, { googleUrl: googleUrlFor(lat, lon) }),
     resetAlignment: () => patchState(store, { scale: { ...MAP_DEFAULT_SCALE }, rotation: 0, dx: 0, dz: 0 }),
+  })),
+  withComputed(() => ({
+    /** The OpenStreetMap embed for the active site (display only; the data behind the model comes from Overpass). */
+    osmUrl: computed(() => {
+      const o = siteOrigin();
+      return osmUrlFor(o.lat, o.lon);
+    }),
   })),
   withHooks((store) => {
     persistState(store, KEY);

@@ -7,7 +7,7 @@ import { SceneService } from '../../services/scene.service';
 import { ToastService } from '../../services/toast.service';
 import { CalibrationStore } from '../../state/calibration.store';
 import { LayoutStore } from '../../state/layout.store';
-import { MapStore, OSM_URL, parseGoogleEmbed, type MapBackground } from '../../state/map.store';
+import { MapStore, parseGoogleEmbed, type MapBackground } from '../../state/map.store';
 import { checkedFrom, numberFrom, selectedFrom } from '../dom';
 import { Panel } from '../panel/panel';
 
@@ -108,7 +108,7 @@ export class MapPanel {
   private readonly stage = viewChild.required<ElementRef<HTMLElement>>('stage');
   protected readonly mapImage = this.mapService.image;
   protected readonly live = computed(() => this.map.background() === 'goog' || this.map.background() === 'osm');
-  protected readonly frameUrl = computed<SafeResourceUrl>(() => this.sanitizer.bypassSecurityTrustResourceUrl(this.map.background() === 'goog' ? this.map.googleUrl() : OSM_URL));
+  protected readonly frameUrl = computed<SafeResourceUrl>(() => this.sanitizer.bypassSecurityTrustResourceUrl(this.map.background() === 'goog' ? this.map.googleUrl() : this.map.osmUrl()));
   protected readonly note = signal(NOTES.img);
   protected readonly bg = (e: Event): MapBackground => selectedFrom(e) as MapBackground;
   protected readonly num = numberFrom;
