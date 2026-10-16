@@ -196,17 +196,39 @@ export function uid(prefix = 'site'): string {
 }
 
 /**
- * Generate a starter site from a location: one main building sized from the footprint guess (or a plausible default),
- * an annex and greenhouse behind it, pads, roads and a seeded tree ring. Everything stays editable afterwards.
+ * A blank canvas at `origin`: no buildings, just a take-off pad on open ground. This is what the app starts with —
+ * every model comes from generating a site from a real location (OSM data) or from the user's own edits.
+ */
+export function emptySpec(origin: { lat: number; lon: number } = { lat: 0, lon: 0 }, name = 'Empty site'): SiteSpec {
+  return {
+    version: 1,
+    id: uid(),
+    name,
+    createdAt: Date.now(),
+    origin: { lat: origin.lat, lon: origin.lon },
+    bearingDeg: 0,
+    genScale: 1,
+    groundColor: '#789b52',
+    buildings: [],
+    pads: [{ x: -14, z: 0, w: 12, d: 12, color: '#a9aaa0' }],
+    trees: [],
+    seed: 7,
+    extent: 220,
+    droneStart: { x: -14, z: 0 },
+    calibCorners: { p1: { x: -60, z: -60 }, p2: { x: 60, z: 60 } },
+  };
+}
+
+/**
+ * Generate a starter site from a location when no OSM footprint data is available: one main building sized from the
+ * footprint guess (or a plausible default), a take-off pad in front of it and a seeded tree ring. No annex /
+ * greenhouse attached — everything else comes from the real data or the editor.
  */
 export function generateSite(info: LocationInfo, opts: { scale?: number; seed?: number } = {}): SiteSpec {
   const k = clampNum(opts.scale ?? 1, 0.2, 5);
   const BL = clampNum((info.footprintLength ?? 120) * k, 30, 400);
   const BW = clampNum((info.footprintWidth ?? BL * 0.36) * k, 12, BL * 0.9);
   const EH = clampNum(BW * 0.105, 3.5, 12);
-  const AL = clampNum(BL * 0.37, 10, BW * 3);
-  const AW = clampNum(BW * 0.36, 8, 30);
-  const GL = AL, GW = AW;
   const rnd = createRandom(opts.seed ?? 7);
 
   const vaultCount = Math.max(1, Math.round(BW / 13.75));
@@ -245,59 +267,11 @@ export function generateSite(info: LocationInfo, opts: { scale?: number; seed?: 
     ],
   };
 
-  const annex: BuildingSpec = {
-    id: 'annex',
-    name: 'Annex',
-    pos: { x: -(BW / 2 + AL / 2 - BW * 0.12), z: -(BL / 2 + AW / 2) },
-    rotDeg: 0,
-    length: AL,
-    width: AW,
-    color: '#d7d0bd',
-    levels: [
-      {
-        baseY: 0,
-        height: EH * 1.12,
-        sides: { n: true, s: true, e: true, w: true },
-        doors: {
-          n: [
-            { kind: 'door', c: AL * 0.21, w: 2.2, h: 2.6 },
-            { kind: 'door', c: AL * 0.5, w: 2.2, h: 2.6 },
-            { kind: 'door', c: AL * 0.78, w: 2.2, h: 2.6 },
-          ],
-          e: [{ kind: 'door', c: AW / 2, w: 2.2, h: 2.6 }],
-          w: [{ kind: 'door', c: AW * 0.4, w: 12, h: EH * 1.0 }],
-          s: [{ kind: 'door', c: AL / 2, w: 2.4, h: 2.8 }],
-        },
-        partitions: [
-          [{ x: AL * 0.34, z: 0 }, { x: AL * 0.34, z: AW * 0.62 }],
-          [{ x: AL * 0.66, z: 0 }, { x: AL * 0.66, z: AW * 0.62 }],
-          [{ x: 0, z: AW * 0.62 }, { x: AL, z: AW * 0.62 }],
-        ],
-        roof: 'gable',
-        roofRise: 3.9,
-        roofColor: '#c27a55',
-      },
-    ],
-  };
-
-  const gh: BuildingSpec = {
-    id: 'greenhouse',
-    name: 'Greenhouse',
-    pos: { x: annex.pos.x - AL / 2 - GL / 2 + 2, z: annex.pos.z },
-    rotDeg: 0,
-    length: GL,
-    width: GW,
-    frame: 'greenhouse',
-    levels: [
-      { baseY: 2, height: 0, sides: { n: false, s: false, e: false, w: false }, doors: {}, partitions: [], roof: 'vault', roofRise: (GW / 2) * 0.7, vaultCount: 1, vaultK: 0.7 },
-    ],
-  };
-
   // scattered trees: a ring outside the buildings, denser where nothing stands
   const trees: TreeSpec[] = [];
   const R = Math.max(BL, BW) * 1.35 + 60;
   const insideAny = (x: number, z: number, pad: number): boolean =>
-    [main, annex, gh].some((b) => {
+    [main].some((b) => {
       const p = pointInBuilding(b, x, z);
       return !!p && p.lx > -pad && p.lx < b.length + pad && p.lz > -pad && p.lz < b.width + pad;
     });
@@ -319,7 +293,7 @@ export function generateSite(info: LocationInfo, opts: { scale?: number; seed?: 
     bearingDeg: info.footprintHeading ?? 0,
     genScale: k,
     groundColor: '#789b52',
-    buildings: [main, annex, gh],
+    buildings: [main],
     pads: [
       { x: -BW * 0.82, z: BL * 0.19, w: Math.min(34, BW * 0.62), d: Math.min(94, BL * 0.62), color: '#a9aaa0' },
       { x: 0, z: BL / 2 + 12, w: BW * 6.5, d: 7, color: '#4a4d4b' },
@@ -328,7 +302,7 @@ export function generateSite(info: LocationInfo, opts: { scale?: number; seed?: 
     seed: opts.seed ?? 7,
     extent: R * 1.9,
     droneStart: { x: -BW * 0.8, z: BL * 0.17 },
-    calibCorners: { p1: { x: gh.pos.x - GL / 2, z: gh.pos.z - GW / 2 }, p2: { x: main.pos.x + BW / 2, z: main.pos.z + BL / 2 } },
+    calibCorners: { p1: { x: main.pos.x - BW / 2, z: main.pos.z - BL / 2 }, p2: { x: main.pos.x + BW / 2, z: main.pos.z + BL / 2 } },
   };
 }
 
@@ -351,7 +325,7 @@ export function sanitizeSpec(raw: unknown): SiteSpec | null {
     trees: Array.isArray(s.trees) ? (s.trees as TreeSpec[]) : [],
     seed: typeof s.seed === 'number' ? s.seed : 7,
     extent: typeof s.extent === 'number' ? s.extent : 500,
-    droneStart: s.droneStart && typeof s.droneStart.x === 'number' ? s.droneStart : { x: -44, z: 26 },
+    droneStart: s.droneStart && typeof s.droneStart.x === 'number' ? s.droneStart : { x: 0, z: 0 },
     calibCorners: s.calibCorners ?? { p1: { x: -100, z: -100 }, p2: { x: 100, z: 100 } },
     geoCorners:
       s.geoCorners && typeof s.geoCorners.p1?.lat === 'number' && typeof s.geoCorners.p2?.lat === 'number'

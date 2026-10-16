@@ -4,10 +4,9 @@ import type { Calibration } from '../core/models';
 import { DEFAULT_CALIBRATION, setSiteOrigin } from '../core/constants';
 import { solveCalibration, toGeo } from '../core/geo';
 import type { BuildingSpec, LocationInfo, PadSpec, SiteSpec, TreeSpec, Vec2 } from '../core/site-spec';
-import { cloneSpec, createRandom, generateSite, uid } from '../core/site-spec';
+import { cloneSpec, createRandom, emptySpec, generateSite, uid } from '../core/site-spec';
 import type { Footprint } from './geo.service';
 import { SiteEditor } from '../core/site-editor';
-import { builtinSpec } from '../three/site-model';
 import { CalibrationStore } from '../state/calibration.store';
 import { MapStore } from '../state/map.store';
 import { GeoService } from './geo.service';
@@ -17,9 +16,10 @@ import { ToastService } from './toast.service';
 
 /**
  * The site as the rest of the app sees it: which {@link SiteSpec} is active, how to generate one from a location
- * (address / map click -> OSM footprints -> starter model), and how to load / save / edit sites. Loading a site
- * moves the geographic origin, re-solves the GPS calibration from the spec's corner landmarks and rebuilds the 3D
- * scene, so logged paths land on the new model without manual alignment.
+ * (address / map click -> OSM footprints -> starter model), and how to load / save / edit sites. The app starts on a
+ * blank canvas — every model comes from a real location or the user's own edits. Loading a site moves the geographic
+ * origin, re-solves the GPS calibration from the spec's corner landmarks and rebuilds the 3D scene, so logged paths
+ * land on the new model without manual alignment.
  */
 @Injectable({ providedIn: 'root' })
 export class SiteService {
@@ -32,8 +32,10 @@ export class SiteService {
 
   /** The editor draft (the "Sites" panel binds to this; apply() pushes it into the scene). */
   readonly editor = new SiteEditor();
-  readonly active = signal<SiteSpec>(builtinSpec());
+  readonly active = signal<SiteSpec>(emptySpec({ lat: 0, lon: 0 }, 'Blank site'));
   readonly generating = signal(false);
+  /** True while no model has been generated / loaded yet — used for the stage hint. */
+  readonly blank = computed(() => this.active().buildings.length === 0);
   readonly generatedCount = computed(() => this.library.list().length);
   /**
    * While a Sites-panel pick mode is armed, the panel registers a handler here: Alt+clicks on the stage edit the
@@ -42,17 +44,17 @@ export class SiteService {
   readonly stagePick: Signal<((clientX: number, clientY: number) => void) | null> = signal(null);
 
   constructor() {
-    // start where the user left off: the stored active spec, or the shipped site
+    // start where the user left off: the stored active spec, otherwise the blank canvas
     const savedId = readStoredId();
     const restored = savedId ? this.library.load(savedId) : null;
-    this.editor.load(restored ?? this.active());
     if (restored) untracked(() => this.applySpec(restored, false));
+    else this.editor.load(this.active());
   }
 
-  /** Builtin site, freshly built from its spec. */
-  useBuiltin(): void {
-    this.applySpec(builtinSpec(), true);
-    this.toast.show('Shipped site loaded.');
+  /** Wipe the scene back to the blank canvas (no buildings), keeping the current location. */
+  newBlank(): void {
+    this.applySpec(emptySpec(this.active().origin, 'Blank site'), true);
+    this.toast.show('Blank model: import a location in the Sites panel or Alt+click the map to build one.');
   }
 
   /** Load a stored site by id. */
