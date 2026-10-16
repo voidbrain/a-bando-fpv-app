@@ -284,7 +284,7 @@ const OVERLAY_MAX_PIXELS = 800_000;
 
             <!-- interior -->
             <div class="row wrap">
-              <button class="btn" (click)="guessInterior()" title="Split into four rooms as a starting point">Guess interior</button>
+              <button class="btn" (click)="ed.guessInterior()" title="Split into four rooms as a starting point">Guess interior</button>
               <button class="btn" [class.on]="tool() === 'partition'" (click)="setTool(tool() === 'partition' ? 'none' : 'partition')" title="Click twice on the plan or the map: wall start → wall end">Draw partition</button>
               <span class="dim small mono">{{ rooms().length }} rooms · {{ l.partitions.length }} walls</span>
             </div>
@@ -451,7 +451,7 @@ export class MapPanel implements AfterContentChecked {
   /** The measuring instrument's two ends (CSS pixels inside the overlay canvas). */
   private readonly measure: MeasureState = createMeasureState();
   /** The last solved model/real distance ratio, applied by "Shift model size by ratio". */
-  private lastRatio: number | null = null;
+  protected lastRatio: number | null = null;
   /** Two real landmarks picked on the map, matched to the model's calibration corners. */
   private pickA: { lat: number; lon: number } | null = null;
   private pickB: { lat: number; lon: number } | null = null;
