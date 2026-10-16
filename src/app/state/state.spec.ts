@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { CalibrationStore } from './calibration.store';
 import { FlightStore } from './flight.store';
 import { LayoutStore } from './layout.store';
+import { MapStore, mergeMapState } from './map.store';
 import { PlaybackStore } from './playback.store';
 import { RadioStore } from './radio.store';
 import { ViewStore } from './view.store';
@@ -154,6 +155,27 @@ describe('stores', () => {
       f.clear();
       expect(f.count()).toBe(0);
       expect(f.active()).toBeNull();
+    });
+  });
+
+  describe('MapStore', () => {
+    it('defaults to the live OpenStreetMap background, not the fixed screenshot', () => {
+      const m = TestBed.inject(MapStore);
+      expect(m.background()).toBe('osm');
+      expect(m.osmUrl()).toContain('openstreetmap.org/export/embed.html');
+    });
+
+    it('migrates a persisted "img" background (old builds) to the live map but keeps other saved values', () => {
+      localStorage.setItem('abando-ng-map', JSON.stringify({ background: 'img', rotation: 12.5, dx: 3 }));
+      const m = TestBed.inject(MapStore);
+      expect(m.background()).toBe('osm');
+      expect(m.rotation()).toBe(12.5);
+      expect(m.dx()).toBe(3);
+    });
+
+    it('respects an explicit Google or 3D-only choice from storage', () => {
+      expect(mergeMapState({ background: 'goog' }).background).toBe('goog');
+      expect(mergeMapState({ background: 'none' }).background).toBe('none');
     });
   });
 });

@@ -7,7 +7,8 @@ import { SceneService } from '../../services/scene.service';
 import { ToastService } from '../../services/toast.service';
 import { CalibrationStore } from '../../state/calibration.store';
 import { LayoutStore } from '../../state/layout.store';
-import { MapStore, parseGoogleEmbed, type MapBackground } from '../../state/map.store';
+import { MapStore, isLiveBackground, parseGoogleEmbed, type MapBackground } from '../../state/map.store';
+import { siteOrigin } from '../../core/constants';
 import { checkedFrom, numberFrom, selectedFrom } from '../dom';
 import { Panel } from '../panel/panel';
 
@@ -17,6 +18,8 @@ const NOTES: Record<'img' | 'live' | 'none', string> = {
   none: '3D model only (north up).',
 };
 const OVERLAY_MAX_PIXELS = 800_000;
+/** The default backdrop: live OpenStreetMap, so the fixed screenshot never shows up unless picked explicitly. */
+const DEFAULT_NOTE = NOTES.live;
 
 @Component({
   selector: 'app-map-panel',
@@ -26,9 +29,9 @@ const OVERLAY_MAX_PIXELS = 800_000;
     <app-panel id="map">
       <div class="row">
         <select (change)="map.setBackground(bg($event))">
-          <option value="img" [selected]="map.background() === 'img'">Satellite image</option>
-          <option value="goog" [selected]="map.background() === 'goog'">Google live</option>
           <option value="osm" [selected]="map.background() === 'osm'">OpenStreetMap (no key)</option>
+          <option value="goog" [selected]="map.background() === 'goog'">Google live</option>
+          <option value="img" [selected]="map.background() === 'img'">Satellite image</option>
           <option value="none" [selected]="map.background() === 'none'">3D only</option>
         </select>
         <label>3D opacity <input type="range" min="0" max="100" [value]="map.overlayOpacity() * 100" (input)="map.setOverlayOpacity(num($event) / 100)" /></label>
@@ -41,7 +44,11 @@ const OVERLAY_MAX_PIXELS = 800_000;
         <label>dx <input type="number" step="1" [value]="map.dx().toFixed(1)" (change)="map.setOffset(num($event), map.dz())" /></label>
         <label>dz <input type="number" step="1" [value]="map.dz().toFixed(1)" (change)="map.setOffset(map.dx(), num($event))" /></label>
         <button class="btn" (click)="map.resetAlignment()">Reset</button>
-        <a class="dim small" target="_blank" rel="noopener" href="https://www.google.com/maps/@45.528698,12.133305,18z/data=!3m1!1e3">Open in Google Maps ↗</a>
+        @if (live()) {
+          <span class="dim small mono" title="The live map follows the active site's location">{{ originLabel() }}</span>
+        } @else {
+          <a class="dim small" target="_blank" rel="noopener" href="https://www.google.com/maps/@45.528698,12.133305,18z/data=!3m1!1e3">Open in Google Maps ↗</a>
+        }
       </div>
       @if (map.background() === 'goog') {
         <div class="row">
@@ -107,9 +114,14 @@ export class MapPanel {
   private readonly overlay = viewChild.required<ElementRef<HTMLCanvasElement>>('overlay');
   private readonly stage = viewChild.required<ElementRef<HTMLElement>>('stage');
   protected readonly mapImage = this.mapService.image;
-  protected readonly live = computed(() => this.map.background() === 'goog' || this.map.background() === 'osm');
+  protected readonly live = computed(() => isLiveBackground(this.map.background()));
   protected readonly frameUrl = computed<SafeResourceUrl>(() => this.sanitizer.bypassSecurityTrustResourceUrl(this.map.background() === 'goog' ? this.map.googleUrl() : this.map.osmUrl()));
-  protected readonly note = signal(NOTES.img);
+  protected readonly note = signal(DEFAULT_NOTE);
+  /** The live OSM/Google backdrop follows the *active* site, so show where it points. */
+  protected readonly originLabel = computed(() => {
+    const o = siteOrigin();
+    return `${o.lat.toFixed(5)}, ${o.lon.toFixed(5)}`;
+  });
   protected readonly bg = (e: Event): MapBackground => selectedFrom(e) as MapBackground;
   protected readonly num = numberFrom;
   protected readonly checked = checkedFrom;
@@ -135,7 +147,7 @@ export class MapPanel {
     });
     effect(() => {
       const b = this.map.background();
-      this.note.set(b === 'goog' || b === 'osm' ? NOTES.live : b === 'img' ? NOTES.img : NOTES.none);
+      this.note.set(isLiveBackground(b) ? NOTES.live : b === 'img' ? NOTES.img : NOTES.none);
     });
     const stop = this.loop.add(FrameOrder.render + 1, () => this.render());
     this.destroyRef.onDestroy(stop);
