@@ -20,7 +20,7 @@ describe('site model terrain', () => {
 
   it('draws the ground before every patch, and the patches in creation order', () => {
     const all = meshes();
-    const ground = all.find((m) => m.geometry.type === 'BoxGeometry' && (m.geometry as THREE.BoxGeometry).parameters.width === 520);
+    const ground = all.find((m) => m.geometry.type === 'BoxGeometry' && (m.geometry as THREE.BoxGeometry).parameters.width === 528);
     const patches = all.filter((m) => m.geometry.type === 'CircleGeometry');
     expect(ground).toBeTruthy();
     for (const p of patches) expect(p.renderOrder).toBeGreaterThan(ground!.renderOrder);
@@ -40,7 +40,7 @@ describe('site model terrain', () => {
   it('draws every concrete / building mesh after every patch, so the patches are always covered', () => {
     const all = meshes();
     const lastPatch = Math.max(...all.filter((m) => m.geometry.type === 'CircleGeometry').map((m) => m.renderOrder));
-    const others = all.filter((m) => m.geometry.type !== 'CircleGeometry' && !(m.geometry.type === 'BoxGeometry' && (m.geometry as THREE.BoxGeometry).parameters.width === 520));
+    const others = all.filter((m) => m.geometry.type !== 'CircleGeometry' && !(m.geometry.type === 'BoxGeometry' && (m.geometry as THREE.BoxGeometry).parameters.width === 528));
     expect(others.length).toBeGreaterThan(100);
     for (const m of others) expect(m.renderOrder).toBeGreaterThan(lastPatch);
   });
