@@ -66,6 +66,8 @@ export class Stage {
         onClick: (x, y, alt) => {
           const cam = this.scene.host?.mainCamera;
           if (!cam) return;
+          // while the map panel's editor tools are armed, its surface owns the picking — never edit through the page
+          if (this.scene.pickSurface()) return;
           if (this.scene.pin()) this.scene.placePin(x, y, cam, { left: 0, top: 0, width: innerWidth, height: innerHeight });
           else if (alt) void this.site.altClick(x, y);
         },

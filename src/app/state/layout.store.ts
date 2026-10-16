@@ -1,5 +1,5 @@
 import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
-import { PANELS, type PanelId } from '../ui/panel-defs';
+import { PANELS, PANEL_BY_ID, type PanelId } from '../ui/panel-defs';
 import { persistState, savedState } from './persist';
 
 export interface PanelState {
@@ -38,7 +38,16 @@ export const LayoutStore = signalStore(
     const saved = savedState<LayoutState>(KEY, d);
     // merge per panel so panels added in a newer version still appear with defaults
     const panels = { ...d.panels };
-    for (const id of Object.keys(panels) as PanelId[]) panels[id] = { ...panels[id], ...(saved.panels?.[id] ?? {}) };
+    for (const id of Object.keys(panels) as PanelId[]) {
+      const s = saved.panels?.[id];
+      // A stale saved size from an older build (or from when a panel was resizable) makes the reopened panel the
+      // wrong height: only trust w/h for panels that are resizable today. Also drop sizes that were recorded while
+      // the panel was collapsed / transiently laid out (a few px high) — those reopen at the wrong height.
+      let clean: Partial<PanelState> = s ? (PANEL_BY_ID[id].resizable ? s : { ...s, w: null, h: null }) : {};
+      if (clean.minimized && (clean.w ?? 0) < 120) clean = { ...clean, w: null };
+      if ((clean.h ?? 999) < 100 || (clean.w ?? 999) < 60) clean = { ...clean, h: null, w: null };
+      panels[id] = { ...panels[id], ...clean };
+    }
     return { panels, zTop: saved.zTop ?? Z_START };
   }),
   withMethods((store) => {
