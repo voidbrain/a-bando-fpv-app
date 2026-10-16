@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { DroneRig, type RigContext } from './drone-rig';
 import { PathRenderer } from './path-renderer';
-import { buildSiteFromSpec, builtinSpec, type SiteModel } from './site-model';
+import { buildSiteFromSpec, type SiteModel } from './site-model';
 import type { SiteSpec } from '../core/site-spec';
+import { emptySpec } from '../core/site-spec';
 import type { CameraView } from '../core/models';
 
 const SKY = '#b8d0c5';
@@ -85,7 +86,7 @@ export class SceneHost {
     Object.assign(sun.shadow.camera, { left: -240, right: 240, top: 240, bottom: -240, far: 700 });
     this.scene.add(sun);
 
-    this.site = buildSiteFromSpec(builtinSpec());
+    this.site = buildSiteFromSpec(emptySpec());
     this.scene.add(this.site.group);
     this.drones = new DroneRig(this.scene);
     this.paths = new PathRenderer(this.scene);
