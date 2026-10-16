@@ -70,7 +70,7 @@ const OVERLAY_MAX_PIXELS = 800_000;
       @if (library().length) {
         <div class="lib">
           @for (s of library(); track s.id) {
-            <button class="entry" [class.active]="s.id === activeId()" (click)="openSite(s.id)" [title]="libCoords(s)">{{ s.label }}</button>
+            <button class="entry" [class.active]="s.id === activeId()" (click)="openSite(s.id)" [title]="libCoords(s)">{{ s.name }}</button>
           }
         </div>
       }
