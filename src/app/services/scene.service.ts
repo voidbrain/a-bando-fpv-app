@@ -1,7 +1,7 @@
 import { Injectable, effect, inject, signal, untracked } from '@angular/core';
 import * as THREE from 'three';
 import type { CameraView } from '../core/models';
-import { DRONE_START } from '../core/constants';
+import { takeoffSpot } from '../core/takeoff';
 import type { SiteModel } from '../three/site-model';
 import { CalibrationStore } from '../state/calibration.store';
 import { FlightStore } from '../state/flight.store';
@@ -139,7 +139,8 @@ export class SceneService {
       this.xray.enabled = this.view.xray();
     }
     this.sim.world = site.collider;
-    this.sim.reposition(DRONE_START.x, DRONE_START.z);
+    const t = takeoffSpot();
+    this.sim.reposition(t.x, t.z);
     untracked(() => this.host?.paths.rebuild(this.flights.all, this.flights.speedMax));
   }
 
