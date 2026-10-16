@@ -1,5 +1,9 @@
 import * as THREE from 'three';
-import { builtinSpec, buildSiteFromSpec } from './site-model';
+import { generateSite } from '../core/site-spec';
+import { buildSiteFromSpec } from './site-model';
+
+const spec = (): SiteSpecLike => generateSite({ label: 'Test site', lat: 45.5, lon: 12.1 }, {});
+type SiteSpecLike = ReturnType<typeof generateSite>;
 
 /**
  * Regression: the meadow patches were once given a draw order BEFORE the ground, so the ground painted over all of them and
@@ -8,7 +12,7 @@ import { builtinSpec, buildSiteFromSpec } from './site-model';
 describe('site model terrain', () => {
   const meshes = (): THREE.Mesh[] => {
     const out: THREE.Mesh[] = [];
-    buildSiteFromSpec(builtinSpec()).group.traverse((o) => {
+    buildSiteFromSpec(spec()).group.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) out.push(o as THREE.Mesh);
     });
     return out;
@@ -46,8 +50,8 @@ describe('site model terrain', () => {
   });
 
   it('builds the same site every time (the tree layout comes from a fixed seed)', () => {
-    const a = buildSiteFromSpec(builtinSpec()).trees;
-    const b = buildSiteFromSpec(builtinSpec()).trees;
+    const a = buildSiteFromSpec(spec()).trees;
+    const b = buildSiteFromSpec(spec()).trees;
     expect(a.dec.length).toBe(b.dec.length);
     expect(a.dec[10]).toEqual(b.dec[10]);
   });

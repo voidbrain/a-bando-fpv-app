@@ -5,7 +5,6 @@ import { RadioService } from './services/radio.service';
 import { ShortcutsService } from './services/shortcuts.service';
 import { FlightStore } from './state/flight.store';
 import { LayoutStore } from './state/layout.store';
-import { AlignmentPanel } from './ui/panels/alignment-panel';
 import { AttitudePanel } from './ui/panels/attitude-panel';
 import { BlackboxPanel } from './ui/panels/blackbox-panel';
 import { CompassPanel } from './ui/panels/compass-panel';
@@ -30,7 +29,7 @@ import { Stage } from './ui/stage/stage';
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    Stage, ViewsPanel, FlightsPanel, SimulatorPanel, AlignmentPanel, RadioPanel, TimelinePanel, SpeedPanel, AttitudePanel, CompassPanel, PathPanel, MapPanel,
+    Stage, ViewsPanel, FlightsPanel, SimulatorPanel, RadioPanel, TimelinePanel, SpeedPanel, AttitudePanel, CompassPanel, PathPanel, MapPanel,
     BlackboxPanel, VideoPanel, LivePanel, RenderPanel, HelpPanel, ViewportPanel, SitesPanel,
   ],
   template: `
@@ -39,7 +38,6 @@ import { Stage } from './ui/stage/stage';
     <app-flights-panel />
     <app-simulator-panel />
     <app-sites-panel />
-    <app-alignment-panel />
     <app-radio-panel />
     <app-timeline-panel />
     <app-speed-panel />

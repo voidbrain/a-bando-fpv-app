@@ -173,9 +173,19 @@ describe('stores', () => {
       expect(m.dx()).toBe(3);
     });
 
-    it('respects an explicit Google or 3D-only choice from storage', () => {
-      expect(mergeMapState({ background: 'goog' }).background).toBe('goog');
+    it('drops removed backgrounds (Google / satellite image) and legacy fields, keeping only OSM or 3D-only', () => {
+      expect(mergeMapState({ background: 'goog' as never }).background).toBe('osm');
+      expect(mergeMapState({ background: 'img' as never }).background).toBe('osm');
       expect(mergeMapState({ background: 'none' }).background).toBe('none');
+      const migrated = mergeMapState({ background: 'goog' as never, googleUrl: 'https://maps.google.com/x', scale: { goog: 0.5 } });
+      expect(migrated.scale.osm).toBe(0.5); // old Google backdrop scale carries over to OSM
+      expect((migrated as unknown as Record<string, unknown>)['googleUrl']).toBeUndefined();
+    });
+
+    it('locate() points the embed at a chosen place; otherwise it follows the active site origin', () => {
+      const m = TestBed.inject(MapStore);
+      m.locate(45.521, 12.134);
+      expect(m.osmUrl()).toContain('marker=45.521000%2C12.134000');
     });
   });
 });

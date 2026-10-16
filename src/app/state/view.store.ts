@@ -24,7 +24,12 @@ const DEFAULTS: ViewState = { mainSource: '3d', cameraView: 'orbit', orbitFollow
 
 export const ViewStore = signalStore(
   { providedIn: 'root' },
-  withState(() => savedState(KEY, DEFAULTS)),
+  withState(() => {
+    const saved = savedState(KEY, DEFAULTS);
+    // Old builds could persist 'video' as the main source; without a loaded video that leaves a black page.
+    if (saved.mainSource === 'video') return { ...saved, mainSource: '3d' as MainSource };
+    return saved;
+  }),
   withMethods((store) => ({
     setMainSource: (mainSource: MainSource) => patchState(store, { mainSource }),
     setCameraView: (cameraView: CameraView) => patchState(store, { cameraView }),

@@ -1,6 +1,6 @@
 /** Every floating panel in the app: identity, title and where it first appears. */
 export type PanelId =
-  | 'views' | 'flights' | 'simulator' | 'alignment' | 'radio' | 'timeline' | 'speed' | 'attitude' | 'compass'
+  | 'views' | 'flights' | 'simulator' | 'radio' | 'timeline' | 'speed' | 'attitude' | 'compass'
   | 'path' | 'map' | 'blackbox' | 'video' | 'live' | 'render' | 'help' | 'sites' | 'vpOrbit' | 'vpChase' | 'vpFpv' | 'vpTop';
 
 export interface PanelDef {
@@ -23,14 +23,13 @@ export const PANELS: readonly PanelDef[] = [
   { id: 'views', title: 'Views', group: 'tools', visible: true, anchor: { left: 12, top: 12 }, width: 210 },
   { id: 'flights', title: 'Flights', group: 'data', visible: true, anchor: { left: 12, top: 232 }, width: 250 },
   { id: 'simulator', title: 'Simulator', group: 'data', visible: true, anchor: { left: 12, bottom: 12 }, width: 250 },
-  { id: 'alignment', title: 'Alignment', group: 'tools', visible: false, anchor: { left: 280, top: 12 }, width: 270 },
   { id: 'radio', title: 'Radio controller', group: 'tools', visible: false, anchor: { left: 280, top: 300 }, width: 280 },
   { id: 'timeline', title: 'Timeline', group: 'data', visible: true, anchor: { left: 280, bottom: 12 }, width: 560 },
   { id: 'speed', title: 'Speed', group: 'instruments', visible: true, anchor: { right: 12, top: 12 }, width: 170 },
   { id: 'attitude', title: 'Attitude & heading', group: 'instruments', visible: true, anchor: { right: 12, top: 168 }, width: 270 },
   { id: 'compass', title: 'Map north', group: 'instruments', visible: false, anchor: { right: 300, top: 12 }, width: 170 },
   { id: 'path', title: 'Flight path', group: 'instruments', visible: true, anchor: { right: 12, bottom: 12 }, width: 330, resizable: true, height: 270 },
-  { id: 'map', title: 'Map', group: 'cameras', visible: false, anchor: { right: 12, top: 330 }, width: 420, resizable: true, height: 330 },
+  { id: 'map', title: 'Map · OpenStreetMap builder', group: 'cameras', visible: true, anchor: { right: 12, top: 330 }, width: 420, resizable: true, height: 330 },
   { id: 'blackbox', title: 'Blackbox', group: 'instruments', visible: false, anchor: { right: 12, top: 330 }, width: 360 },
   { id: 'video', title: 'Video', group: 'data', visible: false, anchor: { left: 280, top: 12 }, width: 380 },
   { id: 'live', title: 'Live link', group: 'data', visible: false, anchor: { left: 280, top: 12 }, width: 300 },

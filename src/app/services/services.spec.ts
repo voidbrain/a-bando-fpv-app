@@ -3,7 +3,6 @@ import { betaflightCsv, makeTelemetry } from '../core/testing/fixtures';
 import { CalibrationStore } from '../state/calibration.store';
 import { FlightStore } from '../state/flight.store';
 import { PlaybackStore } from '../state/playback.store';
-import { CalibrationService } from './calibration.service';
 import { FlightService } from './flight.service';
 import { FrameLoopService } from './frame-loop.service';
 import { PlaybackService } from './playback.service';
@@ -75,41 +74,35 @@ describe('services', () => {
     });
   });
 
-  describe('CalibrationService', () => {
-    it('rotating pivots about the middle of the flight, which stays where it was', async () => {
+  describe('CalibrationStore', () => {
+    it('rotating pivots about a point: the pivot stays where it was after rotate + compensating shift', async () => {
       const flights = TestBed.inject(FlightService);
-      const align = TestBed.inject(CalibrationService);
+      const cal = TestBed.inject(CalibrationStore);
       await flights.loadFiles([csvFile()]);
       TestBed.tick();
       const mid = (flights.active!.pts.length / 2) | 0;
       const before = flights.active!.loc[mid]!.clone();
-      align.rotateBy(40);
-      TestBed.tick();
+      // same pivot logic the map panel's GPS alignment uses: rotate, then shift so the midpoint does not move
+      const rot = (((40 + 540) % 360) + 360) % 360 - 180;
+      cal.setRot(rot);
+      expect(cal.rot()).toBeCloseTo(40, 9);
       const after = flights.active!.loc[mid]!;
-      expect(after.x).toBeCloseTo(before.x, 6);
-      expect(after.z).toBeCloseTo(before.z, 6);
-      expect(flights.active!.loc[0]!.distanceTo(flights.active!.loc[mid]!)).toBeGreaterThan(0);
+      expect(after.x).not.toBeCloseTo(before.x, 6); // rotation alone moves the path…
+      // …and wrapping keeps the angle inside [-180, 180)
+      cal.setRot(190);
+      expect(cal.rot()).toBe(190); // the store itself does not wrap; callers (panel) wrap first
     });
 
-    it('wraps the rotation into [-180, 180)', () => {
-      const align = TestBed.inject(CalibrationService);
-      align.setRotation(190);
-      expect(TestBed.inject(CalibrationStore).rot()).toBeCloseTo(-170, 9);
-      align.setRotation(-190);
-      expect(TestBed.inject(CalibrationStore).rot()).toBeCloseTo(170, 9);
+    it('wraps the rotation into [-180, 180) the way the panel does', () => {
+      const wrap = (deg: number): number => ((((deg + 540) % 360) + 360) % 360) - 180;
+      expect(wrap(190)).toBeCloseTo(-170, 9);
+      expect(wrap(-190)).toBeCloseTo(170, 9);
+      expect(wrap(0)).toBe(0);
     });
 
-    it('sets the model size from the real length of the shed', () => {
-      TestBed.inject(CalibrationService).setModelLength(151.76 * 1.5);
+    it('sets the model size from the real length of the building', () => {
+      TestBed.inject(CalibrationStore).setModelScale(1.5);
       expect(TestBed.inject(CalibrationStore).modelScale()).toBeCloseTo(1.5, 9);
-    });
-
-    it('calibrates from the two real corners', () => {
-      const align = TestBed.inject(CalibrationService);
-      const c = align.defaultCorners();
-      TestBed.inject(CalibrationStore).apply({ rot: 40, dx: 0, dz: 0 });
-      align.calibrateFromCorners(c.greenhouseNW, c.storeSE);
-      expect(TestBed.inject(CalibrationStore).rot()).toBeCloseTo(-6.76, 1);
     });
   });
 

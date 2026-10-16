@@ -10,7 +10,6 @@ import { ToastService } from '../../services/toast.service';
 import { CalibrationStore } from '../../state/calibration.store';
 import { LayoutStore } from '../../state/layout.store';
 import { MapStore, type MapBackground } from '../../state/map.store';
-import { siteOrigin } from '../../core/constants';
 import { toLocal } from '../../core/geo';
 import { checkedFrom, numberFrom, selectedFrom } from '../dom';
 import { Panel } from '../panel/panel';
@@ -149,7 +148,7 @@ export class MapPanel {
 
   /** The live OSM backdrop follows the *active* site, so show where it points. */
   protected readonly originLabel = computed(() => {
-    const o = siteOrigin();
+    const o = this.map.location();
     return `${o.lat.toFixed(5)}, ${o.lon.toFixed(5)}`;
   });
   protected readonly bg = (e: Event): MapBackground => selectedFrom(e) as MapBackground;

@@ -347,7 +347,7 @@ export class SiteService {
     writeStoredId(spec.id);
     setSiteOrigin(spec.origin);
     setTakeoff(spec.droneStart);
-    this.map.locate(spec.origin.lat, spec.origin.lon);
+    this.map.locate(spec.origin.lat, spec.origin.lon); // the OSM embed follows the newly loaded site
     this.calibration.apply(calibrationForSpec(spec));
     if (resetView) this.scene.resetCamera();
     if (this.scene.host) {
