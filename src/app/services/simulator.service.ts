@@ -2,6 +2,7 @@ import { Injectable, effect, inject, signal, untracked } from '@angular/core';
 import type { FlightMode } from '../core/models';
 import { SwitchTracker } from '../core/radio/radio-input';
 import type { CollisionWorld } from '../core/sim/collider';
+import { DRONE_REST_HEIGHT } from '../core/constants';
 import { createDroneState, resetDroneState, stepDrone, toggleMode } from '../core/sim/drone-physics';
 import { SimRecorder } from '../core/sim/recorder';
 import { eulerYXZ } from '../core/math3d';
@@ -89,6 +90,14 @@ export class SimulatorService {
   reset(): void {
     this.setArmed(false);
     resetDroneState(this.state, this.calibration.modelScale());
+  }
+
+  /** Move the parked drone to a new take-off pad (scaled world coords), keeping it disarmed. */
+  reposition(x: number, z: number): void {
+    const scale = this.calibration.modelScale();
+    this.setArmed(false);
+    this.state.p.set(x * scale, DRONE_REST_HEIGHT, z * scale);
+    this.state.v.set(0, 0, 0);
   }
 
   downloadCsv(): void {
