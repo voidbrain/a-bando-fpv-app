@@ -34,8 +34,13 @@ jobs:
         run: npm ci
 
       - name: Build
-        # Production build; artifacts land in dist/a-bando-fpv-app/browser
+        # Production build (baseHref /a-bando-fpv-app/ set in angular.json);
+        # artifacts land in dist/a-bando-fpv-app/browser
         run: npm run build
+
+      - name: Disable Jekyll
+        # GitHub Pages must serve the Angular bundle as-is, not process it with Jekyll
+        run: touch dist/a-bando-fpv-app/browser/.nojekyll
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

@@ -71,7 +71,11 @@ No further configuration is required — the workflow uses the built-in
 
 ### How it works
 
-- Runs `npm ci` and `npm run build` (production build).
+- Runs `npm ci` and `npm run build` (production build, with
+  `"baseHref": "/a-bando-fpv-app/"` set in `angular.json` so asset URLs
+  resolve correctly under the project-page subpath).
+- Adds a `.nojekyll` file so GitHub Pages does **not** process the bundle
+  with Jekyll (without it, Pages renders the README instead of the app).
 - Uploads `dist/a-bando-fpv-app/browser` as the Pages artifact.
 - Deploys it with `actions/deploy-pages`.
 

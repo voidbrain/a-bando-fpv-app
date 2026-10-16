@@ -35,6 +35,7 @@
           },
           "configurations": {
             "production": {
+              "baseHref": "/a-bando-fpv-app/",
               "budgets": [
                 {
                   "type": "initial",
