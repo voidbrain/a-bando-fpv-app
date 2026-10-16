@@ -1,10 +1,11 @@
 import { Injectable, computed, inject, signal, untracked, type Signal } from '@angular/core';
 import * as THREE from 'three';
-import type { Calibration } from '../core/models';
-import { DEFAULT_CALIBRATION, setSiteOrigin } from '../core/constants';
+import type { Calibration, GeoPoint } from '../core/models';
+import { setSiteOrigin } from '../core/constants';
 import { solveCalibration, toGeo } from '../core/geo';
 import type { BuildingSpec, LocationInfo, PadSpec, SiteSpec, TreeSpec, Vec2 } from '../core/site-spec';
 import { cloneSpec, createRandom, emptySpec, generateSite, uid } from '../core/site-spec';
+import { setTakeoff } from '../core/takeoff';
 import type { Footprint } from './geo.service';
 import { SiteEditor } from '../core/site-editor';
 import { CalibrationStore } from '../state/calibration.store';
@@ -343,8 +344,9 @@ export class SiteService {
     this.active.set(spec);
     // adopt the spec as the new draft, unless the caller is applying the draft itself (live preview)
     if (!sameSpec(this.editor.draft(), spec)) this.editor.load(spec);
-    writeStoredId(spec.id === 'bando-default' ? '' : spec.id);
+    writeStoredId(spec.id);
     setSiteOrigin(spec.origin);
+    setTakeoff(spec.droneStart);
     this.map.locate(spec.origin.lat, spec.origin.lon);
     this.calibration.apply(calibrationForSpec(spec));
     if (resetView) this.scene.resetCamera();
@@ -354,14 +356,39 @@ export class SiteService {
       this.scene.rebindSite(site);
     }
   }
+
+  /** The last solved model/real distance ratio from {@link calibrateFromCorners} (null until a calibration ran). */
+  lastCalibrationRatio(): number | null {
+    return this.lastRatio;
+  }
+  private lastRatio: number | null = null;
+
+  /**
+   * Solve rotation + shift in one shot from two real landmarks that match the active spec's calibration corners.
+   * Stores the corner coordinates back into the spec (so the calibration survives a reload) and applies the solved
+   * calibration. Returns false when the input is degenerate (corners too close together).
+   */
+  calibrateFromCorners(a: GeoPoint, b: GeoPoint): boolean {
+    const spec = this.active();
+    const k = this.calibration.modelScale() || 1;
+    const r = solveCalibration(a, b, { x: spec.calibCorners.p1.x * k, z: spec.calibCorners.p1.z * k }, { x: spec.calibCorners.p2.x * k, z: spec.calibCorners.p2.z * k }, spec.origin);
+    if (!r) {
+      this.toast.show('The two corners are too close together to solve a rotation.');
+      return false;
+    }
+    this.calibration.apply(r.calibration);
+    this.lastRatio = r.distanceRatio;
+    this.active.update((s) => ({ ...s, geoCorners: { p1: { lat: a.lat, lon: a.lon }, p2: { lat: b.lat, lon: b.lon } } }));
+    this.editor.load(this.active());
+    return true;
+  }
 }
 
 /**
- * Calibration for a spec: the builtin site keeps the hand-solved default (bit-for-bit identical to the shipped app);
- * generated sites solve rot/dx/dz from their own corner landmarks so logged GPS paths fall in place.
+ * Calibration for a spec: sites with stored corner landmarks re-solve rot/dx/dz from them so logged GPS paths fall
+ * in place; freshly generated ones start from the model's bearing.
  */
 export function calibrationForSpec(spec: SiteSpec): Calibration {
-  if (spec.id === 'bando-default') return { ...DEFAULT_CALIBRATION };
   if (!spec.geoCorners) return { rot: -spec.bearingDeg + 90, dx: 0, dz: 0 };
   const r = solveCalibration(spec.geoCorners.p1, spec.geoCorners.p2, spec.calibCorners.p1, spec.calibCorners.p2, spec.origin);
   return r ? r.calibration : { rot: 0, dx: 0, dz: 0 };
