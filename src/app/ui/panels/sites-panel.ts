@@ -43,7 +43,7 @@ const SIDES: readonly Side[] = ['n', 'e', 's', 'w'];
       <div class="row">
         <label>bearing ° <input type="number" step="1" [value]="ed.draft().bearingDeg" (change)="setBearing(num($event))" /></label>
         <button class="btn" title="Set the model’s north from the map alignment rotation" (click)="pointNorth()">Point north</button>
-        <span class="dim small">Tip: open the Map panel and align the satellite image first.</span>
+        <span class="dim small">Tip: open the Map panel and align / calibrate on OpenStreetMap first.</span>
       </div>
 
       <!-- active site & library -->
@@ -57,7 +57,7 @@ const SIDES: readonly Side[] = ['n', 'e', 's', 'w'];
         <button class="btn" (click)="save()">Save</button>
         <button class="btn" (click)="exportJson()">Export JSON</button>
         <label class="btn">Import<input type="file" accept=".json,application/json" hidden (change)="importFile($event)" /></label>
-        <button class="btn" (click)="site.useBuiltin()">A Bando</button>
+        <button class="btn" (click)="site.newBlank()" title="Start a blank model at the current map location">New blank</button>
       </div>
       @if (library().length) {
         <div class="row col lib">

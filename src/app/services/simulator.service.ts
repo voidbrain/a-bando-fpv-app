@@ -3,6 +3,7 @@ import type { FlightMode } from '../core/models';
 import { SwitchTracker } from '../core/radio/radio-input';
 import type { CollisionWorld } from '../core/sim/collider';
 import { DRONE_REST_HEIGHT } from '../core/constants';
+import { takeoffSpot } from '../core/takeoff';
 import { createDroneState, resetDroneState, stepDrone, toggleMode } from '../core/sim/drone-physics';
 import { SimRecorder } from '../core/sim/recorder';
 import { eulerYXZ } from '../core/math3d';
@@ -35,7 +36,7 @@ export class SimulatorService {
   private readonly downloads = inject(DownloadService);
   private readonly toast = inject(ToastService);
 
-  readonly state = createDroneState(this.calibration.modelScale());
+  readonly state = createDroneState(this.calibration.modelScale(), takeoffSpot());
   readonly recorder = new SimRecorder();
   /** Collision geometry, provided by the scene once the 3D site exists. */
   world: CollisionWorld | null = null;
@@ -89,7 +90,7 @@ export class SimulatorService {
 
   reset(): void {
     this.setArmed(false);
-    resetDroneState(this.state, this.calibration.modelScale());
+    resetDroneState(this.state, this.calibration.modelScale(), takeoffSpot());
   }
 
   /** Move the parked drone to a new take-off pad (scaled world coords), keeping it disarmed. */
