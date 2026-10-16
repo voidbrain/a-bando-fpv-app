@@ -22,8 +22,8 @@ import { PANEL_BY_ID, type PanelId } from '../panel-defs';
     '[style.top.px]': 'state().y ?? def().anchor.top ?? null',
     '[style.right.px]': 'state().x === null ? (def().anchor.right ?? null) : null',
     '[style.bottom.px]': 'state().y === null ? (def().anchor.bottom ?? null) : null',
-    '[style.width.px]': 'state().w ?? def().width ?? null',
-    '[style.height.px]': 'def().resizable && !state().minimized ? (state().h ?? def().height ?? null) : null',
+    '[style.width.px]': 'panelWidth()',
+    '[style.height.px]': 'panelHeight()',
     '(pointerdown)': 'raise()',
   },
   template: `
@@ -119,15 +119,36 @@ export class Panel {
   private get dragging(): boolean { return this.drag !== null; }
   private resizeObserver: ResizeObserver | null = null;
 
+  /** Width: the remembered size, else the default. */
+  protected panelWidth(): number | null {
+    return this.state().w ?? this.def().width ?? null;
+  }
+
+  /**
+   * Height: always explicit for resizable panels so a re-opened one gets exactly its saved height back — never the
+   * transient content height of the first frames after un-hiding. Collapsed panels keep their size (CSS hides the body).
+   */
+  protected panelHeight(): number | null {
+    const d = this.def();
+    if (!d.resizable) return null;
+    return this.state().h ?? d.height ?? null;
+  }
+
   constructor() {
     // Remember the size a resizable panel was dragged to.
     effect((onCleanup) => {
       if (!this.def().resizable) return;
       const el = this.host.nativeElement;
       let first = true;
+      let prevHidden = el.hidden;
       const ro = new ResizeObserver(() => {
-        if (el.hidden) return; // never measure while closed: the size would be wrong
-        if (first) {
+        if (el.hidden) {
+          prevHidden = true;
+          return; // never measure while closed: the size would be wrong
+        }
+        const justReopened = prevHidden;
+        prevHidden = false;
+        if (first && !justReopened) {
           first = false;
           return;
         }
@@ -136,18 +157,26 @@ export class Panel {
         const s = untracked(() => this.state());
         const savedW = s.w ?? this.def().width;
         const savedH = s.h ?? this.def().height;
-        // Re-opening a panel can briefly report a stale content size before the saved inline styles apply.
-        // If we are hidden->visible with a mismatch to the saved size, restore the saved one instead of persisting the transient value.
-        if (savedW !== undefined && savedH !== undefined && w > 0 && h > 0 && (Math.abs(w - savedW) > 2 || Math.abs(h - savedH) > 2) && !this.dragging) {
-          requestAnimationFrame(() => {
-            if (el.hidden) return;
-            const w2 = Math.round(el.offsetWidth);
-            const h2 = Math.round(el.offsetHeight);
-            if (Math.abs(w2 - savedW) <= 2 && Math.abs(h2 - savedH) <= 2) return; // settled back to saved size
-            if (w2 > 0 && h2 > 0) this.layout.resizeTo(this.id(), w2, h2);
-          });
+        // Re-opening a panel reports transient sizes for a frame or two (the browser lays it out before the saved
+        // inline styles settle), and collapsing / expanding changes the measured height for the same reason. Never
+        // persist those: re-check after two frames and only then, if the element really disagrees with the saved
+        // size, adopt what the user sees.
+        if (justReopened || (savedW !== undefined && savedH !== undefined && w > 0 && h > 0 && (Math.abs(w - savedW) > 2 || Math.abs(h - savedH) > 2) && !this.dragging)) {
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => {
+              if (el.hidden) return;
+              const w2 = Math.round(el.offsetWidth);
+              const h2 = Math.round(el.offsetHeight);
+              if (w2 <= 0 || h2 <= 0) return;
+              if (savedW !== undefined && savedH !== undefined && Math.abs(w2 - savedW) <= 2 && Math.abs(h2 - savedH) <= 2) return; // settled back to the saved size
+              this.layout.resizeTo(this.id(), w2, h2);
+            }),
+          );
+          first = false;
           return;
         }
+        first = false;
+        if (s.minimized) return; // collapsed: any measured height is the title bar, never save it
         if (w > 0 && h > 0 && (Math.abs(w - (s.w ?? this.def().width ?? 0)) > 1 || Math.abs(h - (s.h ?? this.def().height ?? 0)) > 1)) this.layout.resizeTo(this.id(), w, h);
       });
       ro.observe(el);

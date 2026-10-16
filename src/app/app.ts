@@ -16,7 +16,6 @@ import { PathPanel } from './ui/panels/path-panel';
 import { RadioPanel } from './ui/panels/radio-panel';
 import { RenderPanel } from './ui/panels/render-panel';
 import { SimulatorPanel } from './ui/panels/simulator-panel';
-import { SitesPanel } from './ui/panels/sites-panel';
 import { SpeedPanel } from './ui/panels/speed-panel';
 import { TimelinePanel } from './ui/panels/timeline-panel';
 import { VideoPanel } from './ui/panels/video-panel';
@@ -30,14 +29,13 @@ import { Stage } from './ui/stage/stage';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     Stage, ViewsPanel, FlightsPanel, SimulatorPanel, RadioPanel, TimelinePanel, SpeedPanel, AttitudePanel, CompassPanel, PathPanel, MapPanel,
-    BlackboxPanel, VideoPanel, LivePanel, RenderPanel, HelpPanel, ViewportPanel, SitesPanel,
+    BlackboxPanel, VideoPanel, LivePanel, RenderPanel, HelpPanel, ViewportPanel,
   ],
   template: `
     <app-stage />
     <app-views-panel />
     <app-flights-panel />
     <app-simulator-panel />
-    <app-sites-panel />
     <app-radio-panel />
     <app-timeline-panel />
     <app-speed-panel />

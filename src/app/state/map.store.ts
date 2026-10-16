@@ -71,8 +71,9 @@ export const MapStore = signalStore(
   withMethods((store) => {
     // The location the map frame points at. Defaults to the active site's origin; `locate()` overrides it
     // (e.g. when a site is generated / imported), so the embed follows the latest location even if the
-    // origin signal hasn't propagated yet.
-    const located = signal<{ lat: number; lon: number } | null>(null);
+    // origin signal hasn't propagated yet. The nonce `n` forces the iframe to reload even when only the
+    // marker position repeats (the user panned the live map away).
+    const located = signal<{ lat: number; lon: number; n: number } | null>(null);
     return {
       setBackground: (background: MapBackground) => patchState(store, { background }),
       setOverlayOpacity: (overlayOpacity: number) => patchState(store, { overlayOpacity }),
@@ -83,17 +84,23 @@ export const MapStore = signalStore(
       nudge: (dx: number, dz: number) => patchState(store, (s) => ({ dx: s.dx + dx, dz: s.dz + dz })),
       setOffset: (dx: number, dz: number) => patchState(store, { dx, dz }),
       resetAlignment: () => patchState(store, { scale: { ...MAP_DEFAULT_SCALE }, rotation: 0, dx: 0, dz: 0 }),
-      /** Point the OpenStreetMap embed at a location (used when a site is created / loaded). */
-      locate: (lat: number, lon: number) => located.set({ lat, lon }),
+      /** Point the OpenStreetMap embed at a location (used when a site is created / loaded or on search). */
+      locate: (lat: number, lon: number) => located.set({ lat, lon, n: Date.now() }),
       /** The location currently shown: explicit `locate()` override, else the active site origin. */
-      location: computed(() => located() ?? siteOrigin()),
+      location: computed(() => {
+        const l = located();
+        return l
+          ? { lat: l.lat, lon: l.lon, nonce: l.n, override: true }
+          : { ...siteOrigin(), nonce: 0, override: false };
+      }),
     };
   }),
   withComputed((store) => ({
-    /** The OpenStreetMap embed for the location being shown (see {@link locate}). */
+    /** The OpenStreetMap embed for the location being shown (see {@link locate}); the nonce busts the iframe cache. */
     osmUrl: computed(() => {
-      const o = store.location();
-      return osmUrlFor(o.lat, o.lon, store.background());
+      // read `locate()`'s signal *inside* this computed so a new locate() re-runs it (the nonce is part of its identity)
+      const l = store.location();
+      return osmUrlFor(l.lat, l.lon, store.background()) + (l.override ? `#v${l.nonce}` : '');
     }),
   })),
   withHooks((store) => {

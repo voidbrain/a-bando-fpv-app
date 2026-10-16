@@ -1,4 +1,4 @@
-import { Injectable, effect, inject, signal, untracked } from '@angular/core';
+import { Injectable, effect, inject, signal, untracked, type WritableSignal } from '@angular/core';
 import * as THREE from 'three';
 import type { CameraView } from '../core/models';
 import { takeoffSpot } from '../core/takeoff';
@@ -32,6 +32,13 @@ export interface Viewport {
 const VIEWPORT_PANELS: Record<ViewportType, PanelId> = { orbit: 'vpOrbit', chase: 'vpChase', fpv: 'vpFpv', top: 'vpTop' };
 const PANEL_MAX_PIXELS = 650_000;
 
+/** A surface that can receive "pick the ground / a building" clicks while an editor tool is armed. */
+export interface PickSurface {
+  id: string;
+  /** Called with client coordinates on a finished click (no drag). */
+  onClick(clientX: number, clientY: number): void;
+}
+
 /**
  * The 3D world as the rest of the app sees it: creates the {@link SceneHost}, keeps it in step with the stores
  * (roof, model scale, paths, north), places the main camera and every floating view each frame, runs the x-ray and
@@ -60,6 +67,12 @@ export class SceneService {
   };
   /** Armed ground pin: the next click on the ground moves the flight's start ('s') or end ('e') there. */
   readonly pin = signal<'s' | 'e' | null>(null);
+  /**
+   * Optional extra pick surface (the Map panel's model overlay). The stage registers itself here; when another
+   * surface arms a pick mode it takes over the clicks, so a click inside the map panel selects / draws on the model
+   * instead of editing through the full-page scene behind it.
+   */
+  readonly pickSurface: WritableSignal<PickSurface | null> = signal(null);
   private xray: XRay | null = null;
   private resizeHandler: (() => void) | null = null;
   private stopTasks: (() => void)[] = [];
