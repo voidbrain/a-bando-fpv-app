@@ -1,6 +1,6 @@
 import { patchState, signalStore, withComputed, withHooks, withMethods, withState } from '@ngrx/signals';
-import { computed, inject } from '@angular/core';
-import { siteOrigin } from '../core/constants';
+import { computed, inject, signal } from '@angular/core';
+import { DEFAULT_SITE_ORIGIN, siteOrigin } from '../core/constants';
 import { StorageService } from '../services/storage.service';
 import { persistState } from './persist';
 
@@ -30,22 +30,22 @@ const DEFAULTS: MapState = { background: 'osm', overlayOpacity: 0.6, align: fals
 
 /**
  * Merge a persisted snapshot with the defaults. Older builds saved extra backgrounds — 'img' (the fixed satellite
- * screenshot), 'goog' (Google Maps) — and per-background scales; everything is OSM-only now, so those values are
- * dropped while the saved alignment (scale / rotation / offset) is kept.
+ * screenshot), 'goog' (Google Maps) — as a per-background scale map and a `googleUrl`; everything is OSM-only now,
+ * so those legacy fields are dropped while the saved alignment (scale / rotation / offset) is kept.
  */
-export function mergeMapState(saved: Partial<MapState> & { googleUrl?: string; scale?: Partial<Record<string, number>> } | null | undefined): MapState {
-  const s = { ...(saved ?? {}) } as Partial<MapState> & Record<string, unknown>;
-  delete s.googleUrl;
-  const bg = s.background === 'none' ? 'none' : 'osm';
-  const scaleIn = (s.scale ?? {}) as Partial<Record<MapBackground, number>>;
-  const merged: MapState = {
+export function mergeMapState(
+  saved: (Partial<Omit<MapState, 'scale'>> & { scale?: Partial<Record<string, number>>; googleUrl?: string }) | null | undefined,
+): MapState {
+  const { googleUrl: _googleUrl, ...rest } = saved ?? {};
+  const bg: MapBackground = rest.background === 'none' ? 'none' : 'osm';
+  const scaleIn = rest.scale ?? {};
+  return {
     ...DEFAULTS,
-    ...s,
+    ...rest,
     background: bg,
-    scale: { ...MAP_DEFAULT_SCALE, osm: scaleIn.osm ?? scaleIn.img ?? scaleIn.goog ?? MAP_DEFAULT_SCALE.osm, none: scaleIn.none ?? MAP_DEFAULT_SCALE.none },
+    // Carry an old per-background scale over to OSM ('img' / 'goog' entries came from removed backdrops).
+    scale: { ...MAP_DEFAULT_SCALE, osm: scaleIn['osm'] ?? scaleIn['img'] ?? scaleIn['goog'] ?? MAP_DEFAULT_SCALE.osm, none: scaleIn['none'] ?? MAP_DEFAULT_SCALE.none },
   };
-  delete (merged as Record<string, unknown>)['googleUrl'];
-  return merged;
 }
 
 export const MapStore = signalStore(
@@ -62,21 +62,31 @@ export const MapStore = signalStore(
     }
     return mergeMapState(saved);
   }),
-  withMethods((store) => ({
-    setBackground: (background: MapBackground) => patchState(store, { background }),
-    setOverlayOpacity: (overlayOpacity: number) => patchState(store, { overlayOpacity }),
-    setAlign: (align: boolean) => patchState(store, { align }),
-    setScale: (v: number) => patchState(store, (s) => ({ scale: { ...s.scale, [s.background]: Math.max(0.01, v) } })),
-    scaleBy: (factor: number) => patchState(store, (s) => ({ scale: { ...s.scale, [s.background]: Math.max(0.01, s.scale[s.background] * factor) } })),
-    setRotation: (rotation: number) => patchState(store, { rotation }),
-    nudge: (dx: number, dz: number) => patchState(store, (s) => ({ dx: s.dx + dx, dz: s.dz + dz })),
-    setOffset: (dx: number, dz: number) => patchState(store, { dx, dz }),
-    resetAlignment: () => patchState(store, { scale: { ...MAP_DEFAULT_SCALE }, rotation: 0, dx: 0, dz: 0 }),
-  })),
-  withComputed(() => ({
-    /** The OpenStreetMap embed for the active site (display only; the data behind the model comes from Overpass). */
+  withMethods((store) => {
+    // The location the map frame points at. Defaults to the active site's origin; `locate()` overrides it
+    // (e.g. when a site is generated / imported), so the embed follows the latest location even if the
+    // origin signal hasn't propagated yet.
+    const located = signal<{ lat: number; lon: number } | null>(null);
+    return {
+      setBackground: (background: MapBackground) => patchState(store, { background }),
+      setOverlayOpacity: (overlayOpacity: number) => patchState(store, { overlayOpacity }),
+      setAlign: (align: boolean) => patchState(store, { align }),
+      setScale: (v: number) => patchState(store, (s) => ({ scale: { ...s.scale, [s.background]: Math.max(0.01, v) } })),
+      scaleBy: (factor: number) => patchState(store, (s) => ({ scale: { ...s.scale, [s.background]: Math.max(0.01, s.scale[s.background] * factor) } })),
+      setRotation: (rotation: number) => patchState(store, { rotation }),
+      nudge: (dx: number, dz: number) => patchState(store, (s) => ({ dx: s.dx + dx, dz: s.dz + dz })),
+      setOffset: (dx: number, dz: number) => patchState(store, { dx, dz }),
+      resetAlignment: () => patchState(store, { scale: { ...MAP_DEFAULT_SCALE }, rotation: 0, dx: 0, dz: 0 }),
+      /** Point the OpenStreetMap embed at a location (used when a site is created / loaded). */
+      locate: (lat: number, lon: number) => located.set({ lat, lon }),
+      /** The location currently shown: explicit `locate()` override, else the active site origin. */
+      location: computed(() => located() ?? siteOrigin()),
+    };
+  }),
+  withComputed((store) => ({
+    /** The OpenStreetMap embed for the location being shown (see {@link locate}). */
     osmUrl: computed(() => {
-      const o = siteOrigin();
+      const o = store.location();
       return osmUrlFor(o.lat, o.lon);
     }),
   })),

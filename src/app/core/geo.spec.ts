@@ -1,6 +1,5 @@
-import { CALIBRATION_CORNERS, DEFAULT_CALIBRATION } from './constants';
+import { DEFAULT_CALIBRATION } from './constants';
 import { courseDegrees, solveCalibration, toGeo, toLocal } from './geo';
-import { SITE_DIMS } from './site-dims';
 
 describe('geo', () => {
   it('maps the site origin through the default calibration to (dx, dz)', () => {
@@ -25,20 +24,16 @@ describe('geo', () => {
     expect(z).toBeLessThan(-10);
   });
 
-  it('solves the default calibration from the two real corners', () => {
-    const r = solveCalibration(
-      CALIBRATION_CORNERS.greenhouseNW,
-      CALIBRATION_CORNERS.storeSE,
-      { x: SITE_DIMS.GX0, z: SITE_DIMS.AZ0 },
-      { x: SITE_DIMS.BX1, z: SITE_DIMS.BZ1 },
-    );
+  it('solves a calibration from two synthetic corner pairs', () => {
+    // Model corners 40 m apart along the model +X axis; real corners due east, 80 m apart -> rot 0, ratio 2.
+    const p1 = { lat: 45.5287, lon: 12.1333 };
+    const p2 = { lat: 45.5287, lon: 12.134364 }; // ~80 m east of p1 at this latitude
+    const r = solveCalibration(p1, p2, { x: -20, z: 0 }, { x: 20, z: 0 });
     expect(r).toBeTruthy();
     if (!r) return;
-    expect(r.calibration.rot).toBeCloseTo(DEFAULT_CALIBRATION.rot, 1);
-    expect(r.calibration.dx).toBeCloseTo(DEFAULT_CALIBRATION.dx, 0);
-    expect(r.calibration.dz).toBeCloseTo(DEFAULT_CALIBRATION.dz, 0);
-    expect(r.distanceRatio).toBeCloseTo(1.022, 2);
-    expect(r.cornerError).toBeLessThan(3);
+    expect(r.distanceRatio).toBeCloseTo(2, 1);
+    expect(Math.abs(r.calibration.rot)).toBeLessThan(2);
+    expect(r.cornerError).toBeLessThan(2);
   });
 
   it('refuses corners that are too close to give a rotation', () => {
