@@ -115,6 +115,8 @@ export class Panel {
   readonly def = computed(() => PANEL_BY_ID[this.id()]);
   readonly state = computed(() => this.layout.panels()[this.id()]);
   private drag: { dx: number; dy: number } | null = null;
+  /** True while the user drags the header (move) — suppresses the re-open size guard. */
+  private get dragging(): boolean { return this.drag !== null; }
   private resizeObserver: ResizeObserver | null = null;
 
   constructor() {
@@ -124,13 +126,28 @@ export class Panel {
       const el = this.host.nativeElement;
       let first = true;
       const ro = new ResizeObserver(() => {
-        if (first || el.hidden) {
+        if (el.hidden) return; // never measure while closed: the size would be wrong
+        if (first) {
           first = false;
           return;
         }
         const w = Math.round(el.offsetWidth);
         const h = Math.round(el.offsetHeight);
         const s = untracked(() => this.state());
+        const savedW = s.w ?? this.def().width;
+        const savedH = s.h ?? this.def().height;
+        // Re-opening a panel can briefly report a stale content size before the saved inline styles apply.
+        // If we are hidden->visible with a mismatch to the saved size, restore the saved one instead of persisting the transient value.
+        if (savedW !== undefined && savedH !== undefined && w > 0 && h > 0 && (Math.abs(w - savedW) > 2 || Math.abs(h - savedH) > 2) && !this.dragging) {
+          requestAnimationFrame(() => {
+            if (el.hidden) return;
+            const w2 = Math.round(el.offsetWidth);
+            const h2 = Math.round(el.offsetHeight);
+            if (Math.abs(w2 - savedW) <= 2 && Math.abs(h2 - savedH) <= 2) return; // settled back to saved size
+            if (w2 > 0 && h2 > 0) this.layout.resizeTo(this.id(), w2, h2);
+          });
+          return;
+        }
         if (w > 0 && h > 0 && (Math.abs(w - (s.w ?? this.def().width ?? 0)) > 1 || Math.abs(h - (s.h ?? this.def().height ?? 0)) > 1)) this.layout.resizeTo(this.id(), w, h);
       });
       ro.observe(el);

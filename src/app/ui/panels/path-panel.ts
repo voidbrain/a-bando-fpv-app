@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { createPathView, dragPathView, drawFlightPath, resetPathView, zoomPathView, type PathViewMode } from '../../core/drawing/flight-path';
 import { FlightService } from '../../services/flight.service';
 import { PlaybackService } from '../../services/playback.service';
+import { SceneService } from '../../services/scene.service';
 import { CalibrationStore } from '../../state/calibration.store';
 import { CanvasWidget } from '../panel/canvas-widget';
 import { Panel } from '../panel/panel';
@@ -18,6 +19,10 @@ import { Panel } from '../panel/panel';
             <button class="btn" [class.on]="mode() === m.mode" (click)="setMode(m.mode)">{{ m.label }}</button>
           }
           <button class="btn" (click)="fit()">Fit</button>
+        </div>
+        <div class="row">
+          <button class="btn" [class.on]="scene.pin() === 's'" (click)="scene.armPin('s')" title="Click the ground where the flight started">Pin start</button>
+          <button class="btn" [class.on]="scene.pin() === 'e'" (click)="scene.armPin('e')" title="Click the ground where the flight ended">Pin end</button>
         </div>
         <div class="keep canvas" (pointerdown)="down($event)" (pointermove)="move($event)" (pointerup)="up()" (pointercancel)="up()" (wheel)="wheel($event)">
           <app-canvas panel="path" [draw]="draw" />
@@ -42,6 +47,7 @@ export class PathPanel {
   private readonly flights = inject(FlightService);
   private readonly playback = inject(PlaybackService);
   private readonly cal = inject(CalibrationStore);
+  protected readonly scene = inject(SceneService);
   protected readonly modes: readonly { mode: PathViewMode; label: string }[] = [
     { mode: 'top', label: 'Top' },
     { mode: 'side', label: 'Side' },

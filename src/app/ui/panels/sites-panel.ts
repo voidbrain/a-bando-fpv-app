@@ -18,8 +18,8 @@ type Side = 'n' | 's' | 'e' | 'w';
 const SIDES: readonly Side[] = ['n', 'e', 's', 'w'];
 
 /**
- * The Sites panel: the front end of the 3D map builder. One JSON document (SiteSpec) is the single source of truth —
- * this panel sets the map location and generates a site from it (address search or Alt+click on the 3D scene), edits
+ * The Sites panel: the model editor of the 3D builder. One JSON document (SiteSpec) is the single source of truth —
+ * location search / generation lives in the Map panel now; here you edit buildings, levels, openings, trees,
  * every building (size, position, rotation, walls, openings, roof, levels, guessed interiors + partition tool) with
  * undo/redo, and manages the browser library (save / open / delete / JSON import & export). Changes preview live in
  * the 3D scene through {@link SiteService.applyDraft}.
@@ -30,22 +30,6 @@ const SIDES: readonly Side[] = ['n', 'e', 's', 'w'];
   imports: [Panel, FormsModule],
   template: `
     <app-panel id="sites">
-      <!-- location & generation -->
-      <h4>Location</h4>
-      <div class="row">
-        <input type="text" class="grow" placeholder="Address or place name (or lat, lon)" [(ngModel)]="query" (keyup.enter)="generate()" />
-        <button class="btn primary" [disabled]="site.generating()" (click)="generate()">{{ site.generating() ? 'Working…' : 'Generate' }}</button>
-      </div>
-      <div class="row">
-        <label>scale × <input type="number" min="0.2" max="5" step="0.1" [(ngModel)]="genScale" /></label>
-        <span class="dim small mono">{{ originLabel() }}</span>
-      </div>
-      <div class="row">
-        <label>bearing ° <input type="number" step="1" [value]="ed.draft().bearingDeg" (change)="setBearing(num($event))" /></label>
-        <button class="btn" title="Set the model’s north from the map alignment rotation" (click)="pointNorth()">Point north</button>
-        <span class="dim small">Tip: open the Map panel and align / calibrate on OpenStreetMap first.</span>
-      </div>
-
       <!-- active site & library -->
       <h4>Site</h4>
       <div class="row">
@@ -253,8 +237,6 @@ export class SitesPanel implements AfterContentChecked {
   /** The stage calls this with site-metre ground coordinates when a pick mode is armed (wired in SceneService). */
   readonly onStageClick = (x: number, z: number): void => this.stageClick(x, z);
 
-  protected readonly query = signal('');
-  protected readonly genScale = signal(1);
   protected readonly level = signal(0);
   protected readonly openSide = signal<Side>('n');
   protected readonly partitionMode = signal(false);
@@ -284,33 +266,8 @@ export class SitesPanel implements AfterContentChecked {
     this.drawPlan();
   }
 
-  // ---- location & generation ----
 
-  protected async generate(): Promise<void> {
-    const q = this.query().trim();
-    if (!q) {
-      this.toast.show('Type an address, or Alt+click the 3D scene at the spot.');
-      return;
-    }
-    await this.site.generateFromAddress(q, this.genScale());
-    this.library.set(this.libraryService.list());
-  }
 
-  protected setBearing(deg: number): void {
-    this.ed.setBearing(deg);
-    this.apply();
-  }
-
-  /** Adopt the Map panel's alignment rotation as the model's north bearing, then re-solve the GPS calibration. */
-  protected pointNorth(): void {
-    const rot = this.map.rotation();
-    this.ed.commitSite((s) => {
-      s.bearingDeg = ((rot % 360) + 360) % 360;
-    });
-    this.site.applyDraft();
-    this.site.recalibrate();
-    this.toast.show(`North set from the map alignment (${rot.toFixed(1)}°).`);
-  }
 
   // ---- site-level draft edits ----
 
