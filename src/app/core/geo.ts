@@ -1,23 +1,26 @@
-import { METRES_PER_DEG_LAT, METRES_PER_DEG_LON, SITE_ORIGIN } from './constants';
+import { METRES_PER_DEG_LAT, siteOrigin } from './constants';
 import { RAD, DEG } from './math';
 import type { Calibration, GeoPoint } from './models';
 
-/** Latitude/longitude -> local model metres [x, z]. */
-export function toLocal(lat: number, lon: number, cal: Calibration): [number, number] {
-  const e = (lon - SITE_ORIGIN.lon) * METRES_PER_DEG_LON;
-  const n = (lat - SITE_ORIGIN.lat) * METRES_PER_DEG_LAT;
+/** Metres per degree of longitude at `lat`. */
+export const metresPerDegLon = (lat: number): number => 111320 * Math.cos((lat * Math.PI) / 180);
+
+/** Latitude/longitude -> local model metres [x, z], around the given geographic origin. */
+export function toLocalAt(origin: GeoPoint, lat: number, lon: number, cal: Calibration): [number, number] {
+  const e = (lon - origin.lon) * metresPerDegLon(origin.lat);
+  const n = (lat - origin.lat) * METRES_PER_DEG_LAT;
   const a = cal.rot * RAD;
   return [e * Math.cos(a) + n * Math.sin(a) + cal.dx, e * Math.sin(a) - n * Math.cos(a) + cal.dz];
 }
 
-/** Local model metres -> [latitude, longitude]. Inverse of {@link toLocal}. */
-export function toGeo(x: number, z: number, cal: Calibration): [number, number] {
+/** Local model metres -> [latitude, longitude]. Inverse of {@link toLocalAt}. */
+export function toGeoAt(origin: GeoPoint, x: number, z: number, cal: Calibration): [number, number] {
   const a = cal.rot * RAD;
   const X = x - cal.dx;
   const Z = z - cal.dz;
   return [
-    SITE_ORIGIN.lat + (X * Math.sin(a) - Z * Math.cos(a)) / METRES_PER_DEG_LAT,
-    SITE_ORIGIN.lon + (X * Math.cos(a) + Z * Math.sin(a)) / METRES_PER_DEG_LON,
+    origin.lat + (X * Math.sin(a) - Z * Math.cos(a)) / METRES_PER_DEG_LAT,
+    origin.lon + (X * Math.cos(a) + Z * Math.sin(a)) / metresPerDegLon(origin.lat),
   ];
 }
 
@@ -39,8 +42,8 @@ export interface PlanePoint {
  * A similarity fit with fixed scale: the rotation comes from the direction between the corners, the shift centres the
  * remaining error between them. Returns null when the corners are too close together to give a stable rotation.
  */
-export function solveCalibration(real1: GeoPoint, real2: GeoPoint, model1: PlanePoint, model2: PlanePoint): CalibrationSolution | null {
-  const en = (p: GeoPoint): [number, number] => [(p.lon - SITE_ORIGIN.lon) * METRES_PER_DEG_LON, (p.lat - SITE_ORIGIN.lat) * METRES_PER_DEG_LAT];
+export function solveCalibration(real1: GeoPoint, real2: GeoPoint, model1: PlanePoint, model2: PlanePoint, origin: GeoPoint = siteOrigin()): CalibrationSolution | null {
+  const en = (p: GeoPoint): [number, number] => [(p.lon - origin.lon) * metresPerDegLon(origin.lat), (p.lat - origin.lat) * METRES_PER_DEG_LAT];
   const a = en(real1);
   const b = en(real2);
   const de = b[0] - a[0];
@@ -70,4 +73,21 @@ export function courseDegrees(vx: number, vz: number, cal: Calibration): number 
   const east = vx * Math.cos(a) + vz * Math.sin(a);
   const north = vx * Math.sin(a) - vz * Math.cos(a);
   return (Math.atan2(east, north) * DEG + 360) % 360;
+}
+
+// ---- origin-aware shorthands: they read the *active* site origin (core/constants -> siteOrigin) ----
+
+/** {@link toLocalAt} with the active site origin. */
+export function toLocal(lat: number, lon: number, cal: Calibration): [number, number] {
+  return toLocalAt(siteOrigin(), lat, lon, cal);
+}
+
+/** {@link toGeoAt} with the active site origin. */
+export function toGeo(x: number, z: number, cal: Calibration): [number, number] {
+  return toGeoAt(siteOrigin(), x, z, cal);
+}
+
+/** {@link solveCalibration} with the active site origin. */
+export function solveCalibrationHere(real1: GeoPoint, real2: GeoPoint, model1: PlanePoint, model2: PlanePoint): CalibrationSolution | null {
+  return solveCalibration(real1, real2, model1, model2, siteOrigin());
 }

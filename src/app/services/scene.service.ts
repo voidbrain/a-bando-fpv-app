@@ -1,6 +1,8 @@
 import { Injectable, effect, inject, signal, untracked } from '@angular/core';
 import * as THREE from 'three';
 import type { CameraView } from '../core/models';
+import { DRONE_START } from '../core/constants';
+import type { SiteModel } from '../three/site-model';
 import { CalibrationStore } from '../state/calibration.store';
 import { FlightStore } from '../state/flight.store';
 import { LayoutStore } from '../state/layout.store';
@@ -123,6 +125,22 @@ export class SceneService {
       this.loop.add(FrameOrder.render, (dt) => this.renderAll(dt)),
     ];
     this.ready.set(true);
+  }
+
+  /**
+   * Re-arm everything that holds a reference to the site object graph after {@link SceneHost.setSite} swapped it:
+   * the x-ray fades the new meshes, the simulator collides with the new geometry, the parked drone moves to the
+   * new take-off pad and the paths are rebuilt for the new scale.
+   */
+  rebindSite(site: SiteModel): void {
+    if (this.xray) {
+      this.xray.reset();
+      this.xray.site = site;
+      this.xray.enabled = this.view.xray();
+    }
+    this.sim.world = site.collider;
+    this.sim.reposition(DRONE_START.x, DRONE_START.z);
+    untracked(() => this.host?.paths.rebuild(this.flights.all, this.flights.speedMax));
   }
 
   detach(): void {

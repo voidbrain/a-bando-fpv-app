@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { SITE_DIMS, isInClearing } from '../core/site-dims';
+import { type BuildingSpec, type LevelSpec, type OpeningSpec, type SiteSpec, type TreeSpec, createRandom } from '../core/site-spec';
+import { SITE_DIMS } from '../core/site-dims';
+import { DEFAULT_CALIBRATION, METRES_PER_DEG_LAT, SITE_ORIGIN } from '../core/constants';
+import { courseDegrees } from '../core/geo';
 import { SiteCollider, type SolidBox, type TreeCylinder } from '../core/sim/collider';
 
-/** Deciduous / conifer description: [x, z, height, radius]. */
-export type TreeSpec = readonly [number, number, number, number];
 export type TreeKind = 'd' | 'c';
 
 /** Everything built for the site: the scalable group, collision data and the pieces other systems manipulate. */
@@ -32,19 +33,20 @@ export class TreeField {
     readonly crownsCon: THREE.InstancedMesh,
   ) {}
 
-  private matrix(kind: TreeKind, i: number, trunk: boolean): THREE.Matrix4 {
-    const [x, z, h, r] = (kind === 'd' ? this.dec : this.con)[i] as TreeSpec;
+  matrix(kind: TreeKind, i: number, trunk: boolean): THREE.Matrix4 {
+    const t = (kind === 'd' ? this.dec : this.con)[i] as TreeSpec;
     const o = this.tmp;
     if (trunk) {
-      o.position.set(x, h * 0.2, z);
-      o.scale.set(1, h * 0.4, 1);
+      o.position.set(t.x, t.h * 0.2, t.z);
+      o.scale.set(1, t.h * 0.4, 1);
     } else if (kind === 'd') {
-      o.position.set(x, h * 0.4 + r * 0.7, z);
-      o.scale.set(r, r * 1.15, r);
+      o.position.set(t.x, t.h * 0.4 + t.r * 0.7, t.z);
+      o.scale.set(t.r, t.r * 1.15, t.r);
     } else {
-      o.position.set(x, h * 0.65, z);
-      o.scale.set(r * 0.9, h * 0.8, r * 0.9);
+      o.position.set(t.x, t.h * 0.65, t.z);
+      o.scale.set(t.r * 0.9, t.h * 0.8, t.r * 0.9);
     }
+    o.rotation.set(0, 0, 0);
     o.updateMatrix();
     return o.matrix.clone();
   }
@@ -65,345 +67,541 @@ const DECAL_ORDER = -1000;
 const material = (color: string, o: THREE.MeshStandardMaterialParameters = {}): THREE.MeshStandardMaterial =>
   new THREE.MeshStandardMaterial({ color, roughness: 0.95, ...o });
 
-/** Park-Miller generator: the tree layout depends on its exact sequence, so it is part of the scene definition. */
-function createRandom(seed = 7): () => number {
-  let s = seed;
-  return () => (s = (s * 16807) % 2147483647) / 2147483647;
+/**
+ * Builder context while one spec is turned into geometry. Mesh coordinates are building-local (the building group
+ * carries position + rotation); collider boxes are registered directly in site space through `at` / `rot`.
+ */
+interface Ctx {
+  /** Centre of the building currently being built, in site coordinates. */
+  at: [number, number];
+  /** Rotation of that building (degrees about Y), baked conservatively into the collider AABBs. */
+  rot: number;
+  solids: SolidBox[];
+  occluders: THREE.Mesh[];
+  mat: { wall: THREE.MeshStandardMaterial; white: THREE.MeshStandardMaterial; pier: THREE.MeshStandardMaterial; steel: THREE.MeshStandardMaterial; conc: THREE.MeshStandardMaterial; dirt: THREE.MeshStandardMaterial };
+  matFor(c?: string): THREE.MeshStandardMaterial;
+  seed: number;
+  addBox(target: THREE.Object3D, x: number, y: number, z: number, w: number, h: number, d: number, m: THREE.Material, solid: boolean, cast: boolean): THREE.Mesh;
+  addMesh(target: THREE.Object3D, m: THREE.Mesh, x: number, y: number, z: number, solidBox?: SolidBox): void;
 }
 
-interface Opening {
-  a: number;
-  b: number;
-  /** Gaps (y0, y1) in the opening that stay empty (door / window), the rest is filled. */
-  g: [number, number][];
+/** Barrel vault / half cylinder along local Z. */
+function vault(len: number, r: number, k: number, mat: THREE.Material, seg = 8): THREE.Mesh {
+  const g = new THREE.CylinderGeometry(r, r, len, seg, 1, true, Math.PI / 2, Math.PI);
+  g.rotateX(Math.PI / 2);
+  g.scale(1, k, 1);
+  const m = new THREE.Mesh(g, mat);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
+
+/** Three-prism gable roof spanning `w` along X, `d` deep, ridge over the long axis. */
+function gable(w: number, d: number, rise: number, mat: THREE.Material): THREE.Mesh {
+  const R = d * 0.577;
+  const g = new THREE.CylinderGeometry(R, R, w + 0.8, 3);
+  g.rotateX(Math.PI / 2);
+  g.rotateZ(Math.PI);
+  g.rotateY(Math.PI / 2);
+  g.scale(1, (rise * 2) / (1.5 * R), 1);
+  const m = new THREE.Mesh(g, mat);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
+
+/** Wall strips of one side with openings punched out (doors from the floor, windows on a high sill). */
+function buildSide(ctx: Ctx, b: BuildingSpec, l: LevelSpec, side: 'n' | 's' | 'e' | 'w', target: THREE.Object3D): void {
+  const runLen = side === 'n' || side === 'w' ? b.length : b.width;
+  const acrossPos = side === 'w' ? -b.length / 2 : side === 'e' ? b.length / 2 : side === 'n' ? -b.width / 2 : b.width / 2;
+  const th = 0.5;
+  const wall = (from: number, len: number, y: number, hh: number): void => {
+    if (len < 0.01 || hh < 0.01) return;
+    const m = from + len / 2 - runLen / 2;
+    if (side === 'w' || side === 'e') ctx.addBox(target, acrossPos, y, m, th, hh, len, ctx.mat.wall, true, true);
+    else ctx.addBox(target, m, y, acrossPos, len, hh, th, ctx.mat.wall, true, true);
+  };
+  let p = 0;
+  for (const o of (l.doors[side] ?? []).slice().sort((x, y) => x.c - y.c)) {
+    wall(p, o.c - o.w / 2, l.height / 2, l.height);
+    const gy0 = o.kind === 'door' ? 0 : Math.max(0.4, l.height * 0.75);
+    const gy1 = Math.min(l.height, gy0 + o.h);
+    if (gy0 > 0) wall(o.c - o.w / 2, o.w, gy0 / 2, gy0);
+    if (gy1 < l.height) wall(o.c - o.w / 2, o.w, (gy1 + l.height) / 2, l.height - gy1);
+    p = o.c + o.w / 2;
+  }
+  wall(p, runLen - p, l.height / 2, l.height);
+}
+
+/** Four walls of one level plus interior partitions (thin solid walls between their endpoints). */
+function buildWalls(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.Object3D): void {
+  for (const side of ['n', 's', 'e', 'w'] as const) {
+    if (l.sides[side]) buildSide(ctx, b, l, side, target);
+  }
+  for (const [a, c] of l.partitions) {
+    const len = Math.hypot(c.x - a.x, c.z - a.z);
+    if (len < 0.3) continue;
+    const mx = (a.x + c.x) / 2 - b.length / 2, mz = (a.z + c.z) / 2 - b.width / 2;
+    if (Math.abs(a.x - c.x) < 0.01) ctx.addBox(target, mx, l.height / 2, mz, 0.3, l.height, len, ctx.mat.wall, true, true);
+    else ctx.addBox(target, mx, l.height / 2, mz, len, l.height, 0.3, ctx.mat.wall, true, true);
+  }
+}
+
+function buildRoof(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.Object3D): void {
+  const top = l.baseY + l.height;
+  const rise = Math.max(0.5, l.roofRise);
+  const rc = ctx.matFor(l.roofColor);
+  if (l.roof === 'flat') {
+    ctx.addBox(target, 0, top + 0.15, 0, b.length + 0.6, 0.3, b.width + 0.6, rc, false, true);
+    ctx.solids.push(rotBoxLocal(ctx.at[0], ctx.at[1], b.length, b.width, ctx.rot, top, top + 0.3, true));
+    return;
+  }
+  if (l.roof === 'gable') {
+    ctx.addMesh(target, gable(b.length, b.width, rise, rc), 0, top + rise * 0.45, 0, rotBoxLocal(ctx.at[0], ctx.at[1], b.length, b.width, ctx.rot, top, top + rise, true));
+    return;
+  }
+  // vault: n barrels across the width (local X), running along Z
+  const n = Math.max(1, l.vaultCount ?? 1);
+  const VW = b.length / n, VR = VW / 2, VK = l.vaultK ?? 0.58;
+  for (let i = 0; i < n; i++) {
+    ctx.addMesh(target, vault(b.width, VR, VK, rc), -b.length / 2 + VW / 2 + i * VW, top, 0);
+  }
+  ctx.solids.push(rotBoxLocal(ctx.at[0], ctx.at[1], b.length, b.width, ctx.rot, top + 0.4, top + VR * VK + 0.2, true));
+}
+
+/** Greenhouse tunnel: elliptical glass vault (middle third torn away), steel ribs every ~2.5 m, bar-only ends. */
+function buildGreenhouse(ctx: Ctx, b: BuildingSpec, target: THREE.Object3D, roofTarget: THREE.Object3D): void {
+  const l = b.levels[0];
+  const GS = l.baseY, GW = b.width / 2, GK = l.vaultK ?? 0.7, GHT = GS + GW * GK;
+  const glassMat = material('#9ec1b6', { transparent: true, opacity: 0.3, side: THREE.DoubleSide, roughness: 0.3, depthWrite: false });
+  const TZ0 = -b.length / 2 + 0.66 * b.length, TZ1 = -b.length / 2 + 0.92 * b.length;
+  for (const [f0, f1] of [[0, 0.37], [0.37, 0.66], [0.92, 1]] as const) {
+    const x0 = -b.length / 2 + f0 * b.length, x1 = -b.length / 2 + f1 * b.length;
+    const v = vault(x1 - x0, GW, GK, glassMat, 14);
+    v.castShadow = false;
+    v.rotation.y = Math.PI / 2;
+    ctx.addMesh(roofTarget, v, (x0 + x1) / 2, GS, 0);
+  }
+  const lp: number[] = [];
+  for (let a = 22.5; a < 180; a += 22.5) {
+    const r = (a * Math.PI) / 180, y = GS + GW * GK * Math.sin(r), z = GW * Math.cos(r);
+    lp.push(-b.length / 2, y, z, b.length / 2, y, z);
+  }
+  const rnd = createRandom(ctx.seed);
+  const nRibs = Math.max(2, Math.round(b.length / 2.5));
+  for (let i = 0; i <= nRibs; i++) {
+    const x = -b.length / 2 + (i * b.length) / nRibs;
+    const torn = x > TZ0 && x < TZ1;
+    const t = new THREE.Mesh(new THREE.TorusGeometry(GW, 0.08, 4, 14, Math.PI), ctx.mat.steel);
+    t.rotation.y = Math.PI / 2;
+    t.scale.y = GK * (torn ? 1 - rnd() * 0.2 : 1);
+    if (torn) t.rotation.x = (rnd() - 0.5) * 0.05;
+    ctx.addMesh(target, t, x, GS, 0);
+    lp.push(x, 0, -GW, x, GS, -GW, x, 0, GW, x, GS, GW);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
+  target.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x56655f })));
+  ctx.solids.push(rotBoxLocal((-b.length / 2 + TZ0) / 2 + ctx.at[0], ctx.at[1], TZ0 + b.length / 2, 8, ctx.rot, GHT - 1.5, GHT, false));
+  ctx.solids.push(rotBoxLocal((TZ1 + b.length / 2) / 2 + ctx.at[0], ctx.at[1], b.length / 2 - TZ1, 8, ctx.rot, GHT - 1.5, GHT, false));
+}
+
+/** Collider AABB of an element at site coordinates (x, z), rotated `deg` about Y (conservative envelope). */
+function rotBoxLocal(x: number, z: number, w: number, d: number, deg: number, y0: number, y1: number, roof: boolean): SolidBox {
+  if (Math.abs(deg) < 0.01) return [x - w / 2, x + w / 2, y0, y1, z - d / 2, z + d / 2, roof];
+  const a = (-deg * Math.PI) / 180;
+  const c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
+  const hw = (w * c + d * s) / 2, hd = (w * s + d * c) / 2;
+  return [x - hw, x + hw, y0, y1, z - hd, z + hd, roof];
+}
+
+// ---- the shipped default site ("A Bando"), expressed as a data-driven SiteSpec -------------------------
+
+/** Local-frame metres -> WGS84, using the builtin site's geographic origin and calibration (pure math, no signals). */
+const builtinGeo = (x: number, z: number): [number, number] => {
+  // inverse of toLocalAt: [x,z] = [e*cos(a)+n*sin(a)+dx, e*sin(a)-n*cos(a)+dz], a = rot*RAD
+  const X = x - DEFAULT_CALIBRATION.dx, Z = z - DEFAULT_CALIBRATION.dz;
+  const a = DEFAULT_CALIBRATION.rot * (Math.PI / 180);
+  return [SITE_ORIGIN.lat + (X * Math.sin(a) - Z * Math.cos(a)) / METRES_PER_DEG_LAT, SITE_ORIGIN.lon + (X * Math.cos(a) + Z * Math.sin(a)) / (111320 * Math.cos((SITE_ORIGIN.lat * Math.PI) / 180))];
+};
+
+/** Wall openings of one side from a list of centres: doors from the floor, small windows on a high sill. */
+function rows(kind: 'door' | 'window', cs: readonly number[], w: number, h: number): OpeningSpec[] {
+  return cs.map((c) => ({ kind, c, w, h }));
+}
+
+/** Evenly spaced window centres along `len`, skipping any within `avoid` distance of the given points. */
+function winRow(from: number, to: number, step: number, avoid: readonly number[]): number[] {
+  const out: number[] = [];
+  for (let c = from; c <= to; c += step) if (avoid.every((d) => Math.abs(c - d) > 2.4)) out.push(c);
+  return out;
+}
+
+/** Heading (degrees clockwise from true north) of a local-frame direction (dx, dz), for the builtin calibration. */
+const builtinHeading = (dx: number, dz: number): number => courseDegrees(dx, dz, DEFAULT_CALIBRATION);
+
+/** One tree zone of the builtin scatter: rectangular band, density, whether it fills the site interior, size scale. */
+interface TreeZone {
+  x0: number;
+  x1: number;
+  z0: number;
+  z1: number;
+  n: number;
+  force?: boolean;
+  sc?: number;
 }
 
 /**
- * Build the whole site from the real measured dimensions (see {@link SITE_DIMS}): store with four barrel vaults,
- * annex ("house") with doors and windows, torn greenhouse tunnel, two small houses, hardstanding, road and 800+ trees.
- * Walls are built from boxes with real openings, so the drone can fly through doors and windows.
+ * The builtin tree scatter, reproduced exactly: the zones are consumed in order by one Park-Miller stream (seed 7),
+ * rejected candidates still burn numbers, so regenerating with this layout yields the original positions.
  */
-export function buildSiteModel(): SiteModel {
+const BUILTIN_ZONES: readonly TreeZone[] = [
+  { x0: -107, x1: 14, z0: -163, z1: -97, n: 200 },
+  { x0: -213, x1: -121, z0: -114, z1: 36, n: 255 },
+  { x0: -213, x1: -114, z0: 36, z1: 156, n: 110 },
+  { x0: -107, x1: 64, z0: 108, z1: 168, n: 140 },
+  { x0: 65, x1: 156, z0: 108, z1: 163, n: 70 },
+  { x0: -150, x1: -70, z0: -20, z1: 70, n: 14, force: true },
+  { x0: -71, x1: 156, z0: -142, z1: -91, n: 50, sc: 0.55 },
+  { x0: 92, x1: 180, z0: -100, z1: 71, n: 60, sc: 0.55 },
+  { x0: -85, x1: -28, z0: -106, z1: -88, n: 18, sc: 0.7 },
+];
+
+/** Scatter the builtin zones into TreeSpecs (deterministic; mirrors the original hand-built placement loop). */
+function builtinTrees(seed: number): TreeSpec[] {
+  const rnd = createRandom(seed);
+  const out: TreeSpec[] = [];
+  const insideSite = (x: number, z: number): boolean => x > -108 && x < 92 && z > -102 && z < 124;
+  const clear = SITE_DIMS.CLEAR;
+  const isInClearing = (x: number, z: number): boolean => x > clear.x0 && x < clear.x1 && z > clear.z0 && z < clear.z1;
+  for (const zo of BUILTIN_ZONES) {
+    for (let i = 0; i < zo.n; i++) {
+      const x = zo.x0 + rnd() * (zo.x1 - zo.x0), z = zo.z0 + rnd() * (zo.z1 - zo.z0);
+      if (isInClearing(x, z)) continue;
+      if (!zo.force && insideSite(x, z)) continue;
+      const sc = zo.sc ?? 1;
+      const h = (5 + rnd() * 6) * sc, r = (1.6 + rnd() * 1.6) * sc;
+      out.push({ x, z, h, r, kind: rnd() < 0.28 ? 'c' : 'd' });
+    }
+  }
+  return out;
+}
+
+/** Meadow shrubs of the builtin scene: positions are stored scaled (as the original placed them). */
+const BUILTIN_Meadow_RAW: readonly (readonly [number, number, number, number])[] = [
+  [-30, -31, 2.3, 4.2], [-37.5, -33, 1.4, 3], [-31, -28, 0.8, 1.6],
+  [-21.5, -27, 1, 2.6], [-24, -20, 0.9, 2], [-22, -15, 1.2, 3], [-25.5, -9, 0.8, 1.8], [-23, -5, 0.9, 2.2], [-26, 0, 0.9, 2], [-21, 2, 0.8, 1.8],
+  [-45, -15, 1.1, 2.8], [-50, -22, 0.8, 1.8], [-48, -5, 0.9, 2], [-55, 8, 1, 2.4], [-42, 12, 0.8, 1.6],
+  [-58, -14, 2.2, 4], [-52, 2, 1.1, 3.6], [-68, -4, 1.2, 4], [-47, 12, 2.1, 3.6], [-70, 10, 0.9, 1.8], [-60, 20, 1, 2.2],
+];
+
+function builtinMeadow(): TreeSpec[] {
+  const G: TreeSpec['kind'][] = ['d', 'd', 'd', 'd'];
+  const out: TreeSpec[] = [];
+  const clear = SITE_DIMS.CLEAR;
+  BUILTIN_Meadow_RAW.forEach((b, i) => {
+    const x = b[0] * 1.42, z = b[1] * 1.42;
+    if (x > clear.x0 && x < clear.x1 && z > clear.z0 && z < clear.z1) return;
+    out.push({ x, z, h: b[3] * 1.25, r: b[2] * 1.25, kind: G[i % 4] as TreeSpec['kind'] });
+  });
+  return out;
+}
+
+/** Small houses seen on the builtin satellite screenshot. */
+const BUILTIN_HOUSES: readonly (readonly [number, number, number, number, number, string])[] = [
+  [-62.7, 94.5, 18, 11, 6.5, '#6e6468'],
+  [68, 91.7, 16, 11.5, 6.5, '#b5683f'],
+];
+
+/**
+ * The shipped site as an editable spec: store (55 × 151.76 m, four barrel vaults), annex ("house", 56 × 20 m),
+ * greenhouse tunnel, two small houses, pads and roads, the exact builtin tree scatter. All values come from
+ * {@link SITE_DIMS}, which was measured against Google Maps; the geometry is pure open data / own measurement.
+ */
+export function builtinSpec(): SiteSpec {
   const D = SITE_DIMS;
+  const { BW, BL, AL, AW, GL, EXN, BX0, BX1, BZ0, BZ1, AX0, AX1, AZ0, AZ1, AX, AZ, GX0, GX1, EH, AH } = D;
+  const vaultCount = 4;
+  const VW = BW / vaultCount, VR = VW / 2, RISE = VR * 0.58;
+  const nb = 23, ps = BL / nb;
+
+  // west face of the store: piers every bay, lower panels except every third bay, one big full-height door in the middle
+  const westDoors: OpeningSpec[] = [];
+  for (let i = 0; i < nb; i++) {
+    if (i % 3 === 2) westDoors.push({ kind: 'door', c: (i + 0.5) * ps, w: ps - 1, h: EH });
+    else westDoors.push({ kind: 'window', c: (i + 0.5) * ps, w: ps - 1, h: 0 }); // low panel: modelled as filled wall below
+  }
+  // strip the pseudo-openings back out: buildSide only needs the real big doors punched through
+  const mainWest = westDoors.filter((o) => o.kind === 'door');
+
+  const dc = (AX0 + BX0) / 2; // centre of the annex's shared (south-facing) wall with the store
+  const nd = [0.21, 0.5, 0.78].map((f) => AL * f); // three doors along the forest side, in annex-local coords
+
+  const store: BuildingSpec = {
+    id: 'store',
+    name: 'Store',
+    pos: { x: 0, z: 0 },
+    rotDeg: 0,
+    length: BW,
+    width: BL,
+    color: '#d7d0bd',
+    floorColor: '#a9aaa0',
+    levels: [
+      {
+        baseY: 0,
+        height: EH,
+        sides: { n: true, s: true, e: true, w: true },
+        doors: { w: mainWest },
+        partitions: [],
+        roof: 'vault',
+        roofRise: RISE,
+        vaultCount,
+        vaultK: 0.58,
+        roofColor: '#b5683f',
+      },
+    ],
+  };
+
+  const annex: BuildingSpec = {
+    id: 'annex',
+    name: 'Annex',
+    pos: { x: AX, z: AZ },
+    rotDeg: 0,
+    length: AL,
+    width: AW,
+    color: '#d7d0bd',
+    levels: [
+      {
+        baseY: 0,
+        height: AH,
+        sides: { n: true, s: true, e: true, w: true },
+        doors: {
+          // forest side (north): 3 doors + small windows — openings measured from AX0
+          n: [
+            ...nd.map((c) => ({ kind: 'door' as const, c, w: 2.2, h: 2.6 })),
+            ...Array.from({ length: Math.floor((AL - 4) / 3.4) + 1 }, (_, i) => AX0 + 2 + i * 3.4 - AX0)
+              .filter((c) => nd.every((d) => Math.abs(c - d) > 2.4))
+              .map((c) => ({ kind: 'window' as const, c, w: 1, h: 1 })),
+          ],
+          // east end: door with a small window above at the same spot
+          e: [{ kind: 'door', c: AW / 2, w: 2.2, h: 2.6 }, { kind: 'window', c: AW / 2, w: 2.2, h: 1 }],
+          // west end: the 12 m opening into the greenhouse
+          w: [{ kind: 'door', c: AW / 2, w: 12, h: AH * 0.91 }],
+          // shared wall with the store (south): central door + windows
+          s: [
+            { kind: 'door', c: dc - AX0, w: 2.4, h: 2.8 },
+            ...Array.from({ length: Math.floor((BX0 - AX0 - 5) / 3.4) + 1 }, (_, i) => 2.5 + i * 3.4)
+              .filter((c) => Math.abs(c - (dc - AX0)) > 2.4)
+              .map((c) => ({ kind: 'window' as const, c, w: 1, h: 1 })),
+          ],
+        },
+        partitions: [],
+        roof: 'gable',
+        roofRise: 3.9,
+        roofColor: '#c27a55',
+      },
+    ],
+  };
+
+  const ghW = AW; // greenhouse width = annex depth
+  const greenhouse: BuildingSpec = {
+    id: 'greenhouse',
+    name: 'Greenhouse',
+    pos: { x: (GX0 + GX1) / 2, z: AZ },
+    rotDeg: 0,
+    length: GL,
+    width: ghW,
+    frame: 'greenhouse',
+    levels: [{ baseY: 2, height: 0, sides: { n: false, s: false, e: false, w: false }, doors: {}, partitions: [], roof: 'vault', roofRise: (ghW / 2) * 0.7, vaultCount: 1, vaultK: 0.7 }],
+  };
+
+  const houses: BuildingSpec[] = BUILTIN_HOUSES.map(([cx, cz, w, d, h, rc], i) => ({
+    id: `house${i + 1}`,
+    name: `House ${i + 1}`,
+    pos: { x: cx, z: cz },
+    rotDeg: 0,
+    length: w,
+    width: d,
+    color: i === 0 ? '#b7cfc4' : '#d7d0bd',
+    levels: [{ baseY: 0, height: h, sides: { n: true, s: true, e: true, w: true }, doors: {}, partitions: [], roof: 'gable', roofRise: (d * 0.577) * 0.45, roofColor: rc }],
+  }));
+
+  const trees = [...builtinTrees(7), ...builtinMeadow()];
+  // the lone cypress in front of the greenhouse (from the oblique photo)
+  const clear = D.CLEAR;
+  if (!(-46.9 > clear.x0 && -46.9 < clear.x1 && -63.2 > clear.z0 && -63.2 < clear.z1)) trees.push({ x: -46.9, z: -63.2, h: 12, r: 1, kind: 'c' });
+
+  const [p1lat, p1lon] = builtinGeo(GX0, AZ0);
+  const [p2lat, p2lon] = builtinGeo(BX1, BZ1);
+
+  return {
+    version: 1,
+    id: 'bando-default',
+    name: 'A Bando',
+    createdAt: 0,
+    origin: { lat: SITE_ORIGIN.lat, lon: SITE_ORIGIN.lon },
+    bearingDeg: builtinHeading(1, 0),
+    genScale: 1,
+    groundColor: '#789b52',
+    buildings: [store, annex, greenhouse, ...houses],
+    pads: [
+      { x: -45, z: 28, w: 34, d: 94, color: '#a9aaa0' },
+      { x: 8.5, z: 90.5, w: 113, d: 29, color: '#a9aaa0' },
+      { x: 55.5, z: 41.5, w: 49, d: 73, color: '#a9aaa0' },
+      { x: -30, z: -143, w: 140, d: 3.5, color: '#b49b73' },
+      { x: 0, z: 111, w: 360, d: 7, color: '#4a4d4b' },
+      { x: -44, z: 26, w: 4, d: 4, color: '#e8c65a' },
+    ],
+    trees,
+    seed: 7,
+    extent: 240,
+    droneStart: { x: -44, z: 26 },
+    calibCorners: { p1: { x: GX0, z: AZ0 }, p2: { x: BX1, z: BZ1 } },
+    geoCorners: { p1: { lat: p1lat, lon: p1lon }, p2: { lat: p2lat, lon: p2lon } },
+  };
+}
+
+/** Build the whole site from a {@link SiteSpec}. Deterministic: the same spec always produces the same scene. */
+export function buildSiteFromSpec(spec: SiteSpec): SiteModel {
   const group = new THREE.Group();
   const roof = new THREE.Group();
   group.add(roof);
   const solids: SolidBox[] = [];
   const treeSolids: TreeCylinder[] = [];
   const occluders: THREE.Mesh[] = [];
-  const rnd = createRandom(7);
+  const rnd = createRandom(spec.seed);
 
-  const box = (x: number, y: number, z: number, w: number, h: number, d: number, mat: THREE.Material, solid = true, parent: THREE.Object3D = group, cast = true): THREE.Mesh => {
-    const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-    o.position.set(x, y, z);
-    o.castShadow = cast;
-    o.receiveShadow = true;
-    parent.add(o);
-    if (solid) {
-      solids.push([x - w / 2, x + w / 2, y - h / 2, y + h / 2, z - d / 2, z + d / 2, false]);
-      occluders.push(o);
-    }
-    return o;
+  const mats: Record<string, THREE.MeshStandardMaterial> = {};
+  const ctx: Ctx = {
+    at: [0, 0],
+    rot: 0,
+    solids,
+    occluders,
+    mat: {
+      wall: material('#d7d0bd'),
+      white: material('#e8e6dc'),
+      pier: material('#c4c1b2'),
+      steel: material('#899792', { metalness: 0.6, roughness: 0.4 }),
+      conc: material('#a9aaa0'),
+      dirt: material('#b49b73'),
+    },
+    matFor: (c?: string) => (mats[c ?? '#b5683f'] ??= material(c ?? '#b5683f')),
+    seed: spec.seed,
+    addBox: (target, x, y, z, w, h, d, m, solid, cast) => {
+      const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+      o.position.set(x, y, z);
+      o.castShadow = cast;
+      o.receiveShadow = true;
+      target.add(o);
+      if (solid) {
+        solids.push(rotBoxLocal(x + ctx.at[0], z + ctx.at[1], w, d, ctx.rot, y - h / 2, y + h / 2, false));
+        occluders.push(o);
+      }
+      return o;
+    },
+    addMesh: (target, m, x, y, z, solidBox) => {
+      m.position.set(x, y, z);
+      target.add(m);
+      if (solidBox) solids.push(solidBox);
+      occluders.push(m);
+    },
   };
 
-  const grass = material('#789b52');
-  const conc = material('#a9aaa0');
-  const wall = material('#d7d0bd');
-  const white = material('#e8e6dc');
-  const pier = material('#c4c1b2');
-  const steel = material('#899792', { metalness: 0.6, roughness: 0.4 });
-  const terra = material('#b5683f', { side: THREE.DoubleSide });
-  const dirt = material('#b49b73');
-  const dark = material('#2a3330');
-
-  // ---- ground and meadow patches
-  box(0, -0.5, 0, 520, 1, 460, grass, false, group, false).renderOrder = GROUND_ORDER;
-  // The original stacked the 300 patches millimetres apart (0.01 + i * 0.00035 m), which a 24-bit depth buffer cannot resolve
-  // at distance: it flickers. The layout is unchanged, but depth is taken out of the equation: the patches are drawn right
-  // after the ground (draw order), in creation order, ignoring the depth buffer entirely. Everything else is drawn after them
-  // and therefore always covers them: concrete, floors and buildings can never show a patch through them.
-  // (Do NOT use polygonOffset here: it scales with the viewing slope and pushes patches in front of the concrete at low angles.)
+  // ---- ground + meadow patches (patches ignore depth; everything drawn after them covers them)
+  const grass = material(spec.groundColor);
+  const ground = new THREE.Mesh(new THREE.BoxGeometry(spec.extent * 2.2, 1, spec.extent * 2.2), grass);
+  ground.position.set(0, -0.5, 0);
+  ground.receiveShadow = true;
+  ground.renderOrder = GROUND_ORDER;
+  group.add(ground);
   const patchMats = ['#6f9350', '#86a35a', '#8a8656', '#7d7a52', '#98a262', '#9a8a5c'].map((c) => material(c, { depthWrite: false, depthTest: false }));
   for (let i = 0; i < 300; i++) {
     const p = new THREE.Mesh(new THREE.CircleGeometry(3 + rnd() * 13, 6), patchMats[i % 6]);
     p.rotation.set(-Math.PI / 2, 0, rnd() * 6);
-    p.position.set((rnd() - 0.5) * 500, 0.01, (rnd() - 0.5) * 440);
-    p.renderOrder = DECAL_ORDER + i; // after the ground, in creation order: later patches paint over earlier ones, like the original
+    p.position.set((rnd() - 0.5) * spec.extent * 2.1, 0.01, (rnd() - 0.5) * spec.extent * 1.9);
+    p.renderOrder = DECAL_ORDER + i;
     p.receiveShadow = true;
     group.add(p);
   }
 
-  // ---- hardstanding + road traced from the north-up screenshot (0.1776 m per pixel)
-  box(-45, 0.08, 28, 34, 0.16, 94, conc, false, group, false);
-  box(8.5, 0.08, 90.5, 113, 0.16, 29, conc, false, group, false);
-  box(55.5, 0.08, 41.5, 49, 0.16, 73, conc, false, group, false);
-  box(-44, 0.2, 26, 4, 0.04, 4, material('#e8c65a'), false, group, false); // take-off pad
-  box(-30, 0.05, -143, 140, 0.05, 3.5, dirt, false, group, false);
-  box(0, 0.04, 111, 360, 0.08, 7, material('#4a4d4b'), false, group, false).rotation.y = 0.061;
-
-  // ---- main store: 4 barrel vaults (13.75 m each). Eaves 5.7 m, ridge ~9.7 m (estimated by proportion from the photos)
-  const vault = (len: number, r: number, k: number, mat: THREE.Material, seg = 8): THREE.Mesh => {
-    const g = new THREE.CylinderGeometry(r, r, len, seg, 1, true, Math.PI / 2, Math.PI);
-    g.rotateX(Math.PI / 2);
-    g.scale(1, k, 1);
-    const m = new THREE.Mesh(g, mat);
-    m.castShadow = true;
-    m.receiveShadow = true;
-    return m;
-  };
-  const { BW, BL, AL, AW, GL, EXN, BX0, BX1, BZ0, BZ1, AX0, AX1, AZ0, AZ1, AX, AZ, GX0, GX1, EH, AH } = D;
-  const VW = BW / 4, VR = VW / 2, VKY = 0.58, RISE = VR * VKY, NB = 23, PS = BL / NB;
-  for (let i = 0; i < 4; i++) {
-    const v = vault(BL, VR, VKY, terra);
-    v.position.set(BX0 + VW / 2 + i * VW, EH, 0);
-    roof.add(v);
+  // ---- pads / roads / take-off pad
+  let order = DECAL_ORDER + 300;
+  for (const pd of spec.pads) {
+    const o = new THREE.Mesh(new THREE.BoxGeometry(pd.w, 0.16, pd.d), material(pd.color ?? '#a9aaa0'));
+    o.position.set(pd.x, 0.08, pd.z);
+    o.receiveShadow = true;
+    o.renderOrder = order++;
+    group.add(o);
   }
-  for (let i = 0; i < 2; i++) for (let z = BZ0 + 25 + i * 12; z <= BZ1 - 12; z += 26) box(BX0 + VW / 2 + i * VW, EH + RISE - 0.1, z, 2, 0.2, 2, white, false, roof, false);
-  solids.push([BX0, BX1, EH + 0.4, EH + RISE + 0.2, BZ0, BZ1, true]);
-  box(0, 0.05, 0, BW, 0.1, BL, conc, false, group, false);
-  box(BX1, EH / 2, 0, 0.8, EH, BL, wall);
-  box(BX1 - EXN / 2, EH / 2, BZ0, EXN, EH, 0.8, wall);
-  // front (west) face: piers, then 2 bays with lower panels + 1 big full-height door, lintel above
-  for (let i = 0; i <= NB; i++) box(BX0, EH / 2, BZ0 + i * PS, 1, EH, 1, pier);
-  for (let i = 0; i < NB; i++) if (i % 3 !== 2) box(BX0, 0.75, BZ0 + (i + 0.5) * PS, 0.5, 1.5, PS - 1, wall);
-  box(BX0, EH - 0.5, 0, 0.5, 1, BL, wall);
-  for (let i = 0; i <= 8; i++) box(BX0 + (i * BW) / 8, EH / 2, BZ1, 1, EH, 1, pier);
-  box(0, EH - 0.5, BZ1, BW, 1, 0.5, wall);
-  for (const x of [BX0 + VW, 0, BX1 - VW]) for (let z = BZ0 + 2 * PS; z < BZ1 - 1; z += 2 * PS) box(x, EH / 2, z, 0.8, EH, 0.8, pier);
-  box(BX1 + 2.2, 3, -33, 3.5, 6, 3.5, white);
-  box(75, 0.9, 55.5, 4.5, 1.8, 2.2, material('#5f7a4a'));
+  const start = new THREE.Mesh(new THREE.BoxGeometry(4, 0.04, 4), material('#e8c65a'));
+  start.position.set(spec.droneStart.x, 0.2, spec.droneStart.z);
+  start.receiveShadow = true;
+  group.add(start);
 
-  // ---- annex ("house") 56 x 20 m: hollow. Front door, 12 m opening to the greenhouse (west), 3 doors on the forest side,
-  // east door, and a shared wall with the store made of 4 big internal windows separated by 3 columns
-  box(AX, 0.05, AZ, AL, 0.1, AW, conc, false, group, false);
-  const holes = (alongX: boolean, c: number, a0: number, a1: number, h: number, th: number, ops: Opening[]): void => {
-    const put = (p0: number, p1: number, y0: number, y1: number): void => {
-      if (p1 - p0 < 0.01 || y1 - y0 < 0.01) return;
-      const m = (p0 + p1) / 2, l = p1 - p0, y = (y0 + y1) / 2, hh = y1 - y0;
-      if (alongX) box(m, y, c, l, hh, th, wall);
-      else box(c, y, m, th, hh, l, wall);
-    };
-    let p = a0;
-    for (const o of [...ops].sort((u, v) => u.a - v.a)) {
-      put(p, o.a, 0, h);
-      let y = 0;
-      for (const g of o.g) {
-        put(o.a, o.b, y, g[0]);
-        y = g[1];
+  // ---- buildings
+  for (const b of spec.buildings) {
+    const inner = new THREE.Group();
+    inner.position.set(b.pos.x, 0, b.pos.z);
+    inner.rotation.y = (-b.rotDeg * Math.PI) / 180;
+    group.add(inner);
+    const localRoof = new THREE.Group();
+    inner.add(localRoof);
+    ctx.at = [b.pos.x, b.pos.z];
+    ctx.rot = b.rotDeg;
+    const floorMat = material(b.floorColor ?? '#a9aaa0');
+    for (const l of b.levels) {
+      if (l.baseY === 0) ctx.addBox(inner, 0, 0.05, 0, b.length, 0.1, b.width, floorMat, false, false);
+      if (l.baseY > 0) ctx.addBox(inner, 0, l.baseY, 0, b.length, 0.2, b.width, floorMat, false, false);
+      if (b.frame === 'greenhouse') {
+        buildGreenhouse(ctx, b, inner, localRoof);
+        break;
       }
-      put(o.a, o.b, y, h);
-      p = o.b;
+      buildWalls(ctx, b, l, inner);
+      buildRoof(ctx, b, l, localRoof);
     }
-    put(p, a1, 0, h);
-  };
-  const door = (c: number, w: number, hh: number): Opening => ({ a: c - w / 2, b: c + w / 2, g: [[0, hh]] });
-  const win = (c: number): Opening => ({ a: c - 0.5, b: c + 0.5, g: [[4.4, 5.4]] });
-  const wins = (x0: number, x1: number, st: number, avoid: number[]): Opening[] => {
-    const r: Opening[] = [];
-    for (let x = x0; x <= x1; x += st) if (avoid.every((d) => Math.abs(x - d) > 2.4)) r.push(win(x));
-    return r;
-  };
-  const nd = [0.21, 0.5, 0.78].map((f) => AX0 + f * AL);
-  holes(true, AZ0, AX0, AX1, AH, 0.5, [...nd.map((c) => door(c, 2.2, 2.6)), ...wins(AX0 + 2, AX1 - 2, 3.4, nd)]); // forest side: 3 doors + small windows
-  holes(false, AX1, AZ0, AZ1, AH, 0.5, [{ a: AZ - 1.1, b: AZ + 1.1, g: [[0, 2.6], [4.4, 5.4]] }]); // east end: door + small window above
-  box(AX0, AH / 2, AZ0 + 2, 0.5, AH, 4, wall);
-  box(AX0, AH / 2, AZ1 - 2, 0.5, AH, 4, wall);
-  box(AX0, 5.95, AZ, 0.5, 1.1, 12, wall); // west wall: 12 m opening into the greenhouse
-  const dc = (AX0 + BX0) / 2;
-  holes(true, AZ1, AX0, BX0, AH, 0.5, [door(dc, 2.4, 2.8), ...wins(AX0 + 2.5, BX0 - 2, 3.4, [dc])]); // front: central door + small windows
-  for (const x of [dc - 1.2, dc + 1.2]) box(x, 1.4, AZ1 + 0.3, 0.14, 2.8, 0.1, dark, false, group, false);
-  box(dc, 2.8, AZ1 + 0.3, 2.6, 0.14, 0.1, dark, false, group, false);
-  {
-    const R = (AW + 1.2) / 1.732;
-    const g = new THREE.CylinderGeometry(R, R, AL + 1, 3);
-    g.rotateX(Math.PI / 2);
-    g.rotateZ(Math.PI);
-    g.rotateY(Math.PI / 2);
-    g.scale(1, 3.9 / (1.5 * R), 1);
-    const a = new THREE.Mesh(g, material('#c27a55'));
-    a.position.set(AX, AH + 1.3, AZ);
-    a.castShadow = true;
-    roof.add(a);
-  }
-  solids.push([AX0, AX1, AH, AH + 3.9, AZ0, AZ1, true]);
-  box(dc - 4.5, 2.4, AZ1 + 0.28, 2.4, 1.4, 0.06, material('#2f6fb5'), false, group, false);
-  box(dc - 8, 1.4, AZ1 + 0.28, 1.4, 1, 0.06, material('#e07a2d'), false, group, false);
-  box(dc + 4.5, 2.2, AZ1 + 0.28, 1.8, 0.9, 0.06, material('#7a4aa8'), false, group, false);
-  {
-    const SW = AX1 - BX0, WW = (SW - 3) / 4, SC = (AX1 + BX0) / 2;
-    box(SC, 0.5, AZ1, SW, 1, 0.6, wall);
-    box(SC, 5.55, AZ1, SW, 1.9, 0.6, wall);
-    for (let i = 0; i < 3; i++) box(BX0 + (i + 1) * WW + i + 0.5, 2.8, AZ1, 1, 3.6, 0.9, pier);
+    // roofs live under the building but belong to the global roof group for hide/show
+    roof.attach(localRoof);
   }
 
-  // ---- greenhouse 50 x 20 m tunnel: no side walls, no horizontal bars below 2 m, elliptical arch (ridge ~9 m),
-  // ribs every 2.5 m, torn middle, open bar-only west end
-  const GW = AW / 2, GK = 0.7, GZ = AZ, GS = 2, GHT = GS + GW * GK;
-  const glass = (o: number): THREE.MeshStandardMaterial => material('#9ec1b6', { transparent: true, opacity: o, side: THREE.DoubleSide, roughness: 0.3, depthWrite: false });
-  const TZ0 = GX0 + 0.66 * GL, TZ1 = GX0 + 0.92 * GL;
-  for (const [f0, f1, o] of [[0, 0.37, 0.34], [0.37, 0.66, 0.24], [0.92, 1, 0.3]] as const) {
-    const x0 = GX0 + f0 * GL, x1 = GX0 + f1 * GL;
-    const v = vault(x1 - x0, GW, GK, glass(o), 14);
-    v.castShadow = false;
-    v.rotation.y = Math.PI / 2;
-    v.position.set((x0 + x1) / 2, GS, GZ);
-    group.add(v);
-  }
-  const lp: number[] = [];
-  for (let a = 22.5; a < 180; a += 22.5) {
-    const r = (a * Math.PI) / 180, y = GS + GW * GK * Math.sin(r), z = GZ + GW * Math.cos(r);
-    lp.push(GX0, y, z, GX1, y, z);
-  }
-  for (let i = 0; i <= 20; i++) {
-    const x = GX0 + (i * GL) / 20, torn = x > TZ0 && x < TZ1;
-    const t = new THREE.Mesh(new THREE.TorusGeometry(GW, 0.08, 4, 14, Math.PI), steel);
-    t.rotation.y = Math.PI / 2;
-    t.position.set(x, GS, GZ);
-    t.scale.y = GK * (torn ? 1 - ((i * 37) % 5) * 0.04 : 1);
-    if (torn) t.rotation.x = (((i * 7) % 5) - 2) * 0.025;
-    group.add(t);
-    lp.push(x, 0, GZ - GW, x, GS, GZ - GW, x, 0, GZ + GW, x, GS, GZ + GW);
-  }
-  {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
-    group.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x56655f })));
-  }
-  for (const o of [-6, -3, 0, 3, 6]) {
-    const h = GS + GW * GK * Math.sqrt(1 - (o / GW) ** 2);
-    box(GX0, h / 2, GZ + o, 0.1, h, 0.1, steel, false, group, false); // west end: open, vertical bars only
-  }
-  for (const y of [5, 6.6, 8]) {
-    const w = GW * Math.sqrt(1 - ((y - GS) / (GW * GK)) ** 2);
-    box(GX0, y, GZ, 0.1, 0.1, 2 * w, steel, false, group, false);
-  }
-  box((GX0 + GX1) / 2, 0.08, GZ, GL, 0.16, AW - 0.5, conc, false, group, false);
-  for (let i = 0; i < 3; i++) {
-    const p = new THREE.Mesh(new THREE.PlaneGeometry(4, 2.6), glass(0.4));
-    p.position.set(TZ0 + 3 + i * 4.5, 0.9, GZ + (i - 1) * 3.5);
-    p.rotation.set(-0.7 + i * 0.4, i * 0.9, 0.3);
-    group.add(p);
-  }
-  solids.push([GX0, TZ0, GHT - 1.5, GHT, GZ - 4, GZ + 4, false], [TZ1, GX1, GHT - 1.5, GHT, GZ - 4, GZ + 4, false]);
-
-  // ---- small houses seen on the screenshot (gable roofs)
-  const house = (cx: number, cz: number, w: number, d: number, h: number, rc: string, wc: string): void => {
-    box(cx, h / 2, cz, w, h, d, material(wc));
-    const R = d * 0.577;
-    const g = new THREE.CylinderGeometry(R, R, w + 0.8, 3);
-    g.rotateX(Math.PI / 2);
-    g.rotateZ(Math.PI);
-    g.rotateY(Math.PI / 2);
-    g.scale(1, 0.45, 1);
-    const r = new THREE.Mesh(g, material(rc));
-    r.position.set(cx, h + R * 0.225, cz);
-    r.castShadow = true;
-    occluders.push(r);
-    group.add(r);
-    solids.push([cx - w / 2, cx + w / 2, h, h + R * 0.675, cz - d / 2, cz + d / 2, false]);
-  };
-  house(-62.7, 94.5, 18, 11, 6.5, '#6e6468', '#b7cfc4');
-  house(68, 91.7, 16, 11.5, 6.5, '#b5683f', '#d7d0bd');
-
-  // ---- trees (instanced). Zones leave the open field between greenhouse and store clear on purpose.
-  const dec: TreeSpec[] = [];
-  const con: TreeSpec[] = [];
-  const insideSite = (x: number, z: number): boolean => x > -108 && x < 92 && z > -102 && z < 124;
-  const zone = (x0: number, x1: number, z0: number, z1: number, n: number, force = false, sc = 1): void => {
-    for (let i = 0; i < n; i++) {
-      const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0);
-      if (isInClearing(x, z)) continue;
-      if (!force && insideSite(x, z)) continue;
-      const h = (5 + rnd() * 6) * sc, r = (1.6 + rnd() * 1.6) * sc;
-      (rnd() < 0.28 ? con : dec).push([x, z, h, r]);
-      treeSolids.push([x, z, r * 0.75, h]);
-    }
-  };
-  zone(-107, 14, -163, -97, 200);
-  zone(-213, -121, -114, 36, 255);
-  zone(-213, -114, 36, 156, 110);
-  zone(-107, 64, 108, 168, 140);
-  zone(65, 156, 108, 163, 70);
-  zone(-150, -70, -20, 70, 14, true);
-  zone(-71, 156, -142, -91, 50, false, 0.55);
-  zone(92, 180, -100, 71, 60, false, 0.55);
-  zone(-85, -28, -106, -88, 18, false, 0.7);
-
+  // ---- trees (instanced, fixed layout from the spec)
+  const dec = spec.trees.filter((t) => t.kind === 'd');
+  const con = spec.trees.filter((t) => t.kind === 'c');
   const dm = new THREE.Object3D();
   const palette = ['#2f6a46', '#3f7a4c', '#4d8150', '#6b9154', '#7a9a58'].map((c) => new THREE.Color(c));
   const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.2, 0.32, 1, 5), material('#70533a'), dec.length + con.length);
   const crownsDec = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), material('#ffffff'), dec.length);
   const crownsCon = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 6), material('#ffffff'), con.length);
+  const field = new TreeField(dec, con, trunks, crownsDec, crownsCon);
   let j = 0;
-  dec.forEach(([x, z, h, r], i) => {
-    dm.position.set(x, h * 0.2, z);
-    dm.scale.set(1, h * 0.4, 1);
+  const place = (t: TreeSpec, i: number, kind: TreeKind): void => {
+    dm.rotation.set(0, 0, 0);
+    dm.position.set(t.x, t.h * 0.2, t.z);
+    dm.scale.set(1, t.h * 0.4, 1);
     dm.updateMatrix();
     trunks.setMatrixAt(j++, dm.matrix);
-    dm.position.set(x, h * 0.4 + r * 0.7, z);
-    dm.scale.set(r, r * 1.15, r);
-    dm.updateMatrix();
-    crownsDec.setMatrixAt(i, dm.matrix);
-    crownsDec.setColorAt(i, palette[i % 5] as THREE.Color);
-  });
-  con.forEach(([x, z, h, r], i) => {
-    dm.position.set(x, h * 0.2, z);
-    dm.scale.set(1, h * 0.4, 1);
-    dm.updateMatrix();
-    trunks.setMatrixAt(j++, dm.matrix);
-    dm.position.set(x, h * 0.65, z);
-    dm.scale.set(r * 0.9, h * 0.8, r * 0.9);
-    dm.updateMatrix();
-    crownsCon.setMatrixAt(i, dm.matrix);
-    crownsCon.setColorAt(i, palette[i % 3] as THREE.Color);
-  });
+    treeSolids.push([t.x, t.z, t.r * 0.75, t.h]);
+    if (kind === 'd') {
+      crownsDec.setMatrixAt(i, field.matrix('d', i, false));
+      crownsDec.setColorAt(i, palette[i % 5] as THREE.Color);
+    } else {
+      crownsCon.setMatrixAt(i, field.matrix('c', i, false));
+      crownsCon.setColorAt(i, palette[i % 3] as THREE.Color);
+    }
+  };
+  dec.forEach((t, i) => place(t, i, 'd'));
+  con.forEach((t, i) => place(t, i, 'c'));
   for (const m of [trunks, crownsDec, crownsCon]) {
     m.castShadow = true;
+    m.receiveShadow = true;
     group.add(m);
   }
-
-  // shrubs + tall cypress in front of the greenhouse (from oblique photo)
-  const bush = (x: number, z: number, r: number, h: number, c: string): void => {
-    if (isInClearing(x, z)) return;
-    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), material(c));
-    m.position.set(x, h / 2, z);
-    m.scale.y = h / (2 * r);
-    m.castShadow = true;
-    occluders.push(m);
-    group.add(m);
-    treeSolids.push([x, z, r * 0.9, h]);
-  };
-  bush(-64, -58, 3, 4.2, '#46704f');
-  bush(-71.7, -56.1, 2.2, 3.2, '#3f6a49');
-  if (!isInClearing(-46.9, -63.2)) {
-    const c = new THREE.Mesh(new THREE.ConeGeometry(1.4, 12, 6), material('#3d6b45'));
-    c.position.set(-46.9, 6, -63.2);
-    c.castShadow = true;
-    occluders.push(c);
-    group.add(c);
-    treeSolids.push([-46.9, -63.2, 1, 12]);
-  }
-  // front meadow shrubs, placed by eye from the oblique photo: big ones mid-field, a loose band along the shed front / apron edge, tall thin ones in the foreground
-  const G = ['#46704f', '#527a4e', '#5e8556', '#3f6a49'];
-  const meadow: readonly (readonly [number, number, number, number])[] = [
-    [-30, -31, 2.3, 4.2], [-37.5, -33, 1.4, 3], [-31, -28, 0.8, 1.6],
-    [-21.5, -27, 1, 2.6], [-24, -20, 0.9, 2], [-22, -15, 1.2, 3], [-25.5, -9, 0.8, 1.8], [-23, -5, 0.9, 2.2], [-26, 0, 0.9, 2], [-21, 2, 0.8, 1.8],
-    [-45, -15, 1.1, 2.8], [-50, -22, 0.8, 1.8], [-48, -5, 0.9, 2], [-55, 8, 1, 2.4], [-42, 12, 0.8, 1.6],
-    [-58, -14, 2.2, 4], [-52, 2, 1.1, 3.6], [-68, -4, 1.2, 4], [-47, 12, 2.1, 3.6], [-70, 10, 0.9, 1.8], [-60, 20, 1, 2.2],
-  ];
-  meadow.forEach((b, i) => bush(b[0] * 1.42, b[1] * 1.42, b[2] * 1.25, b[3] * 1.25, G[i % 4] as string));
-
-  // roofs and every solid piece may be faded by the x-ray
-  roof.traverse((o) => {
-    if ((o as THREE.Mesh).isMesh) occluders.push(o as THREE.Mesh);
-  });
 
   const collider = new SiteCollider(solids, treeSolids);
   return {
     group,
     roof,
     collider,
-    trees: new TreeField(dec, con, trunks, crownsDec, crownsCon),
+    trees: field,
     occluders,
     setScale(k: number): void {
       group.scale.setScalar(k);

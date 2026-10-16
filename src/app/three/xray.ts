@@ -30,7 +30,7 @@ export class XRay {
   private readonly hiddenTrees = new Set<string>();
   private readonly raycaster = new THREE.Raycaster();
 
-  constructor(private readonly site: SiteModel) {}
+  constructor(public site: SiteModel) {}
 
   /** `targets` are world positions of drones that must stay visible; `modelScale` is the site's scale. */
   step(dt: number, camera: THREE.Camera, targets: readonly THREE.Vector3[], modelScale: number): void {
@@ -90,11 +90,11 @@ export class XRay {
         this.raycaster.far = Math.max(0, len - 0.8);
         for (const h of this.raycaster.intersectObjects(this.site.occluders, false)) want.add(h.object as THREE.Mesh);
       }
-      const check = (kind: TreeKind, trees: ReadonlyArray<readonly [number, number, number, number]>): void => {
-        trees.forEach(([x, z, h, r], i) => {
-          const cy = (kind === 'd' ? h * 0.4 + r * 0.7 : h * 0.5) * k;
-          const rho = ((kind === 'd' ? r * 1.1 : Math.max(r * 0.9, h * 0.4)) + 0.6) * k;
-          if (segmentDistance(cam, T, x * k, cy, z * k) < rho) wantTrees.add(kind + i);
+      const check = (kind: TreeKind, trees: ReadonlyArray<{ x: number; z: number; h: number; r: number }>): void => {
+        trees.forEach((t, i) => {
+          const cy = (kind === 'd' ? t.h * 0.4 + t.r * 0.7 : t.h * 0.5) * k;
+          const rho = ((kind === 'd' ? t.r * 1.1 : Math.max(t.r * 0.9, t.h * 0.4)) + 0.6) * k;
+          if (segmentDistance(cam, T, t.x * k, cy, t.z * k) < rho) wantTrees.add(kind + i);
         });
       };
       check('d', this.site.trees.dec);

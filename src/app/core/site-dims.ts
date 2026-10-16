@@ -1,5 +1,7 @@
 /**
- * Real dimensions of the site (measured with Google Maps), in metres, and the values derived from them.
+ * Real dimensions of the shipped site (measured with Google Maps), in metres, and the values derived from them.
+ * They describe the default {@link SiteSpec} (the abandoned store on Via Leonardo da Vinci); the spec-driven model
+ * reads its own numbers from the active spec instead. Kept for the geo tests and as a reference of the builtin scene.
  * Local frame: X across the store (+X = east side), Z along it (+Z = south end, towards Via Leonardo da Vinci),
  * origin = centre of the store.
  */

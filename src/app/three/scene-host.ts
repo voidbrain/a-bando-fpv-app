@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { DroneRig, type RigContext } from './drone-rig';
 import { PathRenderer } from './path-renderer';
-import { buildSiteModel, type SiteModel } from './site-model';
+import { buildSiteFromSpec, builtinSpec, type SiteModel } from './site-model';
+import type { SiteSpec } from '../core/site-spec';
 import type { CameraView } from '../core/models';
 
 const SKY = '#b8d0c5';
@@ -53,7 +54,8 @@ export function fitResolution(w: number, h: number, maxPixels: number, pixelRati
 export class SceneHost {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
-  readonly site: SiteModel;
+  /** The active site model. Replaced (rebuilt from a new {@link SiteSpec}) by {@link setSite}. */
+  site!: SiteModel;
   readonly drones: DroneRig;
   readonly paths: PathRenderer;
   readonly mainCamera = new THREE.PerspectiveCamera(60, 1, 0.05, 1200);
@@ -83,12 +85,27 @@ export class SceneHost {
     Object.assign(sun.shadow.camera, { left: -240, right: 240, top: 240, bottom: -240, far: 700 });
     this.scene.add(sun);
 
-    this.site = buildSiteModel();
+    this.site = buildSiteFromSpec(builtinSpec());
     this.scene.add(this.site.group);
     this.drones = new DroneRig(this.scene);
     this.paths = new PathRenderer(this.scene);
     this.northLabel.scale.set(7, 1.3, 1);
     this.scene.add(this.northArrow, this.northLabel);
+  }
+
+  /**
+   * Swap the site for one built from `spec` (generated from a location, loaded from the library, or edited).
+   * Everything that referenced the old model (x-ray, simulator collider) is re-armed by the caller.
+   */
+  setSite(spec: SiteSpec): SiteModel {
+    this.scene.remove(this.site.group);
+    this.site.group.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.geometry) m.geometry.dispose();
+    });
+    this.site = buildSiteFromSpec(spec);
+    this.scene.add(this.site.group);
+    return this.site;
   }
 
   /** Point the north arrow (a landmark on the west apron) at true north for a model rotated by `rotDeg`. */
