@@ -1,13 +1,13 @@
 import { Injectable, computed, inject, signal, untracked, type Signal } from '@angular/core';
 import * as THREE from 'three';
-import type { Calibration } from '../core/models';
-import { DEFAULT_CALIBRATION, setSiteOrigin } from '../core/constants';
+import type { Calibration, GeoPoint } from '../core/models';
+import { setSiteOrigin } from '../core/constants';
 import { solveCalibration, toGeo } from '../core/geo';
 import type { BuildingSpec, LocationInfo, PadSpec, SiteSpec, TreeSpec, Vec2 } from '../core/site-spec';
-import { cloneSpec, createRandom, generateSite, uid } from '../core/site-spec';
+import { cloneSpec, createRandom, emptySpec, generateSite, uid } from '../core/site-spec';
+import { setTakeoff } from '../core/takeoff';
 import type { Footprint } from './geo.service';
 import { SiteEditor } from '../core/site-editor';
-import { builtinSpec } from '../three/site-model';
 import { CalibrationStore } from '../state/calibration.store';
 import { MapStore } from '../state/map.store';
 import { GeoService } from './geo.service';
@@ -17,9 +17,10 @@ import { ToastService } from './toast.service';
 
 /**
  * The site as the rest of the app sees it: which {@link SiteSpec} is active, how to generate one from a location
- * (address / map click -> OSM footprints -> starter model), and how to load / save / edit sites. Loading a site
- * moves the geographic origin, re-solves the GPS calibration from the spec's corner landmarks and rebuilds the 3D
- * scene, so logged paths land on the new model without manual alignment.
+ * (address / map click -> OSM footprints -> starter model), and how to load / save / edit sites. The app starts on a
+ * blank canvas — every model comes from a real location or the user's own edits. Loading a site moves the geographic
+ * origin, re-solves the GPS calibration from the spec's corner landmarks and rebuilds the 3D scene, so logged paths
+ * land on the new model without manual alignment.
  */
 @Injectable({ providedIn: 'root' })
 export class SiteService {
@@ -32,8 +33,10 @@ export class SiteService {
 
   /** The editor draft (the "Sites" panel binds to this; apply() pushes it into the scene). */
   readonly editor = new SiteEditor();
-  readonly active = signal<SiteSpec>(builtinSpec());
+  readonly active = signal<SiteSpec>(emptySpec({ lat: 0, lon: 0 }, 'Blank site'));
   readonly generating = signal(false);
+  /** True while no model has been generated / loaded yet — used for the stage hint. */
+  readonly blank = computed(() => this.active().buildings.length === 0);
   readonly generatedCount = computed(() => this.library.list().length);
   /**
    * While a Sites-panel pick mode is armed, the panel registers a handler here: Alt+clicks on the stage edit the
@@ -42,17 +45,17 @@ export class SiteService {
   readonly stagePick: Signal<((clientX: number, clientY: number) => void) | null> = signal(null);
 
   constructor() {
-    // start where the user left off: the stored active spec, or the shipped site
+    // start where the user left off: the stored active spec, otherwise the blank canvas
     const savedId = readStoredId();
     const restored = savedId ? this.library.load(savedId) : null;
-    this.editor.load(restored ?? this.active());
     if (restored) untracked(() => this.applySpec(restored, false));
+    else this.editor.load(this.active());
   }
 
-  /** Builtin site, freshly built from its spec. */
-  useBuiltin(): void {
-    this.applySpec(builtinSpec(), true);
-    this.toast.show('Shipped site loaded.');
+  /** Wipe the scene back to the blank canvas (no buildings), keeping the current location. */
+  newBlank(): void {
+    this.applySpec(emptySpec(this.active().origin, 'Blank site'), true);
+    this.toast.show('Blank model: import a location in the Sites panel or Alt+click the map to build one.');
   }
 
   /** Load a stored site by id. */
@@ -341,9 +344,10 @@ export class SiteService {
     this.active.set(spec);
     // adopt the spec as the new draft, unless the caller is applying the draft itself (live preview)
     if (!sameSpec(this.editor.draft(), spec)) this.editor.load(spec);
-    writeStoredId(spec.id === 'bando-default' ? '' : spec.id);
+    writeStoredId(spec.id);
     setSiteOrigin(spec.origin);
-    this.map.locate(spec.origin.lat, spec.origin.lon);
+    setTakeoff(spec.droneStart);
+    this.map.locate(spec.origin.lat, spec.origin.lon); // the OSM embed follows the newly loaded site
     this.calibration.apply(calibrationForSpec(spec));
     if (resetView) this.scene.resetCamera();
     if (this.scene.host) {
@@ -352,14 +356,39 @@ export class SiteService {
       this.scene.rebindSite(site);
     }
   }
+
+  /** The last solved model/real distance ratio from {@link calibrateFromCorners} (null until a calibration ran). */
+  lastCalibrationRatio(): number | null {
+    return this.lastRatio;
+  }
+  private lastRatio: number | null = null;
+
+  /**
+   * Solve rotation + shift in one shot from two real landmarks that match the active spec's calibration corners.
+   * Stores the corner coordinates back into the spec (so the calibration survives a reload) and applies the solved
+   * calibration. Returns false when the input is degenerate (corners too close together).
+   */
+  calibrateFromCorners(a: GeoPoint, b: GeoPoint): boolean {
+    const spec = this.active();
+    const k = this.calibration.modelScale() || 1;
+    const r = solveCalibration(a, b, { x: spec.calibCorners.p1.x * k, z: spec.calibCorners.p1.z * k }, { x: spec.calibCorners.p2.x * k, z: spec.calibCorners.p2.z * k }, spec.origin);
+    if (!r) {
+      this.toast.show('The two corners are too close together to solve a rotation.');
+      return false;
+    }
+    this.calibration.apply(r.calibration);
+    this.lastRatio = r.distanceRatio;
+    this.active.update((s) => ({ ...s, geoCorners: { p1: { lat: a.lat, lon: a.lon }, p2: { lat: b.lat, lon: b.lon } } }));
+    this.editor.load(this.active());
+    return true;
+  }
 }
 
 /**
- * Calibration for a spec: the builtin site keeps the hand-solved default (bit-for-bit identical to the shipped app);
- * generated sites solve rot/dx/dz from their own corner landmarks so logged GPS paths fall in place.
+ * Calibration for a spec: sites with stored corner landmarks re-solve rot/dx/dz from them so logged GPS paths fall
+ * in place; freshly generated ones start from the model's bearing.
  */
 export function calibrationForSpec(spec: SiteSpec): Calibration {
-  if (spec.id === 'bando-default') return { ...DEFAULT_CALIBRATION };
   if (!spec.geoCorners) return { rot: -spec.bearingDeg + 90, dx: 0, dz: 0 };
   const r = solveCalibration(spec.geoCorners.p1, spec.geoCorners.p2, spec.calibCorners.p1, spec.calibCorners.p2, spec.origin);
   return r ? r.calibration : { rot: 0, dx: 0, dz: 0 };

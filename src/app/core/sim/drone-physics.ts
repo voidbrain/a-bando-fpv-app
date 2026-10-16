@@ -1,4 +1,4 @@
-import { DRONE_REST_HEIGHT, DRONE_START, GRAVITY } from '../constants';
+import { DRONE_REST_HEIGHT, GRAVITY } from '../constants';
 import { clamp } from '../math';
 import { Quat, Vec3, eulerYXZ } from '../math3d';
 import type { FlightMode } from '../models';
@@ -46,7 +46,13 @@ const WALL_CRASH_SPEED = 6;
 const GROUND_CRASH_SPEED = 8;
 const DRAG = 0.45;
 
-export function createDroneState(modelScale = 1): DroneState {
+/** The take-off spot in the active site's model frame (site metres, unscaled). */
+export interface TakeoffSpot {
+  x: number;
+  z: number;
+}
+
+export function createDroneState(modelScale = 1, takeoff: TakeoffSpot = { x: 0, z: 0 }): DroneState {
   const d: DroneState = {
     p: new Vec3(),
     v: new Vec3(),
@@ -56,14 +62,14 @@ export function createDroneState(modelScale = 1): DroneState {
     mode: 'angle',
     hold: true,
   };
-  resetDroneState(d, modelScale);
+  resetDroneState(d, modelScale, takeoff);
   return d;
 }
 
-/** Back to the take-off spot on the apron, disarmed, facing the store. */
-export function resetDroneState(d: DroneState, modelScale: number): void {
+/** Back to the take-off pad of the current site, disarmed. */
+export function resetDroneState(d: DroneState, modelScale: number, takeoff: TakeoffSpot = { x: 0, z: 0 }): void {
   d.armed = false;
-  d.p.set(DRONE_START.x * modelScale, DRONE_REST_HEIGHT, DRONE_START.z * modelScale);
+  d.p.set(takeoff.x * modelScale, DRONE_REST_HEIGHT, takeoff.z * modelScale);
   d.v.set(0, 0, 0);
   d.yaw = -Math.PI / 2;
   d.q.setFromEuler(0, d.yaw, 0, 'YXZ');

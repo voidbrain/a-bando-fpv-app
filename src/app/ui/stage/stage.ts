@@ -1,7 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRender, effect, inject, viewChild } from '@angular/core';
 import { attachOrbitControls } from '../../three/orbit-controls';
 import { FlightService } from '../../services/flight.service';
-import { MapService } from '../../services/map.service';
 import { SceneService } from '../../services/scene.service';
 import { SimulatorService } from '../../services/simulator.service';
 import { SiteService } from '../../services/site.service';
@@ -12,7 +11,7 @@ import { ViewStore } from '../../state/view.store';
 
 /**
  * The full-page background: the WebGL canvas (3D model) or the flight video, the FPV overlay and the toast. Also the
- * page-wide drop target (flight logs and map screenshots) and paste target (map screenshots).
+ * page-wide drop target for flight logs.
  */
 @Component({
   selector: 'app-stage',
@@ -50,7 +49,6 @@ export class Stage {
   protected readonly toast = inject(ToastService);
   private readonly sim = inject(SimulatorService);
   private readonly flights = inject(FlightService);
-  private readonly maps = inject(MapService);
   private readonly cal = inject(CalibrationStore);
   private readonly site = inject(SiteService);
   private readonly destroyRef = inject(DestroyRef);
@@ -76,24 +74,14 @@ export class Stage {
       const onDrop = (e: DragEvent): void => {
         e.preventDefault();
         const files = Array.from(e.dataTransfer?.files ?? []);
-        const images = files.filter((f) => f.type.startsWith('image/'));
-        if (images[0]) this.maps.loadFile(images[0]);
         void this.flights.loadFiles(files.filter((f) => !f.type.startsWith('image/')));
-      };
-      const onPaste = (e: ClipboardEvent): void => {
-        const item = Array.from(e.clipboardData?.items ?? []).find((i) => i.type.startsWith('image/'));
-        if (!item) return;
-        this.maps.loadFile(item.getAsFile());
-        e.preventDefault();
       };
       addEventListener('dragover', onDragOver);
       addEventListener('drop', onDrop);
-      addEventListener('paste', onPaste);
       this.destroyRef.onDestroy(() => {
         detach();
         removeEventListener('dragover', onDragOver);
         removeEventListener('drop', onDrop);
-        removeEventListener('paste', onPaste);
         this.scene.detach();
       });
     });
