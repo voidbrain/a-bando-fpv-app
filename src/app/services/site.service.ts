@@ -1,8 +1,8 @@
-import { Injectable, computed, inject, signal, untracked, type Signal } from '@angular/core';
+import { Injectable, computed, inject, signal, untracked, type WritableSignal } from '@angular/core';
 import * as THREE from 'three';
 import type { Calibration, GeoPoint } from '../core/models';
 import { setSiteOrigin } from '../core/constants';
-import { solveCalibration, toGeo } from '../core/geo';
+import { solveCalibration, toGeo, toGeoAt, toLocalAt } from '../core/geo';
 import type { BuildingSpec, LocationInfo, PadSpec, SiteSpec, TreeSpec, Vec2 } from '../core/site-spec';
 import { cloneSpec, createRandom, emptySpec, generateSite, uid } from '../core/site-spec';
 import { setTakeoff } from '../core/takeoff';
@@ -42,7 +42,10 @@ export class SiteService {
    * While a Sites-panel pick mode is armed, the panel registers a handler here: Alt+clicks on the stage edit the
    * model (drop a tree / draw a partition) instead of starting a new generation.
    */
-  readonly stagePick: Signal<((clientX: number, clientY: number) => void) | null> = signal(null);
+  readonly stagePick: WritableSignal<((clientX: number, clientY: number) => void) | null> = signal(null);
+
+  /** The last geocoded search ("Show on map" points the OSM embed here without generating anything). */
+  private lastSearch: { lat: number; lon: number } | null = null;
 
   constructor() {
     // start where the user left off: the stored active spec, otherwise the blank canvas
@@ -121,24 +124,50 @@ export class SiteService {
 
   /** Convenience: geocode an address and generate from the first hit. Returns false when nothing matched. */
   async generateFromAddress(address: string, scale = 1): Promise<boolean> {
-    this.generating.set(true);
+    const hit = await this.searchOne(address);
+    if (!hit) return false;
+    await this.generate(hit, { scale });
+    return true;
+  }
+
+  /** Geocode a query into up to `limit` candidate locations (for the Map panel's search list). */
+  async search(query: string, limit = 6): Promise<LocationInfo[]> {
+    const q = query.trim();
+    if (!q) return [];
     try {
-      const hits = await this.geo.geocode(address, 1);
+      const hits = await this.geo.geocode(q, limit);
       if (!hits.length) {
-        this.toast.show('No location found for that address.');
-        return false;
+        this.toast.show('No location found for that search.');
+        return [];
       }
-      await this.generate(hits[0]!, { scale });
-      return true;
+      this.lastSearch = { lat: hits[0]!.lat, lon: hits[0]!.lon };
+      return hits;
     } catch {
-      this.toast.show('Geocoding unreachable (offline?). Enter lat,lon instead.');
-      const p = parseLatLng(address);
-      if (!p) return false;
-      await this.generate({ label: 'Entered position', lat: p[0], lon: p[1] }, { scale });
-      return true;
-    } finally {
-      this.generating.set(false);
+      // offline / rate-limited: accept plain "lat, lon" input so the flow still works
+      const p = parseLatLng(q);
+      if (!p) {
+        this.toast.show('Geocoding unreachable (offline?). Enter lat,lon instead.');
+        return [];
+      }
+      const hit = { label: 'Entered position', lat: p[0], lon: p[1] };
+      this.lastSearch = { lat: p[0], lon: p[1] };
+      return [hit];
     }
+  }
+
+  /** Point the OpenStreetMap embed at the last searched location — preview without generating a model. */
+  showOnMap(): boolean {
+    if (!this.lastSearch) {
+      this.toast.show('Search a location first.');
+      return false;
+    }
+    this.map.locate(this.lastSearch.lat, this.lastSearch.lon);
+    return true;
+  }
+
+  private async searchOne(address: string): Promise<LocationInfo | null> {
+    const hits = await this.search(address, 1);
+    return hits[0] ?? null;
   }
 
   /**
@@ -176,6 +205,23 @@ export class SiteService {
   /** Push the editor draft into the scene (live preview). Keeps the camera where it is. */
   applyDraft(): void {
     this.applySpec(this.editor.snapshot(), false);
+  }
+
+  /** Commit a site-level draft edit and push it live in one step (Map panel's "Point north"). */
+  commitNorth(deg: number): void {
+    this.editor.commitSite((s) => {
+      s.bearingDeg = ((deg % 360) + 360) % 360;
+    });
+    this.applyDraft();
+  }
+
+  /** Move the take-off pad (and the drone start) to a ground point picked on the 3D scene. */
+  setTakeoffAt(x: number, z: number): void {
+    this.editor.commitSite((s) => {
+      s.droneStart = { x, z };
+    });
+    // applyDraft -> applySpec -> rebindSite already moves the parked drone to takeoffSpot()
+    this.applyDraft();
   }
 
   /** Store the current active site in the library under its name. */
