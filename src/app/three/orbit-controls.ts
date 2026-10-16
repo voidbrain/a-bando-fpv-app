@@ -8,7 +8,7 @@ export interface ControlTarget {
   /** Rotation of the model against true north, degrees (the top view pans along north). */
   calRot(): number;
   /** Called on a click (a press and release that barely moved); the caller decides whether a pin is armed. */
-  onClick?(clientX: number, clientY: number): void;
+  onClick?(clientX: number, clientY: number, alt: boolean): void;
 }
 
 interface Pointer {
@@ -39,7 +39,7 @@ export function attachOrbitControls(el: HTMLElement, target: ControlTarget): () 
   };
   const up = (e: PointerEvent): void => {
     const p = pointers.get(e.pointerId);
-    if (p && Math.hypot(e.clientX - p.x0, e.clientY - p.y0) < 5) target.onClick?.(e.clientX, e.clientY);
+    if (p && Math.hypot(e.clientX - p.x0, e.clientY - p.y0) < 5) target.onClick?.(e.clientX, e.clientY, e.altKey);
     pointers.delete(e.pointerId);
     pinch = 0;
   };

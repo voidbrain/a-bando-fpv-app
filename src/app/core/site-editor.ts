@@ -110,6 +110,16 @@ export class SiteEditor {
 
   // ---- level edits ----
 
+  /** All levels by default (the existing setWall/setRoof/… helpers); pass `li` to edit one level only. */
+  editSelectedLevel(fn: (l: LevelSpec, li: number) => void, li?: number): void {
+    this.commit((s) => {
+      const b = s.buildings.find((x) => x.id === this.selectedId());
+      if (!b) return;
+      if (li === undefined) b.levels.forEach((l, i) => fn(l, i));
+      else if (b.levels[li]) fn(b.levels[li]!, li);
+    });
+  }
+
   private editLevel(fn: (b: BuildingSpec, l: LevelSpec, li: number) => void): void {
     this.commit((s) => {
       const b = s.buildings.find((x) => x.id === this.selectedId());
@@ -162,21 +172,32 @@ export class SiteEditor {
   // ---- openings ----
 
   addOpening(side: 'n' | 's' | 'e' | 'w', kind: 'door' | 'window'): void {
+    this.addOpeningAt(side, kind);
+  }
+
+  /** Add an opening centred on `side` of one level (default: the ground floor). */
+  addOpeningAt(side: 'n' | 's' | 'e' | 'w', kind: 'door' | 'window', level = 0): void {
     this.commit((s) => {
       const b = s.buildings.find((x) => x.id === this.selectedId());
-      if (!b) return;
-      const l = b.levels[0];
+      const l = b?.levels[level];
+      if (!b || !l) return;
       const run = side === 'n' || side === 'w' ? b.length : b.width;
       (l.doors[side] ??= []).push({ kind, c: run / 2, w: kind === 'door' ? 2.2 : 1.2, h: kind === 'door' ? Math.min(2.6, l.height * 0.8) : 1 });
     });
   }
 
   patchOpening(side: 'n' | 's' | 'e' | 'w', index: number, patch: Partial<{ kind: 'door' | 'window'; c: number; w: number; h: number }>): void {
+    this.patchOpeningAt(side, undefined, index, patch);
+  }
+
+  /** Patch one opening (`level` undefined = every level, as before). */
+  patchOpeningAt(side: 'n' | 's' | 'e' | 'w', level: number | undefined, index: number, patch: Partial<{ kind: 'door' | 'window'; c: number; w: number; h: number }>): void {
     this.commit((s) => {
       for (const b of s.buildings) {
         if (b.id !== this.selectedId()) continue;
-        for (const l of b.levels) {
-          const o = l.doors[side]?.[index];
+        for (let li = 0; li < b.levels.length; li++) {
+          if (level !== undefined && li !== level) continue;
+          const o = b.levels[li]!.doors[side]?.[index];
           if (o) Object.assign(o, patch);
         }
       }
@@ -184,10 +205,18 @@ export class SiteEditor {
   }
 
   removeOpening(side: 'n' | 's' | 'e' | 'w', index: number): void {
+    this.removeOpeningAt(side, undefined, index);
+  }
+
+  /** Remove one opening from one level (`level` undefined = every level, as before). */
+  removeOpeningAt(side: 'n' | 's' | 'e' | 'w', level: number | undefined, index: number): void {
     this.commit((s) => {
       const b = s.buildings.find((x) => x.id === this.selectedId());
       if (!b) return;
-      for (const l of b.levels) l.doors[side]?.splice(index, 1);
+      for (let li = 0; li < b.levels.length; li++) {
+        if (level !== undefined && li !== level) continue;
+        b.levels[li]!.doors[side]?.splice(index, 1);
+      }
     });
   }
 
@@ -271,6 +300,11 @@ export class SiteEditor {
   /** The draft ready to store / hand to the builder (a detached copy). */
   snapshot(): SiteSpec {
     return cloneSpec(this.draft());
+  }
+
+  /** A generic committed draft edit (site-level fields the named helpers don't cover). */
+  commitSite(fn: (s: SiteSpec) => void): void {
+    this.commit(fn);
   }
 
   private commit(fn: (s: SiteSpec) => void): void {

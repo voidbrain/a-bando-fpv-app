@@ -4,6 +4,7 @@ import { FlightService } from '../../services/flight.service';
 import { MapService } from '../../services/map.service';
 import { SceneService } from '../../services/scene.service';
 import { SimulatorService } from '../../services/simulator.service';
+import { SiteService } from '../../services/site.service';
 import { ToastService } from '../../services/toast.service';
 import { VideoService } from '../../services/video.service';
 import { CalibrationStore } from '../../state/calibration.store';
@@ -51,6 +52,7 @@ export class Stage {
   private readonly flights = inject(FlightService);
   private readonly maps = inject(MapService);
   private readonly cal = inject(CalibrationStore);
+  private readonly site = inject(SiteService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly gl = viewChild.required<ElementRef<HTMLElement>>('gl');
   private readonly videoSlot = viewChild<ElementRef<HTMLElement>>('videoSlot');
@@ -63,9 +65,11 @@ export class Stage {
         view: () => this.view.cameraView(),
         state: () => this.scene.mainOrbit,
         calRot: () => this.cal.rot(),
-        onClick: (x, y) => {
+        onClick: (x, y, alt) => {
           const cam = this.scene.host?.mainCamera;
-          if (this.scene.pin() && cam) this.scene.placePin(x, y, cam, { left: 0, top: 0, width: innerWidth, height: innerHeight });
+          if (!cam) return;
+          if (this.scene.pin()) this.scene.placePin(x, y, cam, { left: 0, top: 0, width: innerWidth, height: innerHeight });
+          else if (alt) void this.site.altClick(x, y);
         },
       });
       const onDragOver = (e: DragEvent): void => e.preventDefault();

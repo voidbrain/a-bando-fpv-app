@@ -1,7 +1,7 @@
 /** Every floating panel in the app: identity, title and where it first appears. */
 export type PanelId =
   | 'views' | 'flights' | 'simulator' | 'alignment' | 'radio' | 'timeline' | 'speed' | 'attitude' | 'compass'
-  | 'path' | 'map' | 'blackbox' | 'video' | 'live' | 'render' | 'help' | 'vpOrbit' | 'vpChase' | 'vpFpv' | 'vpTop';
+  | 'path' | 'map' | 'blackbox' | 'video' | 'live' | 'render' | 'help' | 'sites' | 'vpOrbit' | 'vpChase' | 'vpFpv' | 'vpTop';
 
 export interface PanelDef {
   id: PanelId;
@@ -36,6 +36,7 @@ export const PANELS: readonly PanelDef[] = [
   { id: 'live', title: 'Live link', group: 'data', visible: false, anchor: { left: 280, top: 12 }, width: 300 },
   { id: 'render', title: 'Render', group: 'tools', visible: false, anchor: { left: 280, top: 12 }, width: 300 },
   { id: 'help', title: 'Controls', group: 'tools', visible: false, anchor: { left: 280, top: 12 }, width: 300 },
+  { id: 'sites', title: 'Sites · 3D map builder', group: 'tools', visible: false, anchor: { left: 280, top: 12 }, width: 430, resizable: true, height: 560 },
   { id: 'vpOrbit', title: 'Orbit view', group: 'cameras', visible: false, anchor: { right: 360, top: 12 }, width: 380, resizable: true, height: 270 },
   { id: 'vpChase', title: 'Chase view', group: 'cameras', visible: false, anchor: { right: 360, top: 12 }, width: 380, resizable: true, height: 270 },
   { id: 'vpFpv', title: 'FPV view', group: 'cameras', visible: false, anchor: { right: 360, top: 12 }, width: 380, resizable: true, height: 270 },

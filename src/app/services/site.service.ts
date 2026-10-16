@@ -1,7 +1,8 @@
-import { Injectable, computed, inject, signal, untracked } from '@angular/core';
+import { Injectable, computed, inject, signal, untracked, type Signal } from '@angular/core';
+import * as THREE from 'three';
 import type { Calibration } from '../core/models';
 import { DEFAULT_CALIBRATION, setSiteOrigin } from '../core/constants';
-import { solveCalibration } from '../core/geo';
+import { solveCalibration, toGeo } from '../core/geo';
 import type { LocationInfo, SiteSpec } from '../core/site-spec';
 import { cloneSpec, generateSite, uid } from '../core/site-spec';
 import { SiteEditor } from '../core/site-editor';
@@ -33,6 +34,11 @@ export class SiteService {
   readonly active = signal<SiteSpec>(builtinSpec());
   readonly generating = signal(false);
   readonly generatedCount = computed(() => this.library.list().length);
+  /**
+   * While a Sites-panel pick mode is armed, the panel registers a handler here: Alt+clicks on the stage edit the
+   * model (drop a tree / draw a partition) instead of starting a new generation.
+   */
+  readonly stagePick: Signal<((clientX: number, clientY: number) => void) | null> = signal(null);
 
   constructor() {
     // start where the user left off: the stored active spec, or the shipped site
@@ -113,6 +119,30 @@ export class SiteService {
     }
   }
 
+  /**
+   * Alt+click on the 3D scene: if a Sites panel pick mode is armed, the click edits there; otherwise the screen
+   * point is projected onto the ground, converted to lat/lon through the current calibration and used as the
+   * generation location ("build a model where I click").
+   */
+  async altClick(clientX: number, clientY: number): Promise<void> {
+    const pick = this.stagePick?.get();
+    if (pick) {
+      pick(clientX, clientY);
+      return;
+    }
+    const host = this.scene.host;
+    if (!host) return;
+    const rect = host.canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(ndc, host.mainCamera);
+    const hit = new THREE.Vector3();
+    if (!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit)) return;
+    const k = this.calibration.modelScale() || 1;
+    const [lat, lon] = toGeo(hit.x / k, hit.z / k, this.calibration.calibration());
+    await this.generateFromPoint(lat, lon);
+  }
+
   /** Reverse-geocode a clicked coordinate and generate there. */
   async generateFromPoint(lat: number, lon: number, scale = 1): Promise<void> {
     const hit = await this.geo.reverse(lat, lon);
@@ -131,6 +161,19 @@ export class SiteService {
     const spec = this.active();
     this.library.save(spec);
     this.toast.show(`Site “${spec.name}” saved (${this.generatedCount()} in the library). Source: ${this.geo.attribution}.`);
+  }
+
+  /** Store the editor draft in the library and make it the active site (the Sites panel's Save). */
+  saveDraft(): void {
+    const spec = this.editor.snapshot();
+    this.library.save(spec);
+    this.applySpec(spec, false);
+    this.toast.show(`Site “${spec.name}” saved (${this.library.list().length} in the library). Source: ${this.geo.attribution}.`);
+  }
+
+  /** Re-solve the GPS calibration from the active spec's corner landmarks / bearing (after a "Point north"). */
+  recalibrate(): void {
+    this.calibration.apply(calibrationForSpec(this.active()));
   }
 
   removeStored(id: string): void {
