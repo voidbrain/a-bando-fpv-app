@@ -118,7 +118,7 @@ const SIDES: readonly Side[] = ['n', 'e', 's', 'w'];
               @for (s of sides; track s) {
                 <label class="check"><input type="checkbox" [checked]="l.sides[s]" (change)="setWall(s, checked($event))" /> {{ s }}</label>
               }
-              <select [value]="l.roof" (change)="setRoof(selected($event))">
+              <select [value]="l.roof" (change)="setRoof(selectedRoof($event))">
                 <option value="gable">gable</option>
                 <option value="vault">vault</option>
                 <option value="flat">flat</option>
@@ -128,7 +128,7 @@ const SIDES: readonly Side[] = ['n', 'e', 's', 'w'];
 
             <!-- openings -->
             <div class="row">
-              <select [value]="openSide()" (change)="openSide.set(selected($event) as any)">
+              <select [value]="openSide()" (change)="setOpenSide(selected($event))">
                 @for (s of sides; track s) {
                   <option [value]="s">{{ sideName(s) }}</option>
                 }
@@ -140,7 +140,7 @@ const SIDES: readonly Side[] = ['n', 'e', 's', 'w'];
               <div class="row col">
                 @for (o of openings(); track $index) {
                   <div class="row">
-                    <select [value]="o.kind" (change)="patchOpening($index, { kind: selected($event) })">
+                    <select [value]="o.kind" (change)="patchOpening($index, { kind: selectedKind($event) })">
                       <option value="door">door</option>
                       <option value="window">window</option>
                     </select>
@@ -264,6 +264,8 @@ export class SitesPanel implements AfterContentChecked {
   protected readonly text = (e: Event): string => textFrom(e);
   protected readonly checked = checkedFrom;
   protected readonly selected = selectedFrom;
+  protected readonly selectedKind = (e: Event): 'door' | 'window' => selectedFrom(e) as 'door' | 'window';
+  protected readonly selectedRoof = (e: Event): 'gable' | 'vault' | 'flat' => selectedFrom(e) as 'gable' | 'vault' | 'flat';
   protected readonly selectedColor = (e: Event): string => (e.target as HTMLInputElement).value;
 
   private readonly planEl = viewChild<ElementRef<HTMLCanvasElement>>('plan');
@@ -359,6 +361,10 @@ export class SitesPanel implements AfterContentChecked {
   }
 
   // ---- openings ----
+
+  protected setOpenSide(side: string): void {
+    this.openSide.set(side as Side);
+  }
 
   protected addOpening(kind: 'door' | 'window'): void {
     this.ed.addOpeningAt(this.openSide(), kind, this.clampedLevel());

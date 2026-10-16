@@ -125,7 +125,7 @@ export class SiteService {
    * generation location ("build a model where I click").
    */
   async altClick(clientX: number, clientY: number): Promise<void> {
-    const pick = this.stagePick?.get();
+    const pick = this.stagePick();
     if (pick) {
       pick(clientX, clientY);
       return;

@@ -63,6 +63,8 @@ export class TreeField {
 /** Draw order of the ground (first) and of the meadow patches (after it, one step per patch). */
 const GROUND_ORDER = -2000;
 const DECAL_ORDER = -1000;
+/** Width of the builtin site's ground slab: extent 240 × 2.2 — the terrain regression tests key on this constant. */
+const BUILTIN_GROUND_WIDTH = 528;
 
 const material = (color: string, o: THREE.MeshStandardMaterialParameters = {}): THREE.MeshStandardMaterial =>
   new THREE.MeshStandardMaterial({ color, roughness: 0.95, ...o });
