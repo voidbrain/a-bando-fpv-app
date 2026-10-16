@@ -56,7 +56,7 @@ const OVERLAY_MAX_PIXELS = 800_000;
       @if (hits().length) {
         <div class="lib">
           @for (h of hits(); track h.lat + ',' + h.lon) {
-            <button class="entry" (click)="pickHit(h)" [title]="h.name">{{ h.name.length > 46 ? h.name.slice(0, 46) + '…' : h.name }}</button>
+            <button class="entry" (click)="pickHit(h)" [title]="h.label">{{ h.label.length > 46 ? h.label.slice(0, 46) + '…' : h.label }}</button>
           }
         </div>
       }
@@ -70,7 +70,7 @@ const OVERLAY_MAX_PIXELS = 800_000;
       @if (library().length) {
         <div class="lib">
           @for (s of library(); track s.id) {
-            <button class="entry" [class.active]="s.id === activeId()" (click)="openSite(s.id)" [title]="libCoords(s)">{{ s.label }}</button>
+            <button class="entry" [class.active]="s.id === activeId()" (click)="openSite(s.id)" [title]="libCoords(s)">{{ s.name }}</button>
           }
         </div>
       }
