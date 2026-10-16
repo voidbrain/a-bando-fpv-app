@@ -81,18 +81,26 @@ export class GeoService {
     const dLat = radiusM / M_LAT;
     const dLon = radiusM / metresPerDegLon(lat);
     const bbox = `${lon - dLon},${lat - dLat},${lon + dLon},${lat + dLat}`;
-    const ql = `[out:json][timeout:20];(way["building"](bbox:${bbox});relation["building"](bbox:${bbox}););out geom center;`;
+    // ways only: a relation tagged "building" is usually an entire complex — and huge multipolygons like
+    // administrative boundaries sneak in with a stray building tag ("Province of Treviso" showed up as a building)
+    const ql = `[out:json][timeout:20];way["building"]["building"!~"^(?:yes|roof|hangar)$"](bbox:${bbox});way["building"="yes"](bbox:${bbox});out geom;`;
     const res = await fetch(GeoService.OVERPASS, { method: 'POST', body: `data=${encodeURIComponent(ql)}` });
     if (!res.ok) throw new Error(`Overpass replied ${res.status}`);
     const data = (await res.json()) as { elements: OsmElement[] };
     const out: Footprint[] = [];
     for (const el of data.elements) {
+      if (el.type !== 'way') continue;
+      const tags = el.tags ?? {};
+      if ('building:part' in tags || 'boundary' in tags || 'place' in tags || 'admin_level' in tags) continue;
       const ring = this.ringOf(el);
       if (!ring || ring.length < 4) continue;
-      out.push(this.toFootprint(ring, el.tags ?? {}));
+      const area = this.polyArea(ring);
+      // anything over ~1 km² around a 250 m search is not a building but a boundary / district outline
+      if (area > 1_000_000) continue;
+      out.push(this.toFootprint(ring, tags));
     }
     // biggest first: the dominant structure becomes the main building
-    return out.sort((a, b) => b.ring.length * 0 + this.polyArea(b.ring) - this.polyArea(a.ring));
+    return out.sort((a, b) => this.polyArea(b.ring) - this.polyArea(a.ring));
   }
 
   /** Trees near a point (Overpass), kept sparse so the model does not drown in instances. */

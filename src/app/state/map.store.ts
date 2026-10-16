@@ -4,8 +4,8 @@ import { DEFAULT_SITE_ORIGIN, siteOrigin } from '../core/constants';
 import { StorageService } from '../services/storage.service';
 import { persistState } from './persist';
 
-/** The only backdrop is the live OpenStreetMap embed; 'none' shows the 3D overlay on its own. */
-export type MapBackground = 'osm' | 'none';
+/** Backdrops: the live OpenStreetMap standard tiles, an aerial/satellite layer (Esri World Imagery), or none. */
+export type MapBackground = 'osm' | 'sat' | 'none';
 
 export interface MapState {
   background: MapBackground;
@@ -19,11 +19,17 @@ export interface MapState {
   dz: number;
 }
 
-export const MAP_DEFAULT_SCALE: Record<MapBackground, number> = { osm: 0.42, none: 0.6 };
-/** The OpenStreetMap embed for a location (the same tiles the builder generates the model from). */
-export const osmUrlFor = (lat: number, lon: number): string => {
+export const MAP_DEFAULT_SCALE: Record<MapBackground, number> = { osm: 0.42, sat: 0.42, none: 0.6 };
+/** The map embed URL for a location and background ('sat' uses Esri World Imagery tiles through the OSM frame). */
+export const osmUrlFor = (lat: number, lon: number, bg: MapBackground = 'osm'): string => {
   const dLat = 0.0025, dLon = 0.0028;
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${(lon - dLon).toFixed(6)}%2C${(lat - dLat).toFixed(6)}%2C${(lon + dLon).toFixed(6)}%2C${(lat + dLat).toFixed(6)}&layer=mapnik&marker=${lat.toFixed(6)}%2C${lon.toFixed(6)}`;
+  const bbox = `${(lon - dLon).toFixed(6)}%2C${(lat - dLat).toFixed(6)}%2C${(lon + dLon).toFixed(6)}%2C${(lat + dLat).toFixed(6)}`;
+  const marker = `${lat.toFixed(6)}%2C${lon.toFixed(6)}`;
+  if (bg === 'sat') {
+    // Esri World Imagery: free-to-view aerial imagery with lat/lon alignment (Web Mercator, no rotation needed)
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=https%3A%2F%2Fserver.arcgisonline.com%2FArcGIS%2Frest%2Fservices%2FWorld_Imagery%2FMapServer%2Ftile%2F%7Bz%7D%2F%7Bx%7D%2F%7By%7D&marker=${marker}`;
+  }
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${marker}`;
 };
 const KEY = 'abando-ng-map';
 const DEFAULTS: MapState = { background: 'osm', overlayOpacity: 0.6, align: false, scale: { ...MAP_DEFAULT_SCALE }, rotation: 0, dx: 0, dz: 0 };
@@ -37,14 +43,14 @@ export function mergeMapState(
   saved: (Partial<Omit<MapState, 'scale'>> & { scale?: Partial<Record<string, number>>; googleUrl?: string }) | null | undefined,
 ): MapState {
   const { googleUrl: _googleUrl, ...rest } = saved ?? {};
-  const bg: MapBackground = rest.background === 'none' ? 'none' : 'osm';
+  const bg: MapBackground = rest.background === 'none' || rest.background === 'sat' ? rest.background : 'osm'; // legacy 'img'/'goog' migrate to osm
   const scaleIn = rest.scale ?? {};
   return {
     ...DEFAULTS,
     ...rest,
     background: bg,
     // Carry an old per-background scale over to OSM ('img' / 'goog' entries came from removed backdrops).
-    scale: { ...MAP_DEFAULT_SCALE, osm: scaleIn['osm'] ?? scaleIn['img'] ?? scaleIn['goog'] ?? MAP_DEFAULT_SCALE.osm, none: scaleIn['none'] ?? MAP_DEFAULT_SCALE.none },
+    scale: { ...MAP_DEFAULT_SCALE, osm: scaleIn['osm'] ?? scaleIn['img'] ?? scaleIn['goog'] ?? MAP_DEFAULT_SCALE.osm, sat: scaleIn['sat'] ?? scaleIn['img'] ?? MAP_DEFAULT_SCALE.sat, none: scaleIn['none'] ?? MAP_DEFAULT_SCALE.none },
   };
 }
 
@@ -87,7 +93,7 @@ export const MapStore = signalStore(
     /** The OpenStreetMap embed for the location being shown (see {@link locate}). */
     osmUrl: computed(() => {
       const o = store.location();
-      return osmUrlFor(o.lat, o.lon);
+      return osmUrlFor(o.lat, o.lon, store.background());
     }),
   })),
   withHooks((store) => {
