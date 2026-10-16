@@ -54,6 +54,44 @@ ng e2e
 
 Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
 
+## Deploying to GitHub Pages
+
+This repository includes a GitHub Actions workflow
+([`.github/workflows/deploy-gh-pages.yml`](.github/workflows/deploy-gh-pages.yml))
+that builds the app and publishes it to GitHub Pages automatically on every
+push to `main` (it can also be triggered manually from the **Actions** tab).
+
+### One-time setup
+
+1. In the repository, open **Settings → Pages**.
+2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
+
+No further configuration is required — the workflow uses the built-in
+`GITHUB_TOKEN`, so no secrets are needed.
+
+### How it works
+
+- Runs `npm ci` and `npm run build` (production build).
+- Uploads `dist/a-bando-fpv-app/browser` as the Pages artifact.
+- Deploys it with `actions/deploy-pages`.
+
+The site will be available at `https://<username>.github.io/<repo>/`.
+
+### Alternative: deploy from your machine
+
+A `deploy` target backed by
+[`angular-cli-ghpages`](https://github.com/angular/angular-cli-ghpages) is
+already configured in `angular.json`. To use it locally:
+
+```bash
+npm i -D angular-cli-ghpages   # one-time install of the builder dependency
+npx ng deploy --base-href /<repo-name>/
+```
+
+This pushes the production build to the `gh-pages` branch. Note that if you go
+this route, set **Settings → Pages → Source** to the `gh-pages` branch instead
+of GitHub Actions.
+
 ## Additional Resources
 
 For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
