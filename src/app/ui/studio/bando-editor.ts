@@ -4,6 +4,7 @@ import * as L from 'leaflet';
 import { contains, edgesOf, type Pt, type Rect } from '../../core/footprint';
 import { addOpening, listOpenings, moveOpening, outlineOf, patchOpening, removeOpening, reshapeBuilding, resetToRect, resizeOpening, type OpenSeg } from '../../core/openings';
 import { cloneSpec, type BuildingSpec, type LevelSpec, type LocationInfo, type SiteSpec } from '../../core/site-spec';
+import { AiService } from '../../services/ai.service';
 import { FlightService } from '../../services/flight.service';
 import { GeoService } from '../../services/geo.service';
 import { SceneService } from '../../services/scene.service';
@@ -13,6 +14,7 @@ import { ToastService } from '../../services/toast.service';
 import { ViewStore } from '../../state/view.store';
 import { numberFrom, selectedFrom, textFrom } from '../dom';
 import { FloatBox } from '../float-box';
+import { AssistantBox } from './assistant-box';
 
 type Tool = 'select' | 'building' | 'cut' | 'wing' | 'tree' | 'door' | 'window' | 'wall' | 'measure';
 type Pick = { t: 'building' } | { t: 'tree'; i: number } | { t: 'opening'; id: string } | { t: 'wall'; i: number } | null;
@@ -49,7 +51,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
 @Component({
   selector: 'app-bando-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, FloatBox],
+  imports: [FormsModule, FloatBox, AssistantBox],
   host: { class: 'be' },
   template: `
     <div class="bar">
@@ -66,6 +68,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
         <button class="btn" [class.on]="pinMode() === 'e'" [disabled]="!hasPath()" (click)="armPin('e')" title="Needs a loaded flight path: click where the flight ended">Pin end</button>
         <button class="btn" [disabled]="!ed.canUndo()" (click)="undo()" title="Undo (Ctrl+Z)">↶</button>
         <button class="btn" [disabled]="!ed.canRedo()" (click)="redo()" title="Redo">↷</button>
+        <button class="btn" [class.on]="ai.open()" (click)="ai.open.set(!ai.open())" title="Chat with the in-browser AI assistant to edit buildings and interiors">💬 AI</button>
         <button class="btn primary" (click)="save()">Save</button>
       }
       <span class="sp"></span>
@@ -183,6 +186,10 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
         <div class="read" [class.warn]="atMax()">{{ round(half().e * 2) }} × {{ round(half().n * 2) }} m{{ atMax() ? ' (maximum)' : '' }}</div>
       } @else if (!overlayOn()) {
         <div class="notice">This bando was built with the old rotated layout and can't be drawn over the map. Go to <b>1 · Area</b> and press <b>Regenerate</b> to rebuild it aligned to the map.</div>
+      }
+
+      @if (mode() === 'model' && overlayOn() && ai.open()) {
+        <app-assistant-box />
       }
 
       @if (mode() === 'model' && overlayOn()) {
@@ -443,6 +450,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
 })
 export class BandoEditor {
   protected readonly studio = inject(StudioService);
+  protected readonly ai = inject(AiService);
   protected readonly site = inject(SiteService);
   private readonly scene = inject(SceneService);
   private readonly flights = inject(FlightService);
@@ -1124,7 +1132,7 @@ export class BandoEditor {
   }
 
   protected key(e: KeyboardEvent): void {
-    if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'SELECT') return;
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
     if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault();
       this.deleteSel();
