@@ -75,66 +75,125 @@ export class GeoService {
   }
 
   private static lastGood = '';
+  private static readonly ENDPOINT_KEY = 'abando-overpass-url';
+  private static readonly CACHE = 'abando-overpass-v1';
+  private static readonly CACHE_MS = 12 * 3600 * 1000;
 
-  /** Public Overpass instances, tried in turn: any of them answers 429 / 504 when busy. */
+  /** Public Overpass instances, tried in turn: any of them answers 429 / 5xx when busy. */
   private static readonly MIRRORS = [
     'https://overpass-api.de/api/interpreter',
+    'https://overpass.openstreetmap.fr/api/interpreter',
     'https://overpass.private.coffee/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
   ];
 
+  /** A server of your own (e.g. the PHP proxy on your hosting) tried before the public ones; '' removes it. */
+  static get endpoint(): string {
+    try {
+      return localStorage.getItem(GeoService.ENDPOINT_KEY) ?? '';
+    } catch {
+      return '';
+    }
+  }
+  static set endpoint(url: string) {
+    try {
+      if (url.trim()) localStorage.setItem(GeoService.ENDPOINT_KEY, url.trim());
+      else localStorage.removeItem(GeoService.ENDPOINT_KEY);
+    } catch {
+      /* no storage */
+    }
+  }
+
+  private static hash(s: string): string {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36);
+  }
+
   /**
-   * One Overpass query, resilient to a busy server: each mirror gets a 25 s budget; a 429 / 5xx / network failure
-   * moves on to the next mirror, and the whole round is retried once after a short pause. (A 429 comes back without
-   * CORS headers, so the browser reports it as an opaque "access control" error — this hides that.)
+   * One Overpass query, resilient to a busy server. Answers are cached for 12 h (same area → no request at all). Each
+   * server gets a 25 s budget; a 429 / 5xx / network failure moves on to the next, and the round is repeated once
+   * after a pause. When everything fails the error names every server and its HTTP status, because the browser
+   * itself only prints an opaque "access control" message for a 429 / 500 that carries no CORS header.
    */
   private async overpass(ql: string): Promise<{ elements: OsmElement[] }> {
+    const key = `https://cache.local/overpass/${GeoService.hash(ql)}`;
+    try {
+      const cache = await caches.open(GeoService.CACHE);
+      const hit = await cache.match(key);
+      if (hit && Date.now() - Number(hit.headers.get('x-ts') ?? 0) < GeoService.CACHE_MS) return (await hit.json()) as { elements: OsmElement[] };
+    } catch {
+      /* Cache Storage unavailable: just fetch */
+    }
+    const mine = GeoService.endpoint;
+    const base = [...GeoService.MIRRORS].sort((a, b) => (a === GeoService.lastGood ? -1 : b === GeoService.lastGood ? 1 : 0));
+    const order = mine ? [mine, ...base] : base;
+    const failures: string[] = [];
     for (let round = 0; round < 2; round++) {
-      // start with the mirror that worked last time: the failing ones only add delay and console noise
-      const order = [...GeoService.MIRRORS].sort((a, b) => (a === GeoService.lastGood ? -1 : b === GeoService.lastGood ? 1 : 0));
       for (const url of order) {
+        const host = new URL(url).host;
         const ctl = new AbortController();
         const timer = setTimeout(() => ctl.abort(), 25000);
         try {
-          const res = await fetch(url, { method: 'POST', body: `data=${encodeURIComponent(ql)}`, signal: ctl.signal });
+          const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `data=${encodeURIComponent(ql)}`, signal: ctl.signal });
           if (res.ok) {
+            const data = (await res.json()) as { elements: OsmElement[] };
             GeoService.lastGood = url;
-            return (await res.json()) as { elements: OsmElement[] };
+            try {
+              const cache = await caches.open(GeoService.CACHE);
+              await cache.put(key, new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json', 'x-ts': String(Date.now()) } }));
+            } catch {
+              /* not cached: fine */
+            }
+            return data;
           }
+          failures.push(`${host} HTTP ${res.status}`);
         } catch {
-          /* blocked / rate-limited / timed out: try the next mirror */
+          failures.push(`${host} unreachable or blocked`);
         } finally {
           clearTimeout(timer);
         }
       }
-      if (round === 0) await new Promise((r) => setTimeout(r, 2000));
+      if (round === 0) await new Promise((r) => setTimeout(r, 3000));
     }
-    throw new Error('OpenStreetMap data servers are busy or unreachable. Try again in a minute.');
+    const uniq = [...new Set(failures)];
+    throw new Error(`OpenStreetMap data servers did not answer (${uniq.slice(0, 4).join('; ')}). They are usually only busy: wait a minute and retry, or set your own data server.`);
   }
 
   /**
-   * Everything the generator needs for a rectangular zone, in ONE Overpass request (three parallel requests are what
-   * trips the rate limit): building footprints (biggest first), trees and roads. Throws when no server answers.
+   * Everything the generator needs for a rectangular zone: building footprints (biggest first), trees and roads.
+   * One request for all of it; if every server refuses that, a second, much lighter request asks for buildings only
+   * (the model is still built, `partial` says trees / roads are missing). The query box is snapped to a ~55 m grid so
+   * that nearby frames share one cached answer; the result is then cut back to the real frame.
    */
-  async areaData(lat: number, lon: number, halfE: number, halfN: number): Promise<{ footprints: Footprint[]; trees: TreeSpec[]; roads: PadSpec[] }> {
-    const dLat = halfN / M_LAT;
-    const dLon = halfE / metresPerDegLon(lat);
-    const bbox = `${lat - dLat},${lon - dLon},${lat + dLat},${lon + dLon}`; // Overpass order: south,west,north,east
-    const ql =
-      `[out:json][timeout:25];(` +
-      `way["building"]["building"!~"^(roof|hangar)$"](${bbox});` +
-      `node["natural"="tree"](${bbox});way["natural"="tree_row"](${bbox});` +
-      `way["highway"~"^(primary|secondary|tertiary|residential|unclassified|service)$"](${bbox});` +
-      `);out geom 1500;`;
-    const data = await this.overpass(ql);
+  async areaData(lat: number, lon: number, halfE: number, halfN: number): Promise<{ footprints: Footprint[]; trees: TreeSpec[]; roads: PadSpec[]; partial: boolean }> {
+    const mLon = metresPerDegLon(lat);
+    const G = 0.0005;
+    const south = Math.floor((lat - halfN / M_LAT) / G) * G, north = Math.ceil((lat + halfN / M_LAT) / G) * G;
+    const west = Math.floor((lon - halfE / mLon) / G) * G, east = Math.ceil((lon + halfE / mLon) / G) * G;
+    const bbox = `${south.toFixed(4)},${west.toFixed(4)},${north.toFixed(4)},${east.toFixed(4)}`; // south,west,north,east
+    const buildingsQ = `way["building"]["building"!~"^(roof|hangar)$"](${bbox});`;
+    const fullQ = `[out:json][timeout:25];(${buildingsQ}node["natural"="tree"](${bbox});way["natural"="tree_row"](${bbox});way["highway"~"^(primary|secondary|tertiary|residential|unclassified|service)$"](${bbox}););out geom 1500;`;
+    let partial = false;
+    let data: { elements: OsmElement[] };
+    try {
+      data = await this.overpass(fullQ);
+    } catch (e) {
+      try {
+        data = await this.overpass(`[out:json][timeout:20];(${buildingsQ});out geom 1500;`);
+        partial = true;
+      } catch {
+        throw e;
+      }
+    }
+    const inZone = (la: number, lo: number): boolean => Math.abs((lo - lon) * mLon) <= halfE + 8 && Math.abs((la - lat) * M_LAT) <= halfN + 8;
     const footprints: Footprint[] = [];
     const trees: TreeSpec[] = [];
     const roads: PadSpec[] = [];
-    const mLon = metresPerDegLon(lat);
     for (const el of data.elements) {
       const tags = el.tags ?? {};
       if (el.type === 'node' && tags['natural'] === 'tree' && el.lat !== undefined && el.lon !== undefined) {
-        if (trees.length >= 250) continue;
+        if (trees.length >= 250 || !inZone(el.lat, el.lon)) continue;
         const h = Math.min(30, Math.max(3, parseFloat(tags['height'] ?? '') || 8));
         trees.push({ x: (el.lon - lon) * mLon, z: -(el.lat - lat) * M_LAT, h, r: Math.max(1.2, h * 0.22), kind: tags['leaf_type'] === 'needleleaved' ? 'c' : 'd' });
       } else if (el.type === 'way' && tags['natural'] === 'tree_row' && el.geometry) {
@@ -165,11 +224,12 @@ export class GeoService {
         const ring = this.ringOf(el);
         if (!ring || ring.length < 4) continue;
         if (this.polyArea(ring) > 1_000_000) continue; // a district outline, not a building
-        footprints.push(this.toFootprint(ring, tags));
+        const fp = this.toFootprint(ring, tags);
+        if (inZone(fp.ring.reduce((a, q) => a + q[1], 0) / fp.ring.length, fp.ring.reduce((a, q) => a + q[0], 0) / fp.ring.length)) footprints.push(fp);
       }
     }
     footprints.sort((p, q) => this.polyArea(q.ring) - this.polyArea(p.ring));
-    return { footprints, trees, roads };
+    return { footprints, trees, roads, partial };
   }
 
   // ---- helpers ----

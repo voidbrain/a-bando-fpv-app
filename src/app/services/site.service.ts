@@ -125,6 +125,7 @@ export class SiteService {
         return null;
       }
       void k;
+      if (data.partial) this.toast.show('Trees and roads could not be loaded (servers busy): buildings only. Regenerate later to add them.');
       const spec = this.specFromZone(info, data.footprints, data.trees, data.roads, area, seed);
       spec.zone = { lat: info.lat, lon: info.lon, halfE: area.halfE, halfN: area.halfN };
       // regenerating an existing bando keeps its identity

@@ -5,6 +5,7 @@ import { contains, edgesOf, type Pt, type Rect } from '../../core/footprint';
 import { addOpening, listOpenings, moveOpening, outlineOf, patchOpening, removeOpening, reshapeBuilding, resetToRect, resizeOpening, type OpenSeg } from '../../core/openings';
 import { cloneSpec, type BuildingSpec, type LevelSpec, type LocationInfo, type SiteSpec } from '../../core/site-spec';
 import { FlightService } from '../../services/flight.service';
+import { GeoService } from '../../services/geo.service';
 import { SceneService } from '../../services/scene.service';
 import { MAX_HALF_EXTENT, SiteService } from '../../services/site.service';
 import { StudioService } from '../../services/studio.service';
@@ -248,6 +249,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
     <div class="foot">
       <span class="dim small grow">{{ hint() }}</span>
       @if (mode() === 'area') {
+        <button class="btn" (click)="setServer()" title="Use your own OpenStreetMap data server (e.g. the PHP proxy) instead of the public ones">Data server…</button>
         <button class="btn primary" (click)="generate()" [disabled]="studio.busy()">{{ studio.busy() ? 'Building…' : studio.isNew() ? 'Generate 3D' : 'Regenerate 3D' }}</button>
       }
     </div>
@@ -691,6 +693,14 @@ export class BandoEditor {
       this.pick.set(null);
       this.mode.set('model');
     }
+  }
+
+  /** Point the generator at your own Overpass endpoint (blank = the public servers). */
+  protected setServer(): void {
+    const v = prompt('Your Overpass / proxy URL (leave empty to use the public servers):', GeoService.endpoint);
+    if (v === null) return;
+    GeoService.endpoint = v;
+    this.toast.show(v.trim() ? 'Using your data server first.' : 'Using the public data servers.');
   }
 
   protected save(): void {
