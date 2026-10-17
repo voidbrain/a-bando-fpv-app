@@ -1,6 +1,6 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import type { SiteSpec } from '../core/site-spec';
-import { sanitizeSpec } from '../core/site-spec';
+import { cloneSpec, sanitizeSpec, uid } from '../core/site-spec';
 import { StorageService } from './storage.service';
 
 const INDEX_KEY = 'abando-ng-sites';
@@ -23,6 +23,12 @@ export interface SiteEntry {
 @Injectable({ providedIn: 'root' })
 export class SiteLibraryService {
   private readonly storage = inject(StorageService);
+  private readonly revision = signal(0);
+  /** Reactive library index: re-evaluates whenever a site is saved, renamed, duplicated or removed. */
+  readonly entries = computed<SiteEntry[]>(() => {
+    this.revision();
+    return this.list();
+  });
 
   list(): SiteEntry[] {
     const raw = this.storage.readRaw(INDEX_KEY);
@@ -50,11 +56,25 @@ export class SiteLibraryService {
     const entries = this.list().filter((e) => e.id !== spec.id);
     entries.unshift({ id: spec.id, name: spec.name, createdAt: spec.createdAt, origin: spec.origin, buildings: spec.buildings.length });
     this.storage.write(INDEX_KEY, entries.slice(0, 50));
+    this.revision.update((n) => n + 1);
   }
 
   remove(id: string): void {
     this.storage.remove(specKey(id));
     this.storage.write(INDEX_KEY, this.list().filter((e) => e.id !== id));
+    this.revision.update((n) => n + 1);
+  }
+
+  /** Store a copy of a site under a new id; returns it (null when the source is missing). */
+  duplicate(id: string): SiteSpec | null {
+    const src = this.load(id);
+    if (!src) return null;
+    const copy = cloneSpec(src);
+    copy.id = uid();
+    copy.name = `${src.name} (copy)`;
+    copy.createdAt = Date.now();
+    this.save(copy);
+    return copy;
   }
 
   rename(id: string, name: string): void {

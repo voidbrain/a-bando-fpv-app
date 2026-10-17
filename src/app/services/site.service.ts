@@ -15,6 +15,19 @@ import { SceneService } from './scene.service';
 import { SiteLibraryService } from './site-library.service';
 import { ToastService } from './toast.service';
 
+/** Zone half extents are bounded: Overpass queries and the 3D scene both get heavy beyond ~1 km. */
+export const MAX_HALF_EXTENT = 500;
+const clampHalf = (v: number): number => Math.min(MAX_HALF_EXTENT, Math.max(30, v));
+
+export interface GenerateOptions {
+  scale?: number;
+  seed?: number;
+  /** Half extents (metres) of the map zone to pull from OpenStreetMap. Default 250 × 250. */
+  area?: { halfE: number; halfN: number };
+  /** Regenerate an existing bando in place: keep its id / name / creation date. */
+  keep?: { id?: string; name: string; createdAt?: number };
+}
+
 /**
  * The site as the rest of the app sees it: which {@link SiteSpec} is active, how to generate one from a location
  * (address / map click -> OSM footprints -> starter model), and how to load / save / edit sites. The app starts on a
@@ -91,19 +104,20 @@ export class SiteService {
    * data around the point — building footprints, tagged trees, roads — and turns it into an editable spec; falls
    * back to the heuristic template when the endpoints are unreachable.
    */
-  async generate(info: LocationInfo, opts: { scale?: number; seed?: number } = {}): Promise<SiteSpec> {
+  async generate(info: LocationInfo, opts: GenerateOptions = {}): Promise<SiteSpec> {
     this.generating.set(true);
     try {
       const k = Math.min(5, Math.max(0.2, opts.scale ?? 1));
       const seed = opts.seed ?? 7;
+      const area = opts.area ? { halfE: clampHalf(opts.area.halfE), halfN: clampHalf(opts.area.halfN) } : { halfE: 250, halfN: 250 };
       let spec: SiteSpec | null = null;
       try {
         const [fps, osmTrees, roads] = await Promise.all([
-          this.geo.footprints(info.lat, info.lon),
-          this.geo.trees(info.lat, info.lon),
-          this.geo.roads(info.lat, info.lon),
+          this.geo.footprints(info.lat, info.lon, area.halfE, area.halfN),
+          this.geo.trees(info.lat, info.lon, area.halfE, area.halfN),
+          this.geo.roads(info.lat, info.lon, area.halfE, area.halfN),
         ]);
-        if (fps.length) spec = this.specFromFootprints(info, fps, osmTrees, roads, k, seed);
+        if (fps.length) spec = this.specFromFootprints(info, fps, osmTrees, roads, k, seed, area);
       } catch {
         /* Overpass down / offline: fall through to the template site below */
       }
@@ -113,9 +127,16 @@ export class SiteService {
         if (info.footprintLength === undefined) full = await this.geo.locationInfo(info.lat, info.lon, info.label);
         spec = generateSite(full, { scale: k, seed });
       }
+      spec.zone = { lat: info.lat, lon: info.lon, halfE: area.halfE, halfN: area.halfN };
+      // regenerating an existing bando keeps its identity (and drops the stale library row's duplicate)
+      if (opts.keep) {
+        if (opts.keep.id) spec.id = opts.keep.id;
+        spec.name = opts.keep.name;
+        spec.createdAt = opts.keep.createdAt ?? spec.createdAt;
+      }
       this.applySpec(spec, true);
       this.library.save(spec);
-      this.toast.show(`Generated “${spec.name}” (${spec.buildings.length} buildings) — edit dimensions in Sites.`);
+      this.toast.show(`Generated “${spec.name}”: ${spec.buildings.length} buildings, ${spec.trees.length} trees.`);
       return spec;
     } finally {
       this.generating.set(false);
@@ -248,6 +269,41 @@ export class SiteService {
     this.library.remove(id);
   }
 
+  // ---- bando management (the Bandos panel) ----
+
+  /** Every saved bando, newest first; re-evaluates on any change. */
+  readonly bandos = this.library.entries;
+
+  /** Delete a bando; when it is the one on screen the scene goes back to a blank model. */
+  remove(id: string): void {
+    const wasActive = this.active().id === id;
+    this.library.remove(id);
+    if (wasActive) this.applySpec(emptySpec(this.active().origin, 'Blank site'), true);
+  }
+
+  /** Copy a bando under a new id; returns the copy's id. */
+  duplicate(id: string): string | null {
+    const copy = this.library.duplicate(id);
+    return copy?.id ?? null;
+  }
+
+  rename(id: string, name: string): void {
+    const n = name.trim();
+    if (!n) return;
+    this.library.rename(id, n);
+    if (this.active().id === id) {
+      this.editor.commitSite((s) => {
+        s.name = n;
+      });
+      this.applyDraft();
+    }
+  }
+
+  /** The stored spec of a bando without activating it (zone, origin ...). */
+  peek(id: string): SiteSpec | null {
+    return this.library.load(id);
+  }
+
   // ---- internals ----
 
   /**
@@ -263,6 +319,7 @@ export class SiteService {
     roads: PadSpec[],
     k: number,
     seed: number,
+    area: { halfE: number; halfN: number },
   ): SiteSpec {
     const mLat = 111132;
     const mLon = 111320 * Math.cos((info.lat * Math.PI) / 180);
@@ -329,7 +386,7 @@ export class SiteService {
     }
 
     // trees: keep the OSM-tagged ones near the centre, scatter filler trees out to the extent
-    const R = Math.min(600, Math.max(120, bestD + 140)) * Math.max(1, k);
+    const R = Math.min(800, Math.max(120, Math.max(area.halfE, area.halfN) + bestD)) * Math.max(1, k);
     const trees: TreeSpec[] = [];
     for (const t of osmTrees) {
       const p = toSite(t.x, -t.z); // geo service stores east/x and north/-z already

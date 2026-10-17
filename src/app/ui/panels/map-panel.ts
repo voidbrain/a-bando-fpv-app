@@ -10,7 +10,7 @@ import { DownloadService } from '../../services/download.service';
 import { FrameLoopService, FrameOrder } from '../../services/frame-loop.service';
 import { FlightService } from '../../services/flight.service';
 import { SceneService } from '../../services/scene.service';
-import { SiteLibraryService, type SiteEntry } from '../../services/site-library.service';
+import { SiteLibraryService } from '../../services/site-library.service';
 import { SiteService } from '../../services/site.service';
 import { ToastService } from '../../services/toast.service';
 import { CalibrationStore } from '../../state/calibration.store';
@@ -18,7 +18,6 @@ import { LayoutStore } from '../../state/layout.store';
 import { MapStore, type MapBackground } from '../../state/map.store';
 import { fitResolution } from '../../three/scene-host';
 import { toGeo, toLocal } from '../../core/geo';
-import type { LocationInfo } from '../../core/site-spec';
 import { checkedFrom, numberFrom, selectedFrom, textFrom } from '../dom';
 import { Panel } from '../panel/panel';
 
@@ -61,27 +60,7 @@ const OVERLAY_MAX_PIXELS = 800_000;
         <span class="dim small mono" title="The live map follows the active site's location">{{ originLabel() }}</span>
       </div>
 
-      <!-- Location -> generate: search a place, preview it on the map, then build the 3D model from what OpenStreetMap knows -->
-      <h4>Location · generate</h4>
-      <div class="row">
-        <input type="text" class="grow" [(ngModel)]="query" placeholder="Address or lat,lon (e.g. Treviso)" (keydown.enter)="showOnMap()" />
-        <button class="btn" (click)="showOnMap()" [disabled]="busy()">Show</button>
-        <button class="btn primary" (click)="generate()" [disabled]="busy()" title="Build the 3D model from OpenStreetMap data at this location">{{ busy() ? 'Building…' : 'Generate 3D' }}</button>
-      </div>
-      @if (hits().length) {
-        <div class="lib">
-          @for (h of hits(); track h.lat + ',' + h.lon) {
-            <button class="entry" (click)="pickHit(h)" [title]="h.label">{{ h.label.length > 46 ? h.label.slice(0, 46) + '…' : h.label }}</button>
-          }
-        </div>
-      }
-      @if (library().length) {
-        <div class="lib">
-          @for (s of library(); track s.id) {
-            <button class="entry" [class.active]="s.id === activeId()" (click)="openSite(s.id)" [title]="libCoords(s)">{{ s.name }}</button>
-          }
-        </div>
-      }
+      <div class="row"><span class="dim small">Create, open or regenerate bandos in the <b>Bandos</b> panel. This panel edits the open model.</span></div>
 
       <!-- Model ↔ map alignment: three sliders per row -->
       <h4>Model ↔ map</h4>
@@ -308,8 +287,10 @@ const OVERLAY_MAX_PIXELS = 800_000;
   styles: `
     .stage {
       position: relative;
-      flex: 1;
-      min-height: 120px;
+      flex: none;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      max-height: 62vh;
       overflow: hidden;
       background: #0a0f0c;
       border-radius: 6px;
@@ -433,11 +414,6 @@ export class MapPanel implements AfterContentChecked {
   protected readonly frameUrl = computed<SafeResourceUrl>(() => this.sanitizer.bypassSecurityTrustResourceUrl(this.map.osmUrl()));
   protected readonly note = signal(NOTES.live);
   // ---- location · generate (moved here from the Sites panel: search -> preview on map -> build the model from OSM) ----
-  protected readonly query = signal('');
-  protected readonly genScale = signal(1);
-  protected readonly hits = signal<LocationInfo[]>([]);
-  protected readonly library = signal<SiteEntry[]>(this.lib.list());
-  protected readonly busy = this.site.generating;
   protected readonly activeId = computed(() => this.site.active().id);
 
   // ---- editor state (merged from the old Sites · 3D map builder panel) ----
@@ -773,37 +749,6 @@ export class MapPanel implements AfterContentChecked {
 
   // ---- location · generate ----
 
-  /** Geocode the query and list candidate places (also remembers the best hit for "Show on map"). */
-  protected async showOnMap(): Promise<void> {
-    const q = this.query().trim();
-    if (!q) return;
-    const hits = await this.site.search(q);
-    this.hits.set(hits);
-    if (hits[0]) this.site.showOnMap();
-  }
-
-  protected pickHit(h: LocationInfo): void {
-    this.hits.set([h]);
-    this.map.locate(h.lat, h.lon);
-  }
-
-  /** Build the 3D model from OpenStreetMap data at the searched location. */
-  protected async generate(): Promise<void> {
-    const q = this.query().trim();
-    if (!q) return;
-    const ok = await this.site.generateFromAddress(q, this.genScale());
-    if (!ok) this.toast.show('No location found for that search.');
-    this.library.set(this.lib.list());
-  }
-
-  protected openSite(id: string): void {
-    if (this.site.useStored(id)) this.library.set(this.lib.list());
-  }
-
-  protected libCoords(e: SiteEntry): string {
-    return `${e.origin.lat.toFixed(5)}, ${e.origin.lon.toFixed(5)} · ${e.buildings} buildings`;
-  }
-
   /** Adopt the map alignment rotation as the model's north bearing, then re-solve the GPS calibration. */
   protected pointNorth(): void {
     const rot = this.map.rotation();
@@ -1019,12 +964,6 @@ export class MapPanel implements AfterContentChecked {
 
   protected save(): void {
     this.site.saveDraft();
-    this.library.set(this.lib.list());
-  }
-
-  protected removeSite(e: SiteEntry): void {
-    this.lib.remove(e.id);
-    this.library.set(this.lib.list());
   }
 
   protected exportJson(): void {
@@ -1037,9 +976,7 @@ export class MapPanel implements AfterContentChecked {
     const file = input.files?.[0];
     input.value = '';
     if (!file) return;
-    void file.text().then((text) => {
-      if (this.site.importJson(text)) this.library.set(this.lib.list());
-    });
+    void file.text().then((text) => this.site.importJson(text));
   }
 
   // ---- 2D plan preview (footprint + partitions, click to draw) ----

@@ -77,9 +77,9 @@ export class GeoService {
    * Building footprints around a point (Overpass). Returns them centred on their centroid with size, heading,
    * levels and height when tagged. Missing heights fall back to defaults by building type (the user corrects them).
    */
-  async footprints(lat: number, lon: number, radiusM = 250): Promise<Footprint[]> {
-    const dLat = radiusM / M_LAT;
-    const dLon = radiusM / metresPerDegLon(lat);
+  async footprints(lat: number, lon: number, halfE = 250, halfN = halfE): Promise<Footprint[]> {
+    const dLat = halfN / M_LAT;
+    const dLon = halfE / metresPerDegLon(lat);
     const bbox = `${lon - dLon},${lat - dLat},${lon + dLon},${lat + dLat}`;
     // ways only: a relation tagged "building" is usually an entire complex — and huge multipolygons like
     // administrative boundaries sneak in with a stray building tag ("Province of Treviso" showed up as a building)
@@ -104,9 +104,9 @@ export class GeoService {
   }
 
   /** Trees near a point (Overpass), kept sparse so the model does not drown in instances. */
-  async trees(lat: number, lon: number, radiusM = 250): Promise<TreeSpec[]> {
-    const dLat = radiusM / M_LAT;
-    const dLon = radiusM / metresPerDegLon(lat);
+  async trees(lat: number, lon: number, halfE = 250, halfN = halfE): Promise<TreeSpec[]> {
+    const dLat = halfN / M_LAT;
+    const dLon = halfE / metresPerDegLon(lat);
     const bbox = `${lon - dLon},${lat - dLat},${lon + dLon},${lat + dLat}`;
     const ql = `[out:json][timeout:20];(node["natural"="tree"]["height"](bbox:${bbox});way["natural"="tree_row"](bbox:${bbox}););out center;`;
     try {
@@ -127,9 +127,9 @@ export class GeoService {
   }
 
   /** One road nearby -> a long thin pad, so the generated site has some context. */
-  async roads(lat: number, lon: number, radiusM = 250): Promise<PadSpec[]> {
-    const dLat = radiusM / M_LAT;
-    const dLon = radiusM / metresPerDegLon(lat);
+  async roads(lat: number, lon: number, halfE = 250, halfN = halfE): Promise<PadSpec[]> {
+    const dLat = halfN / M_LAT;
+    const dLon = halfE / metresPerDegLon(lat);
     const bbox = `${lon - dLon},${lat - dLat},${lon + dLon},${lat + dLat}`;
     const ql = `[out:json][timeout:20];way["highway"~"primary|secondary|tertiary|residential|unclassified"](bbox:${bbox});out geom;`;
     try {

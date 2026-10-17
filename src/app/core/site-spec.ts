@@ -76,6 +76,14 @@ export interface PadSpec {
   color?: string;
 }
 
+/** A rectangular map area: centre and half extents (metres) east-west / north-south. */
+export interface ZoneSpec {
+  lat: number;
+  lon: number;
+  halfE: number;
+  halfN: number;
+}
+
 export interface SiteSpec {
   version: 1;
   id: string;
@@ -85,6 +93,8 @@ export interface SiteSpec {
   origin: { lat: number; lon: number };
   /** Heading of the model's +X axis, degrees clockwise from true north (set by "Point north" or the map alignment). */
   bearingDeg: number;
+  /** The map zone the model was generated from (centre + half extents in metres, east/north), so it can be re-edited. */
+  zone?: ZoneSpec;
   /** Overall multiplier applied to every dimension when generating (kept so regeneration is reproducible). */
   genScale: number;
   groundColor: string;
@@ -317,6 +327,10 @@ export function sanitizeSpec(raw: unknown): SiteSpec | null {
     name: typeof s.name === 'string' ? s.name : 'Site',
     createdAt: typeof s.createdAt === 'number' ? s.createdAt : Date.now(),
     origin: { lat: s.origin.lat, lon: typeof s.origin.lon === 'number' ? s.origin.lon : 0 },
+    zone:
+      s.zone && [s.zone.lat, s.zone.lon, s.zone.halfE, s.zone.halfN].every((v) => typeof v === 'number' && isFinite(v))
+        ? { lat: s.zone.lat, lon: s.zone.lon, halfE: s.zone.halfE, halfN: s.zone.halfN }
+        : undefined,
     bearingDeg: typeof s.bearingDeg === 'number' ? s.bearingDeg : 0,
     genScale: typeof s.genScale === 'number' ? s.genScale : 1,
     groundColor: typeof s.groundColor === 'string' ? s.groundColor : '#789b52',
