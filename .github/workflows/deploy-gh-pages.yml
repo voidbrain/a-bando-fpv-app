@@ -33,6 +33,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Stamp version
+        # Version = commits on main, so it grows with every push (run_number is a fallback-free monotonic counter)
+        run: |
+          printf "export const APP_VERSION = '1.%s';\nexport const APP_COMMIT = '%s';\n" "${{ github.run_number }}" "${GITHUB_SHA::7}" > src/app/version.ts
+
       - name: Build
         # Production build (baseHref /a-bando-fpv-app/ set in angular.json);
         # artifacts land in dist/a-bando-fpv-app/browser

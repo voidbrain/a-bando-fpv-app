@@ -22,6 +22,7 @@ import { VideoPanel } from './ui/panels/video-panel';
 import { ViewportPanel } from './ui/panels/viewport-panel';
 import { ViewsPanel } from './ui/panels/views-panel';
 import { Stage } from './ui/stage/stage';
+import { VersionBadge } from './ui/version-badge';
 
 /** Root: the full-page stage plus every floating panel. Panels hide themselves; nothing here holds state. */
 @Component({
@@ -29,10 +30,11 @@ import { Stage } from './ui/stage/stage';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     Stage, ViewsPanel, FlightsPanel, SimulatorPanel, RadioPanel, TimelinePanel, SpeedPanel, AttitudePanel, CompassPanel, PathPanel, MapPanel,
-    BlackboxPanel, VideoPanel, LivePanel, RenderPanel, HelpPanel, ViewportPanel,
+    BlackboxPanel, VideoPanel, LivePanel, RenderPanel, HelpPanel, ViewportPanel, VersionBadge,
   ],
   template: `
     <app-stage />
+    <app-version-badge />
     <app-views-panel />
     <app-flights-panel />
     <app-simulator-panel />

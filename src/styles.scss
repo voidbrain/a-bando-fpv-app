@@ -153,6 +153,11 @@ app-panel.ghost > .body > *:not(.keep) {
   display: none !important;
 }
 
+/* Author styles like display:flex would otherwise beat the UA [hidden] rule and leave the black video layer on top of the 3D canvas. */
+[hidden] {
+  display: none !important;
+}
+
 /* Main page: the video (when it replaces the 3D model), the FPV overlay and the toast. */
 .vmain {
   position: fixed;
