@@ -36,6 +36,7 @@ export const ViewStore = signalStore(
     toggleOrbitFollow: () => patchState(store, (s) => ({ orbitFollow: !s.orbitFollow })),
     toggleReplayFollow: () => patchState(store, (s) => ({ replayFollow: !s.replayFollow })),
     toggleXray: () => patchState(store, (s) => ({ xray: !s.xray })),
+    setRoofHidden: (roofHidden: boolean) => patchState(store, { roofHidden }),
     toggleRoof: () => patchState(store, (s) => ({ roofHidden: !s.roofHidden })),
     toggleCollisions: () => patchState(store, (s) => ({ collisions: !s.collisions })),
     setFpvTilt: (fpvTiltDeg: number) => patchState(store, { fpvTiltDeg: isFinite(fpvTiltDeg) ? fpvTiltDeg : 0 }),

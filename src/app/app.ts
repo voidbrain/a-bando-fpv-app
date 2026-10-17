@@ -22,6 +22,7 @@ import { VideoPanel } from './ui/panels/video-panel';
 import { ViewportPanel } from './ui/panels/viewport-panel';
 import { ViewsPanel } from './ui/panels/views-panel';
 import { Stage } from './ui/stage/stage';
+import { PlanPanel } from './ui/plan/plan-panel';
 import { StudioPanel } from './ui/studio/studio-panel';
 import { VersionBadge } from './ui/version-badge';
 
@@ -31,7 +32,7 @@ import { VersionBadge } from './ui/version-badge';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     Stage, ViewsPanel, FlightsPanel, SimulatorPanel, RadioPanel, TimelinePanel, SpeedPanel, AttitudePanel, CompassPanel, PathPanel, MapPanel,
-    BlackboxPanel, VideoPanel, LivePanel, RenderPanel, HelpPanel, ViewportPanel, VersionBadge, StudioPanel,
+    BlackboxPanel, VideoPanel, LivePanel, RenderPanel, HelpPanel, ViewportPanel, VersionBadge, StudioPanel, PlanPanel,
   ],
   template: `
     <app-stage />
@@ -46,6 +47,7 @@ import { VersionBadge } from './ui/version-badge';
     <app-compass-panel />
     <app-path-panel />
     <app-studio-panel />
+    <app-plan-panel />
     <app-map-panel />
     <app-blackbox-panel />
     <app-video-panel />

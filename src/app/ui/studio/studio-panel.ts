@@ -54,7 +54,7 @@ import { ZoneMap } from './zone-map';
           </div>
           <app-zone-map />
           <div class="row">
-            <span class="dim small grow">Drag and zoom the map: the dashed frame is the area that will be built.</span>
+            <span class="dim small grow">Drag / zoom the map, and drag the frame's edges or corners to set the area to build.</span>
             <button class="btn" (click)="studio.openModelEditor()" [disabled]="studio.isNew()">Model editor</button>
             <button class="btn primary" (click)="studio.generate()" [disabled]="studio.busy() || !studio.zone()">
               {{ studio.busy() ? 'Building…' : studio.isNew() ? 'Generate 3D' : 'Regenerate 3D' }}

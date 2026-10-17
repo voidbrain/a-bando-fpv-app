@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, input, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, computed, inject, input } from '@angular/core';
 import { LayoutStore } from '../../state/layout.store';
 import { PANEL_BY_ID, type PanelId } from '../panel-defs';
 
@@ -27,6 +27,7 @@ import { PANEL_BY_ID, type PanelId } from '../panel-defs';
     // expanded (or ghost-collapsed): exactly the remembered / default height — never the transient content height.
     '[style.height]': 'state().minimized ? "auto" : panelHeight()',
     '(pointerdown)': 'raise()',
+    '(pointerup)': 'sizeCommit()',
   },
   template: `
     <header class="grip" title="Drag to move" (pointerdown)="dragStart($event)" (pointermove)="dragMove($event)" (pointerup)="dragEnd()" (pointercancel)="dragEnd()">
@@ -123,7 +124,6 @@ export class Panel {
   private drag: { dx: number; dy: number } | null = null;
   /** True while the user drags the header (move) — suppresses the re-open size guard. */
   private get dragging(): boolean { return this.drag !== null; }
-  private resizeObserver: ResizeObserver | null = null;
 
   /** Width: the remembered size, else the default. */
   protected panelWidth(): number | null {
@@ -143,59 +143,20 @@ export class Panel {
     return h ?? d.height ?? null;
   }
 
-  constructor() {
-    // Remember the size a resizable panel was dragged to.
-    effect((onCleanup) => {
-      if (!this.def().resizable) return;
-      const el = this.host.nativeElement;
-      let first = true;
-      let prevHidden = el.hidden;
-      /** True when the body is hidden by CSS: the panel is collapsed or fully transparent in ghost mode. */
-      const chromeHidden = (): boolean => el.classList.contains('min') || el.classList.contains('ghost');
-      const ro = new ResizeObserver(() => {
-        if (el.hidden) {
-          prevHidden = true;
-          return; // never measure while closed: the size would be wrong
-        }
-        const justReopened = prevHidden;
-        prevHidden = false;
-        const s = untracked(() => this.state());
-        // While collapsed (or ghosted with no visible body) the measured height is only the title bar. It must NEVER
-        // be adopted into the remembered expanded size — that is what made panels reopen at the wrong height.
-        if (chromeHidden()) return;
-        if (first && !justReopened) {
-          first = false;
-          return;
-        }
-        const w = Math.round(el.offsetWidth);
-        const h = Math.round(el.offsetHeight);
-        const savedW = s.w ?? this.def().width;
-        const savedH = s.h ?? this.def().height;
-        // Re-opening a panel reports transient sizes for a frame or two (the browser lays it out before the saved
-        // inline styles settle). Never persist those: re-check after two frames — and only if the element is still
-        // expanded and really disagrees with the saved size — adopt what the user sees.
-        if (justReopened || (savedW !== undefined && savedH !== undefined && w > 0 && h > 0 && (Math.abs(w - savedW) > 2 || Math.abs(h - savedH) > 2) && !this.dragging)) {
-          requestAnimationFrame(() =>
-            requestAnimationFrame(() => {
-              if (el.hidden || chromeHidden() || this.dragging) return; // collapsed mid-flight: never store the title-bar height
-              const w2 = Math.round(el.offsetWidth);
-              const h2 = Math.round(el.offsetHeight);
-              // a collapsed panel measures ~one title bar: refuse anything below the sane minimum instead of saving it
-              if (w2 < 60 || h2 < 100) return;
-              if (savedW !== undefined && savedH !== undefined && Math.abs(w2 - savedW) <= 2 && Math.abs(h2 - savedH) <= 2) return; // settled back to the saved size
-              this.layout.resizeTo(this.id(), w2, h2);
-            }),
-          );
-          first = false;
-          return;
-        }
-        first = false;
-        if (w > 0 && h > 0 && (Math.abs(w - (s.w ?? this.def().width ?? 0)) > 1 || Math.abs(h - (s.h ?? this.def().height ?? 0)) > 1)) this.layout.resizeTo(this.id(), w, h);
-      });
-      ro.observe(el);
-      this.resizeObserver = ro;
-      onCleanup(() => ro.disconnect());
-    });
+  /**
+   * Remember the size a resizable panel was dragged to. Only a mouse / touch release on the panel can change the
+   * size (the corner grip is the browser's native `resize`), so that is the single moment it is measured: nothing is
+   * ever stored while the panel is hidden, collapsed or ghosted, and re-opening restores exactly the saved size.
+   */
+  protected sizeCommit(): void {
+    if (!this.def().resizable) return;
+    const el = this.host.nativeElement;
+    if (el.hidden || el.classList.contains('min') || el.classList.contains('ghost')) return;
+    const w = Math.round(el.offsetWidth);
+    const h = Math.round(el.offsetHeight);
+    if (w < 60 || h < 100) return;
+    const s = this.state();
+    if (w !== s.w || h !== s.h) this.layout.resizeTo(this.id(), w, h);
   }
 
   protected raise(): void {

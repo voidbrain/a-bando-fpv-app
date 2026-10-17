@@ -4,7 +4,7 @@ import { DomSanitizer, type SafeResourceUrl } from '@angular/platform-browser';
 import * as THREE from 'three';
 import type { BuildingSpec, LevelSpec } from '../../core/site-spec';
 import { pointInBuilding } from '../../core/site-spec';
-import { createMeasureState, drawMeasure, measureClear, measureClick, measureMetres, type MeasureState } from '../../core/drawing/measure';
+import { createMeasureState, drawMeasure, measureClear, measureClick, measureHit, measureMetres, type MeasureState } from '../../core/drawing/measure';
 import { GeoService } from '../../services/geo.service';
 import { DownloadService } from '../../services/download.service';
 import { FrameLoopService, FrameOrder } from '../../services/frame-loop.service';
@@ -268,13 +268,7 @@ const OVERLAY_MAX_PIXELS = 800_000;
               <span class="dim small mono">{{ rooms().length }} rooms · {{ l.partitions.length }} walls</span>
             </div>
 
-            <!-- 2D plan: footprint, partitions, click to draw -->
-            <canvas
-              #plan
-              class="plan keep"
-              [title]="tool() === 'partition' ? 'Click: first endpoint, then second' : 'Footprint of ' + b.name"
-              (click)="onPlanClick($event)"
-            ></canvas>
+            <div class="dim small">Draw walls, doors and windows with the mouse in the <b>Plan editor</b> (“Edit indoors”).</div>
           }
         } @else {
           <div class="dim small">Greenhouse frame — walls and roof are fixed.</div>
@@ -379,15 +373,6 @@ const OVERLAY_MAX_PIXELS = 800_000;
         color: var(--danger);
       }
     }
-    .plan {
-      width: 100%;
-      height: 150px;
-      background: #0a0f0c;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      touch-action: none;
-      cursor: crosshair;
-    }
   `,
 })
 export class MapPanel implements AfterContentChecked {
@@ -409,7 +394,6 @@ export class MapPanel implements AfterContentChecked {
 
   private readonly overlay = viewChild.required<ElementRef<HTMLCanvasElement>>('overlay');
   private readonly stage = viewChild.required<ElementRef<HTMLElement>>('stage');
-  private readonly planEl = viewChild<ElementRef<HTMLCanvasElement>>('plan');
   protected readonly live = computed(() => this.map.background() !== 'none');
   protected readonly frameUrl = computed<SafeResourceUrl>(() => this.sanitizer.bypassSecurityTrustResourceUrl(this.map.osmUrl()));
   protected readonly note = signal(NOTES.live);
@@ -527,7 +511,6 @@ export class MapPanel implements AfterContentChecked {
   }
 
   ngAfterContentChecked(): void {
-    this.drawPlan();
   }
 
   protected scale(): number {
@@ -567,7 +550,7 @@ export class MapPanel implements AfterContentChecked {
   protected measureCaption(): string {
     if (!this.measure.a) return 'Measure: click point A on the map';
     if (!this.measure.b) return 'Measure: click point B';
-    return `Measure: A → B = ${measureMetres(this.measure, this.metresPerPixel).toFixed(1)} m`;
+    return `Measure: A → B = ${measureMetres(this.measure, this.metresPerPixel).toFixed(1)} m · click the line to remove it`;
   }
 
   protected clearMeasure(): void {
@@ -692,7 +675,10 @@ export class MapPanel implements AfterContentChecked {
       case 'measure': {
         const cv = this.overlay().nativeElement;
         const r = cv.getBoundingClientRect();
-        measureClick(this.measure, clientX - r.left, clientY - r.top);
+        const mx = clientX - r.left, my = clientY - r.top;
+        // clicking the finished line removes it; any other click starts a new measurement
+        if (measureHit(this.measure, mx, my)) measureClear(this.measure);
+        else measureClick(this.measure, mx, my);
         this.dirty = true;
         break;
       }
@@ -977,74 +963,5 @@ export class MapPanel implements AfterContentChecked {
     input.value = '';
     if (!file) return;
     void file.text().then((text) => this.site.importJson(text));
-  }
-
-  // ---- 2D plan preview (footprint + partitions, click to draw) ----
-
-  private lastPlanKey = '';
-
-  private drawPlan(): void {
-    const el = this.planEl();
-    const b = this.sel();
-    if (!el || !b) return;
-    const cv = el.nativeElement;
-    const key = `${b.id}|${JSON.stringify([b.length, b.width, this.clampedLevel(), this.rooms(), this.ed.partitionFrom()])}`;
-    if (key === this.lastPlanKey && cv.clientWidth > 0) return;
-    this.lastPlanKey = key;
-    const dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
-    const w = cv.clientWidth || 300, h = cv.clientHeight || 150;
-    cv.width = w * dpr;
-    cv.height = h * dpr;
-    const ctx = cv.getContext('2d');
-    if (!ctx) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
-    const m = 14;
-    const s = Math.min((w - 2 * m) / b.length, (h - 2 * m) / b.width);
-    const ox = (w - b.length * s) / 2, oz = (h - b.width * s) / 2;
-    const px = (lx: number): number => ox + lx * s;
-    const pz = (lz: number): number => oz + lz * s;
-    ctx.strokeStyle = '#7d9c86';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(px(0), pz(0), b.length * s, b.width * s);
-    const l = b.levels[this.clampedLevel()];
-    if (l) {
-      ctx.strokeStyle = '#e8e4d8';
-      for (const [a, c] of l.partitions) {
-        ctx.beginPath();
-        ctx.moveTo(px(a.x), pz(a.z));
-        ctx.lineTo(px(c.x), pz(c.z));
-        ctx.stroke();
-      }
-      const pending = this.ed.partitionFrom();
-      if (pending) {
-        ctx.strokeStyle = '#ffd166';
-        ctx.beginPath();
-        ctx.arc(px(pending.x), pz(pending.z), 4, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    }
-    ctx.fillStyle = '#aab9af';
-    ctx.font = '10px ui-monospace, monospace';
-    ctx.fillText(`${b.length.toFixed(1)} × ${b.width.toFixed(1)} m`, px(0), pz(0) - 4);
-  }
-
-  /** Plan clicks also run the partition tool (building-local coordinates directly). */
-  protected onPlanClick(e: MouseEvent): void {
-    if (this.tool() !== 'partition') return;
-    const cv = this.planEl()?.nativeElement;
-    const b = this.sel();
-    if (!cv || !b) return;
-    const r = cv.getBoundingClientRect();
-    const m = 14;
-    const s = Math.min((r.width - 2 * m) / b.length, (r.height - 2 * m) / b.width);
-    const ox = (r.width - b.length * s) / 2, oz = (r.height - b.width * s) / 2;
-    const lx = (e.clientX - r.left - ox) / s, lz = (e.clientY - r.top - oz) / s;
-    if (!this.ed.partitionFrom()) this.ed.startPartition(lx, lz);
-    else {
-      this.ed.finishPartition(lx, lz);
-      this.applyDraft();
-    }
-    this.dirty = true;
   }
 }

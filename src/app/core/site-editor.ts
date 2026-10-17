@@ -307,6 +307,20 @@ export class SiteEditor {
     this.commit(fn);
   }
 
+  /** Start a continuous edit (a mouse drag): one undo step for the whole gesture. Follow with {@link live} calls. */
+  beginGesture(): void {
+    this.past.push(cloneSpec(this.draft()));
+    if (this.past.length > 60) this.past.shift();
+    this.future = [];
+  }
+
+  /** Edit the draft without adding an undo step (use between beginGesture() and the end of the drag). */
+  live(fn: (s: SiteSpec) => void): void {
+    const next = cloneSpec(this.draft());
+    fn(next);
+    this.draft.set(next);
+  }
+
   private commit(fn: (s: SiteSpec) => void): void {
     this.past.push(cloneSpec(this.draft()));
     if (this.past.length > 60) this.past.shift();

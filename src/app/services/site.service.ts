@@ -104,31 +104,25 @@ export class SiteService {
    * data around the point — building footprints, tagged trees, roads — and turns it into an editable spec; falls
    * back to the heuristic template when the endpoints are unreachable.
    */
-  async generate(info: LocationInfo, opts: GenerateOptions = {}): Promise<SiteSpec> {
+  async generate(info: LocationInfo, opts: GenerateOptions = {}): Promise<SiteSpec | null> {
     this.generating.set(true);
     try {
       const k = Math.min(5, Math.max(0.2, opts.scale ?? 1));
       const seed = opts.seed ?? 7;
       const area = opts.area ? { halfE: clampHalf(opts.area.halfE), halfN: clampHalf(opts.area.halfN) } : { halfE: 250, halfN: 250 };
-      let spec: SiteSpec | null = null;
+      let data;
       try {
-        const [fps, osmTrees, roads] = await Promise.all([
-          this.geo.footprints(info.lat, info.lon, area.halfE, area.halfN),
-          this.geo.trees(info.lat, info.lon, area.halfE, area.halfN),
-          this.geo.roads(info.lat, info.lon, area.halfE, area.halfN),
-        ]);
-        if (fps.length) spec = this.specFromFootprints(info, fps, osmTrees, roads, k, seed, area);
-      } catch {
-        /* Overpass down / offline: fall through to the template site below */
+        data = await this.geo.areaData(info.lat, info.lon, area.halfE, area.halfN);
+      } catch (e) {
+        // never swap in a made-up model: keep what is on screen and say what happened
+        this.toast.show(e instanceof Error ? e.message : 'Could not load OpenStreetMap data.');
+        return null;
       }
-      if (!spec) {
-        // no footprint data: size the template main building from the best guess we have
-        let full = info;
-        if (info.footprintLength === undefined) full = await this.geo.locationInfo(info.lat, info.lon, info.label);
-        spec = generateSite(full, { scale: k, seed });
-      }
+      const spec = data.footprints.length
+        ? this.specFromFootprints(info, data.footprints, data.trees, data.roads, k, seed, area)
+        : this.emptyZoneSpec(info, data.trees, data.roads, area, seed);
       spec.zone = { lat: info.lat, lon: info.lon, halfE: area.halfE, halfN: area.halfN };
-      // regenerating an existing bando keeps its identity (and drops the stale library row's duplicate)
+      // regenerating an existing bando keeps its identity
       if (opts.keep) {
         if (opts.keep.id) spec.id = opts.keep.id;
         spec.name = opts.keep.name;
@@ -136,19 +130,33 @@ export class SiteService {
       }
       this.applySpec(spec, true);
       this.library.save(spec);
-      this.toast.show(`Generated “${spec.name}”: ${spec.buildings.length} buildings, ${spec.trees.length} trees.`);
+      this.toast.show(
+        spec.buildings.length
+          ? `Generated “${spec.name}”: ${spec.buildings.length} buildings, ${spec.trees.length} trees.`
+          : `No buildings mapped in this area: “${spec.name}” has ${spec.trees.length} trees and ${spec.pads.length} roads. Add buildings in the Model editor.`,
+      );
       return spec;
     } finally {
       this.generating.set(false);
     }
   }
 
+  /** A zone with no mapped buildings: open ground with whatever trees / roads OpenStreetMap knows, centred on the zone. */
+  private emptyZoneSpec(info: LocationInfo, trees: TreeSpec[], roads: PadSpec[], area: { halfE: number; halfN: number }, seed: number): SiteSpec {
+    const spec = emptySpec({ lat: info.lat, lon: info.lon }, info.label || 'New bando');
+    spec.trees = trees;
+    spec.pads = [...roads, { x: 0, z: 0, w: 12, d: 12, color: '#a9aaa0' }];
+    spec.seed = seed;
+    spec.extent = Math.max(area.halfE, area.halfN) * 1.6;
+    spec.droneStart = { x: 0, z: 0 };
+    return spec;
+  }
+
   /** Convenience: geocode an address and generate from the first hit. Returns false when nothing matched. */
   async generateFromAddress(address: string, scale = 1): Promise<boolean> {
     const hit = await this.searchOne(address);
     if (!hit) return false;
-    await this.generate(hit, { scale });
-    return true;
+    return (await this.generate(hit, { scale })) !== null;
   }
 
   /** Geocode a query into up to `limit` candidate locations (for the Map panel's search list). */

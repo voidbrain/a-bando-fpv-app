@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import type { BuildingSpec, LocationInfo, PadSpec, TreeSpec } from '../core/site-spec';
+import type { BuildingSpec, PadSpec, TreeSpec } from '../core/site-spec';
 import { uid } from '../core/site-spec';
 
 /** One geocoding result (Nominatim / Google — display + generation only, see the licence notes below). */
@@ -28,7 +28,9 @@ export interface Footprint {
 
 interface OsmElement {
   id: number;
-  type: 'way' | 'relation';
+  type: 'node' | 'way' | 'relation';
+  lat?: number;
+  lon?: number;
   tags?: Record<string, string>;
   geometry?: { lat: number; lon: number }[];
   center?: { lat: number; lon: number };
@@ -47,7 +49,6 @@ const metresPerDegLon = (lat: number): number => 111320 * Math.cos((lat * Math.P
 @Injectable({ providedIn: 'root' })
 export class GeoService {
   private static readonly NOMINATIM = 'https://nominatim.openstreetmap.org/search';
-  private static readonly OVERPASS = 'https://overpass-api.de/api/interpreter';
 
   /** Address / place search (Nominatim). Free-form input -> up to `limit` coordinates. */
   async geocode(query: string, limit = 6): Promise<GeoResult[]> {
@@ -73,97 +74,91 @@ export class GeoService {
     }
   }
 
+  /** Public Overpass instances, tried in turn: any of them answers 429 / 504 when busy. */
+  private static readonly MIRRORS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+  ];
+
   /**
-   * Building footprints around a point (Overpass). Returns them centred on their centroid with size, heading,
-   * levels and height when tagged. Missing heights fall back to defaults by building type (the user corrects them).
+   * One Overpass query, resilient to a busy server: each mirror gets a 25 s budget; a 429 / 5xx / network failure
+   * moves on to the next mirror, and the whole round is retried once after a short pause. (A 429 comes back without
+   * CORS headers, so the browser reports it as an opaque "access control" error — this hides that.)
    */
-  async footprints(lat: number, lon: number, halfE = 250, halfN = halfE): Promise<Footprint[]> {
+  private async overpass(ql: string): Promise<{ elements: OsmElement[] }> {
+    for (let round = 0; round < 2; round++) {
+      for (const url of GeoService.MIRRORS) {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), 25000);
+        try {
+          const res = await fetch(url, { method: 'POST', body: `data=${encodeURIComponent(ql)}`, signal: ctl.signal });
+          if (res.ok) return (await res.json()) as { elements: OsmElement[] };
+        } catch {
+          /* blocked / rate-limited / timed out: try the next mirror */
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+      if (round === 0) await new Promise((r) => setTimeout(r, 2000));
+    }
+    throw new Error('OpenStreetMap data servers are busy or unreachable. Try again in a minute.');
+  }
+
+  /**
+   * Everything the generator needs for a rectangular zone, in ONE Overpass request (three parallel requests are what
+   * trips the rate limit): building footprints (biggest first), trees and roads. Throws when no server answers.
+   */
+  async areaData(lat: number, lon: number, halfE: number, halfN: number): Promise<{ footprints: Footprint[]; trees: TreeSpec[]; roads: PadSpec[] }> {
     const dLat = halfN / M_LAT;
     const dLon = halfE / metresPerDegLon(lat);
-    const bbox = `${lon - dLon},${lat - dLat},${lon + dLon},${lat + dLat}`;
-    // ways only: a relation tagged "building" is usually an entire complex — and huge multipolygons like
-    // administrative boundaries sneak in with a stray building tag ("Province of Treviso" showed up as a building)
-    const ql = `[out:json][timeout:20];way["building"]["building"!~"^(?:yes|roof|hangar)$"](bbox:${bbox});way["building"="yes"](bbox:${bbox});out geom;`;
-    const res = await fetch(GeoService.OVERPASS, { method: 'POST', body: `data=${encodeURIComponent(ql)}` });
-    if (!res.ok) throw new Error(`Overpass replied ${res.status}`);
-    const data = (await res.json()) as { elements: OsmElement[] };
-    const out: Footprint[] = [];
+    const bbox = `${lat - dLat},${lon - dLon},${lat + dLat},${lon + dLon}`; // Overpass order: south,west,north,east
+    const ql =
+      `[out:json][timeout:25];(` +
+      `way["building"]["building"!~"^(roof|hangar)$"](${bbox});` +
+      `node["natural"="tree"](${bbox});way["natural"="tree_row"](${bbox});` +
+      `way["highway"~"^(primary|secondary|tertiary|residential|unclassified|service)$"](${bbox});` +
+      `);out geom 1500;`;
+    const data = await this.overpass(ql);
+    const footprints: Footprint[] = [];
+    const trees: TreeSpec[] = [];
+    const roads: PadSpec[] = [];
+    const mLon = metresPerDegLon(lat);
     for (const el of data.elements) {
-      if (el.type !== 'way') continue;
       const tags = el.tags ?? {};
-      if ('building:part' in tags || 'boundary' in tags || 'place' in tags || 'admin_level' in tags) continue;
-      const ring = this.ringOf(el);
-      if (!ring || ring.length < 4) continue;
-      const area = this.polyArea(ring);
-      // anything over ~1 km² around a 250 m search is not a building but a boundary / district outline
-      if (area > 1_000_000) continue;
-      out.push(this.toFootprint(ring, tags));
-    }
-    // biggest first: the dominant structure becomes the main building
-    return out.sort((a, b) => this.polyArea(b.ring) - this.polyArea(a.ring));
-  }
-
-  /** Trees near a point (Overpass), kept sparse so the model does not drown in instances. */
-  async trees(lat: number, lon: number, halfE = 250, halfN = halfE): Promise<TreeSpec[]> {
-    const dLat = halfN / M_LAT;
-    const dLon = halfE / metresPerDegLon(lat);
-    const bbox = `${lon - dLon},${lat - dLat},${lon + dLon},${lat + dLat}`;
-    const ql = `[out:json][timeout:20];(node["natural"="tree"]["height"](bbox:${bbox});way["natural"="tree_row"](bbox:${bbox}););out center;`;
-    try {
-      const res = await fetch(GeoService.OVERPASS, { method: 'POST', body: `data=${encodeURIComponent(ql)}` });
-      if (!res.ok) return [];
-      const data = (await res.json()) as { elements: OsmElement[] };
-      const out: TreeSpec[] = [];
-      for (const el of data.elements.slice(0, 120)) {
-        const c = el.center ?? el.geometry?.[0];
-        if (!c) continue;
-        const h = Math.min(30, Math.max(3, parseFloat(el.tags?.['height'] ?? '') || 8));
-        out.push({ x: (c.lon - lon) * metresPerDegLon(lat), z: -(c.lat - lat) * M_LAT, h, r: Math.max(1.2, h * 0.22), kind: 'd' });
-      }
-      return out;
-    } catch {
-      return [];
-    }
-  }
-
-  /** One road nearby -> a long thin pad, so the generated site has some context. */
-  async roads(lat: number, lon: number, halfE = 250, halfN = halfE): Promise<PadSpec[]> {
-    const dLat = halfN / M_LAT;
-    const dLon = halfE / metresPerDegLon(lat);
-    const bbox = `${lon - dLon},${lat - dLat},${lon + dLon},${lat + dLat}`;
-    const ql = `[out:json][timeout:20];way["highway"~"primary|secondary|tertiary|residential|unclassified"](bbox:${bbox});out geom;`;
-    try {
-      const res = await fetch(GeoService.OVERPASS, { method: 'POST', body: `data=${encodeURIComponent(ql)}` });
-      if (!res.ok) return [];
-      const data = (await res.json()) as { elements: OsmElement[] };
-      const out: PadSpec[] = [];
-      for (const el of data.elements.slice(0, 6)) {
+      if (el.type === 'node' && tags['natural'] === 'tree' && el.lat !== undefined && el.lon !== undefined) {
+        if (trees.length >= 250) continue;
+        const h = Math.min(30, Math.max(3, parseFloat(tags['height'] ?? '') || 8));
+        trees.push({ x: (el.lon - lon) * mLon, z: -(el.lat - lat) * M_LAT, h, r: Math.max(1.2, h * 0.22), kind: tags['leaf_type'] === 'needleleaved' ? 'c' : 'd' });
+      } else if (el.type === 'way' && tags['natural'] === 'tree_row' && el.geometry) {
+        // a row of trees: one tree every ~7 m along it
         const g = el.geometry;
-        if (!g || g.length < 2) continue;
+        for (let i = 0; i + 1 < g.length && trees.length < 250; i++) {
+          const a = g[i]!, b = g[i + 1]!;
+          const len = Math.hypot((b.lon - a.lon) * mLon, (b.lat - a.lat) * M_LAT);
+          for (let t = 0; t < len; t += 7) {
+            const f = len ? t / len : 0;
+            const la = a.lat + (b.lat - a.lat) * f, lo = a.lon + (b.lon - a.lon) * f;
+            trees.push({ x: (lo - lon) * mLon, z: -(la - lat) * M_LAT, h: 8, r: 1.8, kind: 'd' });
+          }
+        }
+      } else if (el.type === 'way' && tags['highway'] && el.geometry && el.geometry.length >= 2) {
+        if (roads.length >= 12) continue;
+        const g = el.geometry;
         const a = g[0]!, b = g[g.length - 1]!;
-        const mx = (((a.lon + b.lon) / 2) - lon) * metresPerDegLon(lat);
-        const mz = -(((a.lat + b.lat) / 2) - lat) * M_LAT;
-        const len = Math.hypot((b.lon - a.lon) * metresPerDegLon(lat), (b.lat - a.lat) * M_LAT);
+        const len = Math.hypot((b.lon - a.lon) * mLon, (b.lat - a.lat) * M_LAT);
         if (len < 20) continue;
-        out.push({ x: mx, z: mz, w: len, d: 7, color: '#4a4d4b' });
+        roads.push({ x: (((a.lon + b.lon) / 2) - lon) * mLon, z: -(((a.lat + b.lat) / 2) - lat) * M_LAT, w: len, d: tags['highway'] === 'service' ? 4 : 7, color: '#4a4d4b' });
+      } else if (el.type === 'way' && tags['building']) {
+        if ('building:part' in tags || 'boundary' in tags || 'place' in tags || 'admin_level' in tags) continue;
+        const ring = this.ringOf(el);
+        if (!ring || ring.length < 4) continue;
+        if (this.polyArea(ring) > 1_000_000) continue; // a district outline, not a building
+        footprints.push(this.toFootprint(ring, tags));
       }
-      return out;
-    } catch {
-      return [];
     }
-  }
-
-  /** Turn the biggest footprint into the location info that seeds {@link generateSite}. */
-  async locationInfo(lat: number, lon: number, label: string): Promise<LocationInfo> {
-    const base: LocationInfo = { label, lat, lon };
-    try {
-      const fps = await this.footprints(lat, lon);
-      const best = fps[0];
-      if (!best) return base;
-      return { ...base, footprintLength: Math.max(best.dx, best.dz), footprintWidth: Math.min(best.dx, best.dz), footprintHeading: best.headingDeg };
-    } catch {
-      return base; // offline / endpoint down: plausible defaults still give an editable starter site
-    }
+    footprints.sort((p, q) => this.polyArea(q.ring) - this.polyArea(p.ring));
+    return { footprints, trees, roads };
   }
 
   // ---- helpers ----

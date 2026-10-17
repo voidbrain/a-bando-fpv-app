@@ -94,7 +94,7 @@ export class StudioService {
       { label, lat: z.lat, lon: z.lon },
       { area: { halfE: z.halfE, halfN: z.halfN }, keep: existing ? { id: existing.id, name: label, createdAt: existing.createdAt } : { name: label } },
     );
-    this.editingId.set(spec.id);
+    if (spec) this.editingId.set(spec.id);
   }
 
   /** Open the model editor (the old Map panel, now only used for editing the generated model). */

@@ -26,6 +26,15 @@ export function measureClick(s: MeasureState, x: number, y: number): 'a' | 'b' |
   return 'a';
 }
 
+/** True when (x, y) lies within `tol` pixels of the finished A→B line (the click that removes it). */
+export function measureHit(s: MeasureState, x: number, y: number, tol = 8): boolean {
+  if (!s.a || !s.b) return false;
+  const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 ? Math.max(0, Math.min(1, ((x - s.a.x) * dx + (y - s.a.y) * dy) / len2)) : 0;
+  return Math.hypot(x - (s.a.x + t * dx), y - (s.a.y + t * dy)) <= tol;
+}
+
 export const measureClear = (s: MeasureState): void => {
   s.a = null;
   s.b = null;
@@ -67,6 +76,11 @@ export function drawMeasure(canvas: HTMLCanvasElement, state: MeasureState, cssW
       g.moveTo(p.x, p.y - 6);
       g.lineTo(p.x, p.y + 6);
       g.stroke();
+      // a solid marker so the first click is clearly registered
+      g.fillStyle = line;
+      g.beginPath();
+      g.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+      g.fill();
     }
     if (b) {
       const m = Math.hypot(b.x - a.x, b.y - a.y) * metresPerPixel;

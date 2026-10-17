@@ -5,7 +5,15 @@ import type { LocationInfo } from '../../core/site-spec';
 import { SiteService, MAX_HALF_EXTENT } from '../../services/site.service';
 import { StudioService, type Zone } from '../../services/studio.service';
 
-const INSET = 0.08; // the framed zone is the visible map minus this margin on every side
+const INSET = 0.08; // the frame starts as the visible map minus this margin on every side
+const MIN_FRAC = 0.1; // the frame can shrink to 10 % of the map, never vanish
+type Handle = 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se';
+interface Box {
+  l: number;
+  t: number;
+  r: number;
+  b: number;
+}
 const STREET = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const M_LAT = 111132;
@@ -21,7 +29,11 @@ const M_LAT = 111132;
   host: { class: 'zm' },
   template: `
     <div #el class="map"></div>
-    <div class="frame" [style.inset.%]="inset"></div>
+    <div class="frame" [style.left.%]="box().l * 100" [style.top.%]="box().t * 100" [style.width.%]="(box().r - box().l) * 100" [style.height.%]="(box().b - box().t) * 100">
+      @for (h of handles; track h) {
+        <div class="h" [class]="'h ' + h" [attr.data-h]="h" (pointerdown)="hDown($event, h)" (pointermove)="hMove($event)" (pointerup)="hUp($event)" (pointercancel)="hUp($event)"></div>
+      }
+    </div>
     <div class="search">
       <input type="text" [(ngModel)]="query" placeholder="Search a place or lat,lon" (keydown.enter)="search()" aria-label="Search a place" />
       <button class="btn" (click)="search()" [disabled]="searching()">Go</button>
@@ -65,6 +77,22 @@ const M_LAT = 111132;
       border: 2px dashed var(--accent);
       box-shadow: 0 0 0 9999px rgba(8, 14, 10, 0.5);
     }
+    /* grab zones on the four edges and four corners of the frame */
+    .h {
+      position: absolute;
+      pointer-events: auto;
+      touch-action: none;
+      z-index: 600;
+    }
+    .h.n, .h.s { left: 12px; right: 12px; height: 14px; cursor: ns-resize; }
+    .h.e, .h.w { top: 12px; bottom: 12px; width: 14px; cursor: ew-resize; }
+    .h.n { top: -8px; } .h.s { bottom: -8px; }
+    .h.e { right: -8px; } .h.w { left: -8px; }
+    .h.nw, .h.ne, .h.sw, .h.se { width: 18px; height: 18px; background: var(--accent); border-radius: 3px; border: 2px solid #12200b; }
+    .h.nw { top: -10px; left: -10px; cursor: nwse-resize; }
+    .h.se { bottom: -10px; right: -10px; cursor: nwse-resize; }
+    .h.ne { top: -10px; right: -10px; cursor: nesw-resize; }
+    .h.sw { bottom: -10px; left: -10px; cursor: nesw-resize; }
     .search {
       position: absolute;
       z-index: 1100;
@@ -131,7 +159,10 @@ export class ZoneMap {
   private readonly destroyRef = inject(DestroyRef);
   private readonly el = viewChild.required<ElementRef<HTMLElement>>('el');
 
-  protected readonly inset = INSET * 100;
+  /** The dashed frame, as fractions of the map size (so it survives the window being resized). */
+  protected readonly box = signal<Box>({ l: INSET, t: INSET, r: 1 - INSET, b: 1 - INSET });
+  protected readonly handles: readonly Handle[] = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'];
+  private dragH: { h: Handle; x: number; y: number; box: Box } | null = null;
   protected readonly max = MAX_HALF_EXTENT;
   protected readonly round = Math.round;
   protected query = '';
@@ -186,9 +217,9 @@ export class ZoneMap {
     if (!map) return;
     const size = map.getSize();
     if (size.x < 40 || size.y < 40) return;
-    const ix = size.x * INSET, iy = size.y * INSET;
-    const tl = map.containerPointToLatLng([ix, iy]);
-    const br = map.containerPointToLatLng([size.x - ix, size.y - iy]);
+    const bx = this.box();
+    const tl = map.containerPointToLatLng([size.x * bx.l, size.y * bx.t]);
+    const br = map.containerPointToLatLng([size.x * bx.r, size.y * bx.b]);
     const lat = (tl.lat + br.lat) / 2;
     const lon = (tl.lng + br.lng) / 2;
     const zone: Zone = {
@@ -198,6 +229,33 @@ export class ZoneMap {
       halfN: (Math.abs(tl.lat - br.lat) / 2) * M_LAT,
     };
     this.studio.zone.set(zone);
+  }
+
+  protected hDown(e: PointerEvent, h: Handle): void {
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    this.dragH = { h, x: e.clientX, y: e.clientY, box: { ...this.box() } };
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  protected hMove(e: PointerEvent): void {
+    const d = this.dragH;
+    const host = this.el().nativeElement;
+    if (!d || !host.clientWidth || !host.clientHeight) return;
+    const dx = (e.clientX - d.x) / host.clientWidth;
+    const dy = (e.clientY - d.y) / host.clientHeight;
+    const b = { ...d.box };
+    if (d.h.includes('w')) b.l = Math.min(Math.max(0.01, b.l + dx), b.r - MIN_FRAC);
+    if (d.h.includes('e')) b.r = Math.max(Math.min(0.99, b.r + dx), b.l + MIN_FRAC);
+    if (d.h.includes('n')) b.t = Math.min(Math.max(0.01, b.t + dy), b.b - MIN_FRAC);
+    if (d.h.includes('s')) b.b = Math.max(Math.min(0.99, b.b + dy), b.t + MIN_FRAC);
+    this.box.set(b);
+    this.emit();
+  }
+
+  protected hUp(e: PointerEvent): void {
+    this.dragH = null;
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
   }
 
   protected setBase(e: Event): void {
