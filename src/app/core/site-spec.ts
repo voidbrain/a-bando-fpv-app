@@ -17,7 +17,23 @@ export interface OpeningSpec {
   kind: 'door' | 'window';
   c: number;
   w: number;
+  /** Height of the opening itself. */
   h: number;
+  /** Windows: height of the bottom edge above the floor (doors always start at the floor). Default 75 % of the wall. */
+  sill?: number;
+}
+
+/**
+ * An opening in a shaped (non-rectangular) building: the centre point on a wall, in building-centred metres. The wall
+ * is found geometrically, so openings survive reshaping the footprint as long as their wall still exists.
+ */
+export interface WallOpening {
+  kind: 'door' | 'window';
+  x: number;
+  z: number;
+  w: number;
+  h: number;
+  sill?: number;
 }
 
 /** One storey of a building: a slab at `baseY`, walls up to `baseY + height`, roof on top, interior partitions. */
@@ -30,6 +46,8 @@ export interface LevelSpec {
   sides: Record<'n' | 's' | 'e' | 'w', boolean>;
   /** Openings per side, positions measured along that side (from its min corner). */
   doors: Partial<Record<'n' | 's' | 'e' | 'w', OpeningSpec[]>>;
+  /** Openings of a shaped building ({@link BuildingSpec.footprint}); rectangular buildings use `doors`. */
+  wallOpenings?: WallOpening[];
   /** Interior partition walls (solid, no openings): segment endpoints in building-local metres. */
   partitions: [Vec2, Vec2][];
   /** 'gable' = pitched roof over the long axis, 'vault' = barrel vault(s), 'flat' = parapet slab. */
@@ -54,6 +72,11 @@ export interface BuildingSpec {
   length: number;
   width: number;
   levels: LevelSpec[];
+  /**
+   * Outline of a shaped building (L, T, U, H ...): a rectilinear polygon in building-centred metres. Absent = plain
+   * rectangle of `length` × `width`. Shaped buildings get flat roofs and per-edge walls (see wallOpenings).
+   */
+  footprint?: Vec2[];
   color?: string;
   floorColor?: string;
   /** Greenhouse-style thin steel frame instead of masonry walls (walls ignored). */
@@ -73,6 +96,8 @@ export interface PadSpec {
   z: number;
   w: number;
   d: number;
+  /** Rotation about Y in degrees (roads along a map bearing); default 0. */
+  rotDeg?: number;
   color?: string;
 }
 

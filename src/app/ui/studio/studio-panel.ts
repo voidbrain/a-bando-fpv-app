@@ -4,7 +4,7 @@ import { SiteService } from '../../services/site.service';
 import { StudioService } from '../../services/studio.service';
 import { ToastService } from '../../services/toast.service';
 import { Panel } from '../panel/panel';
-import { ZoneMap } from './zone-map';
+import { BandoEditor } from './bando-editor';
 
 /**
  * Bandos: the entry point of the map builder. First a list — open, create, edit the area of, duplicate, rename or
@@ -14,7 +14,7 @@ import { ZoneMap } from './zone-map';
 @Component({
   selector: 'app-studio-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Panel, FormsModule, ZoneMap],
+  imports: [Panel, FormsModule, BandoEditor],
   template: `
     <app-panel id="studio">
       @if (studio.view() === 'list') {
@@ -22,7 +22,6 @@ import { ZoneMap } from './zone-map';
           <button class="btn primary" (click)="studio.create()">＋ New bando</button>
           <label class="btn">Import<input type="file" accept=".json,application/json" hidden (change)="importFile($event)" /></label>
           <span class="grow"></span>
-          <button class="btn" (click)="studio.openModelEditor()" [disabled]="site.blank()" title="Edit buildings, trees, doors and windows of the open bando">Model editor</button>
         </div>
         @if (site.bandos().length === 0) {
           <div class="empty dim">
@@ -52,14 +51,7 @@ import { ZoneMap } from './zone-map';
             <button class="btn" (click)="studio.back()">← Bandos</button>
             <input type="text" class="grow" [ngModel]="studio.name()" (ngModelChange)="studio.name.set($event)" placeholder="Bando name" aria-label="Bando name" />
           </div>
-          <app-zone-map />
-          <div class="row">
-            <span class="dim small grow">Drag / zoom the map, and drag the frame's edges or corners to set the area to build.</span>
-            <button class="btn" (click)="studio.openModelEditor()" [disabled]="studio.isNew()">Model editor</button>
-            <button class="btn primary" (click)="studio.generate()" [disabled]="studio.busy() || !studio.zone()">
-              {{ studio.busy() ? 'Building…' : studio.isNew() ? 'Generate 3D' : 'Regenerate 3D' }}
-            </button>
-          </div>
+          <app-bando-editor />
         </div>
       }
     </app-panel>

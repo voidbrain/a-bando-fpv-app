@@ -1,3 +1,4 @@
+import { edgesOf, slabs } from '../core/footprint';
 import * as THREE from 'three';
 import { type BuildingSpec, type LevelSpec, type OpeningSpec, type SiteSpec, type TreeSpec, createRandom } from '../core/site-spec';
 import { SiteCollider, type SolidBox, type TreeCylinder } from '../core/sim/collider';
@@ -121,7 +122,7 @@ function buildSide(ctx: Ctx, b: BuildingSpec, l: LevelSpec, side: 'n' | 's' | 'e
   let p = 0;
   for (const o of (l.doors[side] ?? []).slice().sort((x, y) => x.c - y.c)) {
     wall(p, o.c - o.w / 2, l.height / 2, l.height);
-    const gy0 = o.kind === 'door' ? 0 : Math.max(0.4, l.height * 0.75);
+    const gy0 = o.kind === 'door' ? 0 : Math.min(l.height - 0.2, o.sill ?? Math.max(0.4, l.height * 0.75));
     const gy1 = Math.min(l.height, gy0 + o.h);
     if (gy0 > 0) wall(o.c - o.w / 2, o.w, gy0 / 2, gy0);
     if (gy1 < l.height) wall(o.c - o.w / 2, o.w, (gy1 + l.height) / 2, l.height - gy1);
@@ -130,10 +131,42 @@ function buildSide(ctx: Ctx, b: BuildingSpec, l: LevelSpec, side: 'n' | 's' | 'e
   wall(p, runLen - p, l.height / 2, l.height);
 }
 
+/** Walls of a shaped building: one wall per footprint edge, openings (door / window centres) punched out of them. */
+function buildPolyWalls(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.Object3D): void {
+  const th = 0.5;
+  for (const e of edgesOf(b.footprint ?? [])) {
+    const ops = (l.wallOpenings ?? [])
+      .filter((o) => (e.axis === 'x' ? Math.abs(o.z - e.at) < 0.08 && o.x >= e.from - 0.08 && o.x <= e.to + 0.08 : Math.abs(o.x - e.at) < 0.08 && o.z >= e.from - 0.08 && o.z <= e.to + 0.08))
+      .map((o) => ({ o, c: e.axis === 'x' ? o.x : o.z }))
+      .sort((p, q) => p.c - q.c);
+    const wall = (from: number, to: number, y: number, hh: number): void => {
+      const len = to - from;
+      if (len < 0.01 || hh < 0.01) return;
+      const m = (from + to) / 2;
+      if (e.axis === 'x') ctx.addBox(target, m, y, e.at, len, hh, th, ctx.mat.wall, true, true);
+      else ctx.addBox(target, e.at, y, m, th, hh, len, ctx.mat.wall, true, true);
+    };
+    let p = e.from - th / 2;
+    for (const { o, c } of ops) {
+      const a = Math.max(p, c - o.w / 2), z = Math.min(e.to + th / 2, c + o.w / 2);
+      wall(p, a, l.height / 2, l.height);
+      const gy0 = o.kind === 'door' ? 0 : Math.min(l.height - 0.2, o.sill ?? Math.max(0.4, l.height * 0.75));
+      const gy1 = Math.min(l.height, gy0 + o.h);
+      if (gy0 > 0) wall(a, z, gy0 / 2, gy0);
+      if (gy1 < l.height) wall(a, z, (gy1 + l.height) / 2, l.height - gy1);
+      p = z;
+    }
+    wall(p, e.to + th / 2, l.height / 2, l.height);
+  }
+}
+
 /** Four walls of one level plus interior partitions (thin solid walls between their endpoints). */
 function buildWalls(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.Object3D): void {
-  for (const side of ['n', 's', 'e', 'w'] as const) {
-    if (l.sides[side]) buildSide(ctx, b, l, side, target);
+  if (b.footprint) buildPolyWalls(ctx, b, l, target);
+  else {
+    for (const side of ['n', 's', 'e', 'w'] as const) {
+      if (l.sides[side]) buildSide(ctx, b, l, side, target);
+    }
   }
   for (const [a, c] of l.partitions) {
     const len = Math.hypot(c.x - a.x, c.z - a.z);
@@ -148,6 +181,11 @@ function buildRoof(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.Object
   const top = l.baseY + l.height;
   const rise = Math.max(0.5, l.roofRise);
   const rc = ctx.matFor(l.roofColor);
+  if (b.footprint) {
+    // shaped buildings: a flat roof, one slab per rectangle of the outline (each is also a collider)
+    for (const r of slabs(b.footprint)) ctx.addBox(target, (r.x0 + r.x1) / 2, top + 0.15, (r.z0 + r.z1) / 2, r.x1 - r.x0, 0.3, r.z1 - r.z0, rc, true, true);
+    return;
+  }
   if (l.roof === 'flat') {
     ctx.addBox(target, 0, top + 0.15, 0, b.length + 0.6, 0.3, b.width + 0.6, rc, false, true);
     ctx.solids.push(rotBoxLocal(ctx.at[0], ctx.at[1], b.length, b.width, ctx.rot, top, top + 0.3, true));
@@ -280,6 +318,7 @@ export function buildSiteFromSpec(spec: SiteSpec): SiteModel {
   for (const pd of spec.pads) {
     const o = new THREE.Mesh(new THREE.BoxGeometry(pd.w, 0.16, pd.d), material(pd.color ?? '#a9aaa0'));
     o.position.set(pd.x, 0.08, pd.z);
+    o.rotation.y = (-(pd.rotDeg ?? 0) * Math.PI) / 180;
     o.receiveShadow = true;
     o.renderOrder = order++;
     group.add(o);
@@ -301,8 +340,11 @@ export function buildSiteFromSpec(spec: SiteSpec): SiteModel {
     ctx.rot = b.rotDeg;
     const floorMat = material(b.floorColor ?? '#a9aaa0');
     for (const l of b.levels) {
-      if (l.baseY === 0) ctx.addBox(inner, 0, 0.05, 0, b.length, 0.1, b.width, floorMat, false, false);
-      if (l.baseY > 0) ctx.addBox(inner, 0, l.baseY, 0, b.length, 0.2, b.width, floorMat, false, false);
+      for (const r of b.footprint ? slabs(b.footprint) : [{ x0: -b.length / 2, x1: b.length / 2, z0: -b.width / 2, z1: b.width / 2 }]) {
+        const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2, w = r.x1 - r.x0, d = r.z1 - r.z0;
+        if (l.baseY === 0) ctx.addBox(inner, cx, 0.05, cz, w, 0.1, d, floorMat, false, false);
+        if (l.baseY > 0) ctx.addBox(inner, cx, l.baseY, cz, w, 0.2, d, floorMat, false, false);
+      }
       if (b.frame === 'greenhouse') {
         buildGreenhouse(ctx, b, inner, localRoof);
         break;

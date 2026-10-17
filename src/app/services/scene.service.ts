@@ -257,6 +257,19 @@ export class SceneService {
     this.endPin();
   }
 
+  /** Same as {@link placePin} but with a ground point already known in site metres (the map editor's own overlay). */
+  placePinAt(x: number, z: number): void {
+    const which = this.pin();
+    const f = this.flights.active;
+    if (!which || !f) return;
+    const anchor = which === 's' ? f.loc[0] : f.loc[f.loc.length - 1];
+    if (anchor) {
+      this.calibration.shift(x - anchor.x, z - anchor.z);
+      this.toast.show('Path placed. Use the compass to rotate it if needed.');
+    }
+    this.endPin();
+  }
+
   // ---- per frame ----
   private updateCameras(dt: number): void {
     const host = this.host;

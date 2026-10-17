@@ -21,14 +21,17 @@ export interface PanelState {
 export interface LayoutState {
   panels: Record<PanelId, PanelState>;
   zTop: number;
+  /** Layout format: a different number discards the remembered panel sizes (older builds stored wrong ones). */
+  v?: number;
 }
 
 const KEY = 'abando-ng-layout';
+const LAYOUT_V = 4;
 const Z_START = 10;
 const Z_MAX = 5000;
 
 const initialPanel = (visible: boolean): PanelState => ({ visible, minimized: false, ghost: false, x: null, y: null, z: Z_START, w: null, h: null });
-const defaults = (): LayoutState => ({ panels: Object.fromEntries(PANELS.map((p) => [p.id, initialPanel(p.visible)])) as Record<PanelId, PanelState>, zTop: Z_START });
+const defaults = (): LayoutState => ({ panels: Object.fromEntries(PANELS.map((p) => [p.id, initialPanel(p.visible)])) as Record<PanelId, PanelState>, zTop: Z_START, v: LAYOUT_V });
 
 /** Where every floating panel is, whether it is shown / collapsed / transparent, and which is on top. Remembered across visits. */
 export const LayoutStore = signalStore(
@@ -40,15 +43,16 @@ export const LayoutStore = signalStore(
     const panels = { ...d.panels };
     for (const id of Object.keys(panels) as PanelId[]) {
       const s = saved.panels?.[id];
+      if (!PANEL_BY_ID[id]) continue;
       // A stale saved size from an older build (or from when a panel was resizable) makes the reopened panel the
       // wrong height: only trust w/h for panels that are resizable today. Also drop sizes that were recorded while
       // the panel was collapsed / transiently laid out (a few px high) — those reopen at the wrong height.
-      let clean: Partial<PanelState> = s ? (PANEL_BY_ID[id].resizable ? s : { ...s, w: null, h: null }) : {};
+      let clean: Partial<PanelState> = s ? (PANEL_BY_ID[id]?.resizable && saved.v === LAYOUT_V ? s : { ...s, w: null, h: null }) : {};
       if (clean.minimized && (clean.w ?? 0) < 120) clean = { ...clean, w: null };
       if ((clean.h ?? 999) < 100 || (clean.w ?? 999) < 60) clean = { ...clean, h: null, w: null };
       panels[id] = { ...panels[id], ...clean };
     }
-    return { panels, zTop: saved.zTop ?? Z_START };
+    return { panels, zTop: saved.zTop ?? Z_START, v: LAYOUT_V };
   }),
   withMethods((store) => {
     const update = (id: PanelId, fn: (p: PanelState) => Partial<PanelState>): void =>

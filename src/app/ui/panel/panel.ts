@@ -26,8 +26,9 @@ import { PANEL_BY_ID, type PanelId } from '../panel-defs';
     // collapsed: drop the remembered height so the box hugs the title bar instead of staying big over the page;
     // expanded (or ghost-collapsed): exactly the remembered / default height — never the transient content height.
     '[style.height]': 'state().minimized ? "auto" : panelHeight()',
-    '(pointerdown)': 'raise()',
-    '(pointerup)': 'sizeCommit()',
+    '(pointerdown)': 'raise(); gripDown($event)',
+    '(document:pointerup)': 'sizeCommit()',
+    '(document:pointercancel)': 'sizeCommit()',
   },
   template: `
     <header class="grip" title="Drag to move" (pointerdown)="dragStart($event)" (pointermove)="dragMove($event)" (pointerup)="dragEnd()" (pointercancel)="dragEnd()">
@@ -148,8 +149,18 @@ export class Panel {
    * size (the corner grip is the browser's native `resize`), so that is the single moment it is measured: nothing is
    * ever stored while the panel is hidden, collapsed or ghosted, and re-opening restores exactly the saved size.
    */
-  protected sizeCommit(): void {
+  private resizing = false;
+
+  /** A press in the bottom-right corner is the start of a native resize drag. */
+  protected gripDown(e: PointerEvent): void {
     if (!this.def().resizable) return;
+    const r = this.host.nativeElement.getBoundingClientRect();
+    this.resizing = e.clientX > r.right - 24 && e.clientY > r.bottom - 24;
+  }
+
+  protected sizeCommit(): void {
+    if (!this.resizing) return;
+    this.resizing = false;
     const el = this.host.nativeElement;
     if (el.hidden || el.classList.contains('min') || el.classList.contains('ghost')) return;
     const w = Math.round(el.offsetWidth);

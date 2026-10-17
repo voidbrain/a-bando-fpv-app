@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import type { Calibration, GeoPoint } from '../core/models';
 import { setSiteOrigin } from '../core/constants';
 import { solveCalibration, toGeo, toGeoAt, toLocalAt } from '../core/geo';
-import type { BuildingSpec, LocationInfo, PadSpec, SiteSpec, TreeSpec, Vec2 } from '../core/site-spec';
+import { bounds, edgesOf, recentre, rectilinear, type Pt } from '../core/footprint';
+import type { BuildingSpec, LocationInfo, PadSpec, SiteSpec, TreeSpec, Vec2, WallOpening } from '../core/site-spec';
 import { cloneSpec, createRandom, emptySpec, generateSite, uid } from '../core/site-spec';
 import { setTakeoff } from '../core/takeoff';
 import type { Footprint } from './geo.service';
@@ -18,6 +19,11 @@ import { ToastService } from './toast.service';
 /** Zone half extents are bounded: Overpass queries and the 3D scene both get heavy beyond ~1 km. */
 export const MAX_HALF_EXTENT = 500;
 const clampHalf = (v: number): number => Math.min(MAX_HALF_EXTENT, Math.max(30, v));
+
+const bboxPoly = (pts: Pt[]): Pt[] => {
+  const b = bounds(pts);
+  return [{ x: b.x0, z: b.z0 }, { x: b.x1, z: b.z0 }, { x: b.x1, z: b.z1 }, { x: b.x0, z: b.z1 }];
+};
 
 export interface GenerateOptions {
   scale?: number;
@@ -118,9 +124,8 @@ export class SiteService {
         this.toast.show(e instanceof Error ? e.message : 'Could not load OpenStreetMap data.');
         return null;
       }
-      const spec = data.footprints.length
-        ? this.specFromFootprints(info, data.footprints, data.trees, data.roads, k, seed, area)
-        : this.emptyZoneSpec(info, data.trees, data.roads, area, seed);
+      void k;
+      const spec = this.specFromZone(info, data.footprints, data.trees, data.roads, area, seed);
       spec.zone = { lat: info.lat, lon: info.lon, halfE: area.halfE, halfN: area.halfN };
       // regenerating an existing bando keeps its identity
       if (opts.keep) {
@@ -141,18 +146,6 @@ export class SiteService {
     }
   }
 
-  /** A zone with no mapped buildings: open ground with whatever trees / roads OpenStreetMap knows, centred on the zone. */
-  private emptyZoneSpec(info: LocationInfo, trees: TreeSpec[], roads: PadSpec[], area: { halfE: number; halfN: number }, seed: number): SiteSpec {
-    const spec = emptySpec({ lat: info.lat, lon: info.lon }, info.label || 'New bando');
-    spec.trees = trees;
-    spec.pads = [...roads, { x: 0, z: 0, w: 12, d: 12, color: '#a9aaa0' }];
-    spec.seed = seed;
-    spec.extent = Math.max(area.halfE, area.halfN) * 1.6;
-    spec.droneStart = { x: 0, z: 0 };
-    return spec;
-  }
-
-  /** Convenience: geocode an address and generate from the first hit. Returns false when nothing matched. */
   async generateFromAddress(address: string, scale = 1): Promise<boolean> {
     const hit = await this.searchOne(address);
     if (!hit) return false;
@@ -315,140 +308,91 @@ export class SiteService {
   // ---- internals ----
 
   /**
-   * Turn real OSM data around a point into an editable spec: the nearest building becomes the origin and main
-   * building, every other footprint within the radius becomes a rectangular stand-in (size + heading from its
-   * longest edge, levels/height from tags), roads become pads. Non-rectangular rings are approximated for now —
-   * true polygon walls are a later phase.
+   * Turn real OSM data for a zone into an editable spec, laid out exactly like the map: no rotation (site +x = east,
+   * +z = south), origin at the zone centre. Each footprint keeps its true outline when it is rectilinear (L, T, U, H
+   * shapes ...) or becomes a rectangle along its longest edge otherwise; roads are rotated pads.
    */
-  private specFromFootprints(
-    info: LocationInfo,
-    fps: Footprint[],
-    osmTrees: TreeSpec[],
-    roads: PadSpec[],
-    k: number,
-    seed: number,
-    area: { halfE: number; halfN: number },
-  ): SiteSpec {
+  private specFromZone(info: LocationInfo, fps: Footprint[], osmTrees: TreeSpec[], roads: PadSpec[], area: { halfE: number; halfN: number }, seed: number): SiteSpec {
     const mLat = 111132;
     const mLon = 111320 * Math.cos((info.lat * Math.PI) / 180);
-    // centre on the footprint closest to the requested point (the clicked/searched place itself)
-    let ci = 0;
-    let bestD = Infinity;
-    fps.forEach((f, i) => {
-      let la = 0, lo = 0;
-      for (const [p, q] of f.ring) { lo += p; la += q; }
-      la /= f.ring.length; lo /= f.ring.length;
-      const d = Math.hypot((lo - info.lon) * mLon, (la - info.lat) * mLat);
-      if (d < bestD) { bestD = d; ci = i; }
-    });
-    const centre = fps[ci]!;
-    const clat = centre.ring.reduce((a, p) => a + p[1], 0) / centre.ring.length;
-    const clon = centre.ring.reduce((a, p) => a + p[0], 0) / centre.ring.length;
-    const bearing = ((centre.headingDeg % 180) + 180) % 180;
-    const bRad = (bearing * Math.PI) / 180;
-    const sinB = Math.sin(bRad), cosB = Math.cos(bRad);
-    /** local east/north metres -> site x/z with north along -z and the model rotated so +x is site north-ish */
-    const toSite = (ex: number, nz: number): { x: number; z: number } => ({
-      x: ex * cosB + nz * sinB,
-      z: ex * sinB - nz * cosB,
-    });
-    const rotLocal = (deg: number): number => (((deg - bearing) % 180) + 180) % 180;
-
     const buildings: BuildingSpec[] = [];
-    for (const f of fps) {
+    for (const f of fps.slice(0, 120)) {
       let la = 0, lo = 0;
       for (const [p, q] of f.ring) { lo += p; la += q; }
       la /= f.ring.length; lo /= f.ring.length;
-      const pos = toSite((lo - clon) * mLon, (la - clat) * mLat);
-      const L = Math.min(400, Math.max(6, Math.max(f.dx, f.dz) * k));
-      const W = Math.min(L * 0.9, Math.max(5, Math.min(f.dx, f.dz) * k));
-      const H = Math.min(120, Math.max(2.5, (f.heightM ?? 3.2) * k));
+      const cx = (lo - info.lon) * mLon, cz = -(la - info.lat) * mLat; // centroid, site metres
+      const rot = (((f.headingDeg - 90) % 360) + 360) % 360;
+      const a = (rot * Math.PI) / 180;
+      const cs = Math.cos(a), sn = Math.sin(a);
+      const local: Pt[] = f.ring.map(([p, q]) => {
+        const dx = (p - lo) * mLon, dz = -(q - la) * mLat;
+        return { x: dx * cs + dz * sn, z: -dx * sn + dz * cs };
+      });
+      let outline = rectilinear(local);
+      if (outline && outline.length === 4) outline = null;
+      const rc = recentre(outline ?? bboxPoly(local));
+      const L = Math.max(3, rc.length), W = Math.max(3, rc.width);
+      const pos = { x: cx + rc.shift.x * cs - rc.shift.z * sn, z: cz + rc.shift.x * sn + rc.shift.z * cs };
+      const H = Math.min(120, Math.max(2.5, f.heightM ?? 3.2));
       const lev = Math.max(1, Math.min(12, f.levels ?? 1));
       const lh = H / lev;
-      const roof: 'gable' | 'flat' = /^(hip|gable)/i.test(f.roof ?? '') ? 'gable' : lev > 1 ? 'flat' : 'gable';
+      const roof: 'gable' | 'flat' = !outline && (/^(hip|gable)/i.test(f.roof ?? '') || lev === 1) && lev === 1 ? 'gable' : 'flat';
       const sides = { n: true, s: true, e: true, w: true };
-      const doors: BuildingSpec['levels'][number]['doors'] = {
-        s: [{ kind: 'door', c: L / 2, w: Math.min(4, L * 0.3), h: Math.min(lh * 0.8, 4) }],
-      };
-      if (L > 24) doors.w = [{ kind: 'door', c: L * 0.3, w: 3, h: Math.min(lh * 0.8, 4) }];
+      const dh = Math.min(lh * 0.8, 3);
+      const doors: BuildingSpec['levels'][number]['doors'] = outline ? {} : { s: [{ kind: 'door', c: L / 2, w: Math.min(3, L * 0.3), h: dh }] };
+      const wallOpenings: WallOpening[] = [];
+      if (outline) {
+        const e = edgesOf(rc.poly).sort((p, q) => q.to - q.from - (p.to - p.from))[0];
+        if (e) wallOpenings.push(e.axis === 'x' ? { kind: 'door', x: (e.from + e.to) / 2, z: e.at, w: Math.min(3, (e.to - e.from) * 0.3), h: dh } : { kind: 'door', x: e.at, z: (e.from + e.to) / 2, w: Math.min(3, (e.to - e.from) * 0.3), h: dh });
+      }
       const levels = Array.from({ length: lev }, (_, i) => ({
         baseY: i * lh,
         height: lh,
         sides,
         doors: i === 0 ? doors : {},
+        ...(outline && i === 0 ? { wallOpenings } : {}),
         partitions: [] as [Vec2, Vec2][],
         roof: i === lev - 1 ? roof : ('flat' as const),
         roofRise: i === lev - 1 ? (roof === 'gable' ? Math.min(W * 0.35, 6) : 0.4) : 0,
       }));
       buildings.push({
-        id: f === centre ? 'main' : uid('b'),
+        id: uid('b'),
         name: f.name || `Building ${buildings.length + 1}`,
         pos,
-        rotDeg: rotLocal(f.headingDeg),
+        rotDeg: rot,
         length: L,
         width: W,
+        ...(outline ? { footprint: rc.poly } : {}),
         color: '#d7d0bd',
         floorColor: '#a9aaa0',
         levels,
       });
     }
-
-    // trees: keep the OSM-tagged ones near the centre, scatter filler trees out to the extent
-    const R = Math.min(800, Math.max(120, Math.max(area.halfE, area.halfN) + bestD)) * Math.max(1, k);
-    const trees: TreeSpec[] = [];
-    for (const t of osmTrees) {
-      const p = toSite(t.x, -t.z); // geo service stores east/x and north/-z already
-      if (Math.hypot(p.x, p.z) <= R) trees.push({ ...t, x: p.x, z: p.z });
-    }
-    const rnd = createRandom(seed);
-    for (let i = 0; i < 260 && trees.length < 320; i++) {
-      const ang = rnd() * Math.PI * 2;
-      const rad = R * (0.25 + rnd() * 0.85);
-      const x = Math.cos(ang) * rad, z = Math.sin(ang) * rad;
-      if (buildings.some((b) => Math.abs(x - b.pos.x) < b.length / 2 + 5 && Math.abs(z - b.pos.z) < b.width / 2 + 5)) continue;
-      const h = 5 + rnd() * 6, r = 1.6 + rnd() * 1.6;
-      trees.push({ x, z, h, r, kind: rnd() < 0.28 ? 'c' : 'd' });
-    }
-
-    // roads stay axis-aligned pads in the rotated frame; the take-off pad goes into the biggest free spot
-    const pads: PadSpec[] = [...roads];
-    const main = buildings.find((b) => b.id === 'main') ?? buildings[0]!;
-    const frontZ = main.pos.z + main.width / 2 + Math.max(8, main.width * 0.3);
-    let sx = main.pos.x, sz = frontZ;
-    for (let i = 0; i < 60; i++) {
-      const cx = (rnd() - 0.5) * R * 1.2;
-      const cz = (rnd() - 0.5) * R * 1.2;
-      if (!buildings.some((b) => Math.abs(cx - b.pos.x) < b.length / 2 + 8 && Math.abs(cz - b.pos.z) < b.width / 2 + 8)) {
-        sx = cx; sz = cz; break;
+    const inside = (x: number, z: number, pad: number): boolean =>
+      buildings.some((b) => {
+        const a = (b.rotDeg * Math.PI) / 180;
+        const dx = x - b.pos.x, dz = z - b.pos.z;
+        const lx = dx * Math.cos(a) + dz * Math.sin(a), lz = -dx * Math.sin(a) + dz * Math.cos(a);
+        return Math.abs(lx) < b.length / 2 + pad && Math.abs(lz) < b.width / 2 + pad;
+      });
+    // take-off pad: the free spot closest to the zone centre
+    let sx = 0, sz = 0;
+    search: for (let r = 0; r < 300; r += 4) {
+      for (let k = 0; k < Math.max(1, Math.round(r / 2)); k++) {
+        const ang = (k / Math.max(1, Math.round(r / 2))) * Math.PI * 2;
+        const x = Math.cos(ang) * r, z = Math.sin(ang) * r;
+        if (!inside(x, z, 6)) { sx = x; sz = z; break search; }
       }
     }
-    pads.push({ x: sx, z: sz, w: 12, d: 12, color: '#a9aaa0' });
-
-    const gl = Math.max(main.length, main.width) * 0.6;
-    return {
-      version: 1,
-      id: uid(),
-      name: info.label || 'Generated site',
-      createdAt: Date.now(),
-      origin: { lat: clat, lon: clon },
-      bearingDeg: bearing,
-      genScale: k,
-      groundColor: '#789b52',
-      buildings,
-      pads,
-      trees,
-      seed,
-      extent: R * 1.6,
-      droneStart: { x: sx, z: sz },
-      calibCorners: {
-        p1: { x: main.pos.x - main.length / 2, z: main.pos.z - main.width / 2 },
-        p2: { x: main.pos.x + main.length / 2, z: main.pos.z + main.width / 2 },
-      },
-      geoCorners: {
-        p1: { lat: clat - (gl / 2) / mLat, lon: clon },
-        p2: { lat: clat, lon: clon + (gl / 2) / mLon },
-      },
-    };
+    const spec = emptySpec({ lat: info.lat, lon: info.lon }, info.label || 'New bando');
+    spec.buildings = buildings;
+    spec.trees = osmTrees.filter((t) => !inside(t.x, t.z, 0));
+    spec.pads = [...roads, { x: sx, z: sz, w: 6, d: 6, color: '#a9aaa0' }];
+    spec.seed = seed;
+    spec.extent = Math.max(area.halfE, area.halfN) * 1.5 + 40;
+    spec.droneStart = { x: sx, z: sz };
+    spec.calibCorners = { p1: { x: -area.halfE, z: -area.halfN }, p2: { x: area.halfE, z: area.halfN } };
+    return spec;
   }
 
   private applySpec(spec: SiteSpec, resetView: boolean): void {

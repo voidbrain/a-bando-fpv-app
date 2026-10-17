@@ -74,6 +74,8 @@ export class GeoService {
     }
   }
 
+  private static lastGood = '';
+
   /** Public Overpass instances, tried in turn: any of them answers 429 / 504 when busy. */
   private static readonly MIRRORS = [
     'https://overpass-api.de/api/interpreter',
@@ -88,12 +90,17 @@ export class GeoService {
    */
   private async overpass(ql: string): Promise<{ elements: OsmElement[] }> {
     for (let round = 0; round < 2; round++) {
-      for (const url of GeoService.MIRRORS) {
+      // start with the mirror that worked last time: the failing ones only add delay and console noise
+      const order = [...GeoService.MIRRORS].sort((a, b) => (a === GeoService.lastGood ? -1 : b === GeoService.lastGood ? 1 : 0));
+      for (const url of order) {
         const ctl = new AbortController();
         const timer = setTimeout(() => ctl.abort(), 25000);
         try {
           const res = await fetch(url, { method: 'POST', body: `data=${encodeURIComponent(ql)}`, signal: ctl.signal });
-          if (res.ok) return (await res.json()) as { elements: OsmElement[] };
+          if (res.ok) {
+            GeoService.lastGood = url;
+            return (await res.json()) as { elements: OsmElement[] };
+          }
         } catch {
           /* blocked / rate-limited / timed out: try the next mirror */
         } finally {
@@ -143,12 +150,16 @@ export class GeoService {
           }
         }
       } else if (el.type === 'way' && tags['highway'] && el.geometry && el.geometry.length >= 2) {
-        if (roads.length >= 12) continue;
+        // every segment of the road becomes one rotated pad (so bends and diagonals follow the map)
         const g = el.geometry;
-        const a = g[0]!, b = g[g.length - 1]!;
-        const len = Math.hypot((b.lon - a.lon) * mLon, (b.lat - a.lat) * M_LAT);
-        if (len < 20) continue;
-        roads.push({ x: (((a.lon + b.lon) / 2) - lon) * mLon, z: -(((a.lat + b.lat) / 2) - lat) * M_LAT, w: len, d: tags['highway'] === 'service' ? 4 : 7, color: '#4a4d4b' });
+        const width = tags['highway'] === 'service' ? 4 : tags['highway'] === 'residential' || tags['highway'] === 'unclassified' ? 6 : 8;
+        for (let i = 0; i + 1 < g.length && roads.length < 120; i++) {
+          const a = g[i]!, b = g[i + 1]!;
+          const dx = (b.lon - a.lon) * mLon, dz = -(b.lat - a.lat) * M_LAT;
+          const len = Math.hypot(dx, dz);
+          if (len < 1) continue;
+          roads.push({ x: (((a.lon + b.lon) / 2) - lon) * mLon, z: -(((a.lat + b.lat) / 2) - lat) * M_LAT, w: len + 0.6, d: width, rotDeg: (Math.atan2(dz, dx) * 180) / Math.PI, color: '#4a4d4b' });
+        }
       } else if (el.type === 'way' && tags['building']) {
         if ('building:part' in tags || 'boundary' in tags || 'place' in tags || 'admin_level' in tags) continue;
         const ring = this.ringOf(el);

@@ -11,7 +11,6 @@ import { CompassPanel } from './ui/panels/compass-panel';
 import { FlightsPanel } from './ui/panels/flights-panel';
 import { HelpPanel } from './ui/panels/help-panel';
 import { LivePanel } from './ui/panels/live-panel';
-import { MapPanel } from './ui/panels/map-panel';
 import { PathPanel } from './ui/panels/path-panel';
 import { RadioPanel } from './ui/panels/radio-panel';
 import { RenderPanel } from './ui/panels/render-panel';
@@ -22,7 +21,6 @@ import { VideoPanel } from './ui/panels/video-panel';
 import { ViewportPanel } from './ui/panels/viewport-panel';
 import { ViewsPanel } from './ui/panels/views-panel';
 import { Stage } from './ui/stage/stage';
-import { PlanPanel } from './ui/plan/plan-panel';
 import { StudioPanel } from './ui/studio/studio-panel';
 import { VersionBadge } from './ui/version-badge';
 
@@ -31,8 +29,8 @@ import { VersionBadge } from './ui/version-badge';
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    Stage, ViewsPanel, FlightsPanel, SimulatorPanel, RadioPanel, TimelinePanel, SpeedPanel, AttitudePanel, CompassPanel, PathPanel, MapPanel,
-    BlackboxPanel, VideoPanel, LivePanel, RenderPanel, HelpPanel, ViewportPanel, VersionBadge, StudioPanel, PlanPanel,
+    Stage, ViewsPanel, FlightsPanel, SimulatorPanel, RadioPanel, TimelinePanel, SpeedPanel, AttitudePanel, CompassPanel, PathPanel,
+    BlackboxPanel, VideoPanel, LivePanel, RenderPanel, HelpPanel, ViewportPanel, VersionBadge, StudioPanel,
   ],
   template: `
     <app-stage />
@@ -47,8 +45,6 @@ import { VersionBadge } from './ui/version-badge';
     <app-compass-panel />
     <app-path-panel />
     <app-studio-panel />
-    <app-plan-panel />
-    <app-map-panel />
     <app-blackbox-panel />
     <app-video-panel />
     <app-live-panel />

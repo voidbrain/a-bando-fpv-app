@@ -1,6 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import type { SiteSpec } from '../core/site-spec';
-import { LayoutStore } from '../state/layout.store';
 import { MAX_HALF_EXTENT, SiteService } from './site.service';
 import { ToastService } from './toast.service';
 
@@ -28,7 +27,6 @@ const DEFAULT_START: MapStart = { lat: 45.6669, lon: 12.2431, zoom: 17 }; // Tre
 @Injectable({ providedIn: 'root' })
 export class StudioService {
   private readonly site = inject(SiteService);
-  private readonly layout = inject(LayoutStore);
   private readonly toast = inject(ToastService);
 
   readonly view = signal<'list' | 'zone'>('list');
@@ -38,7 +36,12 @@ export class StudioService {
   readonly start = signal<MapStart>(DEFAULT_START);
   /** Written by the map on every pan / zoom / resize. */
   readonly zone = signal<Zone | null>(null);
-  readonly basemap = signal<'street' | 'sat'>('street');
+  readonly basemap = signal<'street' | 'sat' | 'off'>('street');
+  /** Opacity of the map under the model (0.2 – 1). */
+  readonly mapOpacity = signal(1);
+  /** Which editor tab a freshly opened bando starts on, and the half extents of its stored area (metres). */
+  readonly initialMode = signal<'area' | 'model'>('area');
+  readonly startHalf = signal<{ e: number; n: number } | null>(null);
   readonly busy = this.site.generating;
 
   readonly isNew = computed(() => this.editingId() === null);
@@ -54,6 +57,8 @@ export class StudioService {
     this.editingId.set(null);
     this.name.set('New bando');
     this.start.set(hasLoc ? { lat: last.origin.lat, lon: last.origin.lon, zoom: 17 } : DEFAULT_START);
+    this.startHalf.set(null);
+    this.initialMode.set('area');
     this.zone.set(null);
     this.view.set('zone');
   }
@@ -66,6 +71,8 @@ export class StudioService {
     this.editingId.set(id);
     this.name.set(spec.name);
     this.start.set(startFor(spec));
+    this.startHalf.set(spec.zone ? { e: spec.zone.halfE, n: spec.zone.halfN } : null);
+    this.initialMode.set(spec.buildings.length > 0 && spec.bearingDeg === 0 ? 'model' : 'area');
     this.zone.set(null);
     this.view.set('zone');
   }
@@ -76,6 +83,7 @@ export class StudioService {
   }
 
   back(): void {
+    if (this.editingId()) this.site.saveDraft();
     this.view.set('list');
   }
 
@@ -96,20 +104,14 @@ export class StudioService {
     );
     if (spec) this.editingId.set(spec.id);
   }
-
-  /** Open the model editor (the old Map panel, now only used for editing the generated model). */
-  openModelEditor(): void {
-    this.layout.setVisible('map', true);
-    this.layout.raise('map');
-  }
 }
 
 function startFor(spec: SiteSpec): MapStart {
   if (spec.zone) {
     // choose a zoom at which the stored zone fits a typical panel: ~ 2 * halfE metres across 420 px
-    const mpp = (spec.zone.halfE * 2) / 420;
+    const mpp = (spec.zone.halfE * 2) / 320;
     const zoom = Math.round(Math.log2((156543.03 * Math.cos((spec.zone.lat * Math.PI) / 180)) / mpp));
-    return { lat: spec.zone.lat, lon: spec.zone.lon, zoom: Math.min(19, Math.max(16, zoom)) };
+    return { lat: spec.zone.lat, lon: spec.zone.lon, zoom: Math.min(19, Math.max(15, zoom)) };
   }
   return { lat: spec.origin.lat, lon: spec.origin.lon, zoom: 17 };
 }
