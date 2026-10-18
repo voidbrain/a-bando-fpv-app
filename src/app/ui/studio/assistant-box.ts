@@ -16,7 +16,7 @@ const EXAMPLES: readonly string[] = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FloatBox],
   template: `
-    <app-float-box fid="assistant" title="AI assistant" [x]="320" [y]="44" [w]="370" [h]="400">
+    <app-float-box fid="assistant-v2" title="AI assistant" [x]="320" [y]="44" [w]="400" [h]="460" [minW]="320" [minH]="300">
       @if (ai.status() !== 'ready' && ai.status() !== 'loading') {
         <div class="seg">
           <button [class.on]="ai.provider() === 'browser'" (click)="ai.setProvider('browser')">In this browser</button>
@@ -196,6 +196,7 @@ const EXAMPLES: readonly string[] = [
     }
     .in textarea {
       flex: 1;
+      min-width: 0;
       resize: none;
     }
     .row2 {

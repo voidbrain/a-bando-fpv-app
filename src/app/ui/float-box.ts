@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, afterNextRender, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRender, inject, input, signal } from '@angular/core';
 
 interface Geo {
   x: number;
@@ -18,6 +18,8 @@ interface Geo {
     '[style.left.px]': 'geo().x',
     '[style.top.px]': 'geo().y',
     '[style.width.px]': 'geo().w',
+    '[style.min-width.px]': 'minW()',
+    '[style.min-height]': 'open() ? minH() + "px" : null',
     '[style.height]': 'open() ? geo().h + "px" : "auto"',
     '[class.closed]': '!open()',
     '(pointerdown)': 'down($event)',
@@ -25,7 +27,7 @@ interface Geo {
     '(document:pointercancel)': 'up()',
   },
   template: `
-    <header (pointerdown)="dragStart($event)" (pointermove)="dragMove($event)" (pointerup)="dragEnd()">
+    <header (pointerdown)="dragStart($event)" (pointermove)="dragMove($event)" (pointerup)="dragEnd()" (dblclick)="reset()" title="Drag to move · double-click for the default size">
       <span class="t">{{ title() }}</span>
       <button (pointerdown)="$event.stopPropagation()" (click)="open.set(!open())" [title]="open() ? 'Collapse' : 'Expand'">{{ open() ? '▾' : '▸' }}</button>
     </header>
@@ -112,10 +114,24 @@ export class FloatBox {
   readonly y = input(8);
   readonly w = input(260);
   readonly h = input(220);
+  /** The smallest size the box may have (a chat box is useless below ~300 × 280). */
+  readonly minW = input(160);
+  readonly minH = input(60);
 
   protected readonly open = signal(true);
+  private ro: ResizeObserver | null = null;
   constructor() {
-    afterNextRender(() => this.init());
+    inject(DestroyRef).onDestroy(() => this.ro?.disconnect());
+    afterNextRender(() => {
+      this.init();
+      const par = this.host.nativeElement.parentElement;
+      if (par) {
+        this.ro = new ResizeObserver(() => {
+          if (this.ready) this.geo.update((g) => this.clamp(g));
+        });
+        this.ro.observe(par);
+      }
+    });
   }
 
   protected readonly geo = signal<Geo>({ x: 8, y: 8, w: 260, h: 220 });
@@ -128,15 +144,22 @@ export class FloatBox {
     return `abando-float-${this.fid()}`;
   }
 
-  private init(): void {
+  private init(tries = 0): void {
     if (this.ready) return;
+    const par = this.host.nativeElement.parentElement;
+    // the parent has not been laid out yet (0 × 0): measuring now would squash the box. Try again next frame.
+    if ((!par || par.clientWidth < 50 || par.clientHeight < 50) && tries < 20) {
+      requestAnimationFrame(() => this.init(tries + 1));
+      return;
+    }
     this.ready = true;
-    let g: Geo = { x: this.x(), y: this.y(), w: this.w(), h: this.h() };
+    let g: Geo = this.defaults();
     try {
       const raw = localStorage.getItem(this.key());
       if (raw) {
         const p = JSON.parse(raw) as Partial<Geo>;
-        if ([p.x, p.y, p.w, p.h].every((v) => typeof v === 'number' && isFinite(v))) g = p as Geo;
+        // a remembered size below the minimum is a leftover of an earlier bug: ignore it
+        if ([p.x, p.y, p.w, p.h].every((v) => typeof v === 'number' && isFinite(v)) && p.w! >= this.minW() && p.h! >= this.minH()) g = p as Geo;
       }
     } catch {
       /* no storage: defaults */
@@ -144,12 +167,23 @@ export class FloatBox {
     this.geo.set(this.clamp(g));
   }
 
-  /** Keep the box inside its parent area. */
+  private defaults(): Geo {
+    return { x: this.x(), y: this.y(), w: this.w(), h: this.h() };
+  }
+
+  /** Double-click the title: back to the default place and size. */
+  protected reset(): void {
+    this.init();
+    this.geo.set(this.clamp(this.defaults()));
+    this.save();
+  }
+
+  /** Keep the box inside its parent area (and never below its minimum size). */
   private clamp(g: Geo): Geo {
     const par = this.host.nativeElement.parentElement;
-    const pw = par?.clientWidth ?? 9999, ph = par?.clientHeight ?? 9999;
-    const w = Math.min(Math.max(160, g.w), Math.max(160, pw - 8));
-    const h = Math.min(Math.max(60, g.h), Math.max(60, ph - 8));
+    const pw = par?.clientWidth || 9999, ph = par?.clientHeight || 9999;
+    const w = Math.min(Math.max(this.minW(), g.w), Math.max(this.minW(), pw - 8));
+    const h = Math.min(Math.max(this.minH(), g.h), Math.max(this.minH(), ph - 8));
     return { w, h, x: Math.min(Math.max(0, g.x), Math.max(0, pw - w)), y: Math.min(Math.max(0, g.y), Math.max(0, ph - h)) };
   }
 
@@ -200,9 +234,9 @@ export class FloatBox {
     if (!d) return;
     const dx = e.clientX - d.x;
     let x = d.g.x + dx, w = d.g.w - dx;
-    if (w < 160) {
-      x -= 160 - w;
-      w = 160;
+    if (w < this.minW()) {
+      x -= this.minW() - w;
+      w = this.minW();
     }
     if (x < 0) {
       w += x;
