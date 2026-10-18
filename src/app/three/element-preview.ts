@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { OpenSeg } from '../core/openings';
-import { emptySpec, type BuildingSpec, type ColumnSpec, type TreeSpec, type VoidSpec, type WallSpec, type Vec2 } from '../core/site-spec';
+import { emptySpec, type BuildingSpec, type ColumnSpec, type StructureSpec, type TreeSpec, type VoidSpec, type WallSpec, type Vec2 } from '../core/site-spec';
+import { buildStructure } from './structures';
 import { buildSiteFromSpec } from './site-model';
 
 /** What the inspector's 3D preview shows. A part of a building is shown in place, the rest of the building ghosted. */
@@ -8,6 +9,7 @@ export type PreviewTarget =
   | { kind: 'building'; b: BuildingSpec }
   | { kind: 'tree'; t: TreeSpec }
   | { kind: 'fence'; w: WallSpec }
+  | { kind: 'structure'; s: StructureSpec }
   | { kind: 'part'; b: BuildingSpec; li: number; part: PartHighlight };
 
 export type PartHighlight =
@@ -95,6 +97,7 @@ export function buildPreviewGroup(target: PreviewTarget): THREE.Group {
   const root = new THREE.Group();
   if (target.kind === 'building') root.add(buildingGroup(target.b));
   else if (target.kind === 'tree') root.add(treeGroup(target.t));
+  else if (target.kind === 'structure') root.add(buildStructure({ ...target.s, x: 0, z: 0, rotDeg: 0 }).object);
   else if (target.kind === 'fence') {
     const w = target.w;
     const len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z);

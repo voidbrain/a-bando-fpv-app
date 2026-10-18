@@ -1,4 +1,5 @@
 import { cutRect, edgesOf, slabs } from '../core/footprint';
+import { buildStructure } from './structures';
 import * as THREE from 'three';
 import { type BuildingSpec, type LevelSpec, type OpeningSpec, type SiteSpec, type TreeSpec, createRandom } from '../core/site-spec';
 import { SiteCollider, type SolidBox, type TreeCylinder } from '../core/sim/collider';
@@ -425,6 +426,14 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
       const cx = w.a.x + dx * t, cz = w.a.z + dz * t;
       solids.push([cx - hw, cx + hw, 0, w.height, cz - hd, cz + hd, false]);
     }
+  }
+
+  // ---- towers and bridges
+  for (const st of spec.structures ?? []) {
+    const built = buildStructure(st);
+    group.add(built.object);
+    solids.push(...built.solids);
+    treeSolids.push(...built.cylinders);
   }
 
   // ---- trees (instanced, fixed layout from the spec)

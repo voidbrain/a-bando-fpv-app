@@ -54,6 +54,19 @@ describe('inspector 3D preview', () => {
     expect(box.min.y).toBeGreaterThan(0.2); // a window sits above the floor
   });
 
+  it('shows a tower or bridge on its own, and a greenhouse frame like any building', () => {
+    const tower = buildPreviewGroup({ kind: 'structure', s: { id: 's', kind: 'chimney', name: 'C', x: 300, z: 300, rotDeg: 40, height: 35, size: 1.8 } });
+    const tb = new THREE.Box3().setFromObject(tower);
+    expect(tb.max.y).toBeCloseTo(35, 0);
+    expect(tb.getCenter(new THREE.Vector3()).x).toBeCloseTo(0, 0); // shown at the origin, not at its site position
+    const bridge = buildPreviewGroup({ kind: 'structure', s: { id: 'b', kind: 'bridge', name: 'B', x: 0, z: 0, rotDeg: 0, height: 6, size: 8, length: 40, style: 'arch' } });
+    expect(new THREE.Box3().setFromObject(bridge).getSize(new THREE.Vector3()).x).toBeGreaterThan(39);
+    const gh: BuildingSpec = { id: 'g', name: 'Greenhouse', pos: { x: 5, z: 5 }, rotDeg: 20, length: 30, width: 9, frame: 'greenhouse', levels: [{ baseY: 0, height: 2.4, sides: { n: false, s: false, e: false, w: false }, doors: {}, partitions: [], roof: 'vault', roofRise: 0, vaultK: 0.7 }] };
+    const g = new THREE.Box3().setFromObject(buildPreviewGroup({ kind: 'building', b: gh }));
+    expect(g.max.y).toBeGreaterThan(3); // the arch rises above the 2.4 m base
+    expect(g.getSize(new THREE.Vector3()).x).toBeGreaterThan(29);
+  });
+
   it('shows trees and fences on their own', () => {
     expect(buildPreviewGroup({ kind: 'tree', t: { x: 0, z: 0, h: 9, r: 2, kind: 'd' } }).children.length).toBe(1);
     const f = buildPreviewGroup({ kind: 'fence', w: { a: { x: 0, z: 0 }, b: { x: 10, z: 0 }, height: 2.2, thick: 0.3 } });

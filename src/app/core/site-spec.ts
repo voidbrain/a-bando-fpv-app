@@ -54,6 +54,31 @@ export interface ColumnSpec {
   round?: boolean;
 }
 
+export type StructureKind = 'chimney' | 'silo' | 'tank' | 'water_tower' | 'lattice_tower' | 'bridge';
+
+/**
+ * A free-standing structure that is not a building: towers (chimney, silo, storage tank, water tower, lattice mast
+ * / pylon) and bridges. Towers stand at (x, z); a bridge is centred there and runs along its rotation.
+ */
+export interface StructureSpec {
+  id: string;
+  kind: StructureKind;
+  name: string;
+  x: number;
+  z: number;
+  /** Rotation about Y in degrees (same convention as buildings). */
+  rotDeg: number;
+  /** Towers: total height. Bridge: height of the deck's top surface above the ground. */
+  height: number;
+  /** Chimney / silo / tank / water tower: radius. Lattice tower: half-width at the base. Bridge: deck width. */
+  size: number;
+  /** Bridge only: length along its direction. */
+  length?: number;
+  /** Bridge only: flat beam on piers, or an arch below the deck. */
+  style?: 'beam' | 'arch';
+  color?: string;
+}
+
 /** A free-standing wall or fence on the site (not part of a building). */
 export interface WallSpec {
   a: Vec2;
@@ -146,6 +171,8 @@ export interface ZoneSpec {
 export interface SiteSpec {
   /** Free-standing walls / fences. */
   walls?: WallSpec[];
+  /** Towers and bridges. */
+  structures?: StructureSpec[];
   version: 1;
   id: string;
   name: string;
@@ -398,6 +425,7 @@ export function sanitizeSpec(raw: unknown): SiteSpec | null {
     buildings: s.buildings.filter((b) => b && typeof b.length === 'number') as BuildingSpec[],
     pads: Array.isArray(s.pads) ? (s.pads as PadSpec[]) : [],
     walls: Array.isArray(s.walls) ? (s.walls as WallSpec[]) : [],
+    structures: Array.isArray(s.structures) ? (s.structures as StructureSpec[]) : [],
     trees: Array.isArray(s.trees) ? (s.trees as TreeSpec[]) : [],
     seed: typeof s.seed === 'number' ? s.seed : 7,
     extent: typeof s.extent === 'number' ? s.extent : 500,

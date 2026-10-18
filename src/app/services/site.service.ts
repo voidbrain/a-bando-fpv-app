@@ -4,7 +4,7 @@ import type { Calibration, GeoPoint } from '../core/models';
 import { setSiteOrigin } from '../core/constants';
 import { solveCalibration, toGeo, toGeoAt, toLocalAt } from '../core/geo';
 import { bounds, edgesOf, recentre, rectilinear, type Pt } from '../core/footprint';
-import type { BuildingSpec, LocationInfo, PadSpec, SiteSpec, TreeSpec, Vec2, WallOpening } from '../core/site-spec';
+import type { BuildingSpec, LocationInfo, PadSpec, SiteSpec, StructureSpec, TreeSpec, Vec2, WallOpening } from '../core/site-spec';
 import { cloneSpec, createRandom, emptySpec, generateSite, uid } from '../core/site-spec';
 import { setTakeoff } from '../core/takeoff';
 import type { Footprint } from './geo.service';
@@ -126,7 +126,7 @@ export class SiteService {
       }
       void k;
       if (data.partial) this.toast.show('Trees and roads could not be loaded (servers busy): buildings only. Regenerate later to add them.');
-      const spec = this.specFromZone(info, data.footprints, data.trees, data.roads, area, seed);
+      const spec = this.specFromZone(info, data.footprints, data.trees, data.roads, data.structures, area, seed);
       spec.zone = { lat: info.lat, lon: info.lon, halfE: area.halfE, halfN: area.halfN };
       // regenerating an existing bando keeps its identity
       if (opts.keep) {
@@ -313,7 +313,7 @@ export class SiteService {
    * +z = south), origin at the zone centre. Each footprint keeps its true outline when it is rectilinear (L, T, U, H
    * shapes ...) or becomes a rectangle along its longest edge otherwise; roads are rotated pads.
    */
-  private specFromZone(info: LocationInfo, fps: Footprint[], osmTrees: TreeSpec[], roads: PadSpec[], area: { halfE: number; halfN: number }, seed: number): SiteSpec {
+  private specFromZone(info: LocationInfo, fps: Footprint[], osmTrees: TreeSpec[], roads: PadSpec[], structures: StructureSpec[], area: { halfE: number; halfN: number }, seed: number): SiteSpec {
     const mLat = 111132;
     const mLon = 111320 * Math.cos((info.lat * Math.PI) / 180);
     const buildings: BuildingSpec[] = [];
@@ -329,7 +329,8 @@ export class SiteService {
         const dx = (p - lo) * mLon, dz = -(q - la) * mLat;
         return { x: dx * cs + dz * sn, z: -dx * sn + dz * cs };
       });
-      let outline = rectilinear(local);
+      const greenhouse = f.type === 'greenhouse';
+      let outline = greenhouse ? null : rectilinear(local);
       if (outline && outline.length === 4) outline = null;
       const rc = recentre(outline ?? bboxPoly(local));
       const L = Math.max(3, rc.length), W = Math.max(3, rc.width);
@@ -345,6 +346,21 @@ export class SiteService {
       if (outline) {
         const e = edgesOf(rc.poly).sort((p, q) => q.to - q.from - (p.to - p.from))[0];
         if (e) wallOpenings.push(e.axis === 'x' ? { kind: 'door', x: (e.from + e.to) / 2, z: e.at, w: Math.min(3, (e.to - e.from) * 0.3), h: dh } : { kind: 'door', x: e.at, z: (e.from + e.to) / 2, w: Math.min(3, (e.to - e.from) * 0.3), h: dh });
+      }
+      if (greenhouse) {
+        // the arched steel-skeleton greenhouse: a vault tunnel along the longest side
+        buildings.push({
+          id: uid('b'),
+          name: f.name || 'Greenhouse',
+          pos,
+          rotDeg: rot,
+          length: Math.max(6, L),
+          width: Math.max(3, W),
+          frame: 'greenhouse',
+          color: '#9ec1b6',
+          levels: [{ baseY: 0, height: 2.4, sides: { n: false, s: false, e: false, w: false }, doors: {}, partitions: [], roof: 'vault', roofRise: 0, vaultK: 0.7 }],
+        });
+        continue;
       }
       const levels = Array.from({ length: lev }, (_, i) => ({
         baseY: i * lh,
@@ -388,6 +404,7 @@ export class SiteService {
     const spec = emptySpec({ lat: info.lat, lon: info.lon }, info.label || 'New bando');
     spec.buildings = buildings;
     spec.trees = osmTrees.filter((t) => !inside(t.x, t.z, 0));
+    spec.structures = structures;
     spec.pads = [...roads, { x: sx, z: sz, w: 6, d: 6, color: '#a9aaa0' }];
     spec.seed = seed;
     spec.extent = Math.max(area.halfE, area.halfN) * 1.5 + 40;

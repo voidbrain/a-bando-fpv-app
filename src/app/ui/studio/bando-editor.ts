@@ -4,7 +4,8 @@ import * as L from 'leaflet';
 import { contains, edgesOf, type Pt, type Rect } from '../../core/footprint';
 import { buildingsOverlap, mergeBuildings, overlapsOthers } from '../../core/building-ops';
 import { addOpening, insideBuilding, listOpenings, moveOpening, outlineOf, patchOpening, removeOpening, reshapeBuilding, resetToRect, resizeOpening, type OpenSeg } from '../../core/openings';
-import { cloneSpec, type BuildingSpec, type LevelSpec, type LocationInfo, type SiteSpec } from '../../core/site-spec';
+import { cloneSpec, uid, type BuildingSpec, type LevelSpec, type LocationInfo, type SiteSpec, type StructureKind, type StructureSpec } from '../../core/site-spec';
+import { STRUCTURE_DEFAULTS } from '../../three/structures';
 import { AiService } from '../../services/ai.service';
 import { FlightService } from '../../services/flight.service';
 import { GeoService } from '../../services/geo.service';
@@ -19,8 +20,8 @@ import { AssistantBox } from './assistant-box';
 import { ElementPreview } from './element-preview';
 import type { PreviewTarget } from '../../three/element-preview';
 
-type Tool = 'select' | 'building' | 'merge' | 'cut' | 'wing' | 'tree' | 'fence' | 'door' | 'window' | 'wall' | 'void' | 'column' | 'measure';
-type Pick = { t: 'building' } | { t: 'tree'; i: number } | { t: 'opening'; id: string } | { t: 'wall'; i: number } | { t: 'fence'; i: number } | { t: 'void'; i: number } | { t: 'column'; i: number } | null;
+type Tool = 'select' | 'building' | 'structure' | 'merge' | 'cut' | 'wing' | 'tree' | 'fence' | 'door' | 'window' | 'wall' | 'void' | 'column' | 'measure';
+type Pick = { t: 'building' } | { t: 'tree'; i: number } | { t: 'opening'; id: string } | { t: 'wall'; i: number } | { t: 'fence'; i: number } | { t: 'void'; i: number } | { t: 'column'; i: number } | { t: 'structure'; i: number } | null;
 type Handle = 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se';
 type Drag =
   | { t: 'move'; ox: number; oz: number; px: number; pz: number }
@@ -33,6 +34,9 @@ type Drag =
   | { t: 'draw'; x0: number; z0: number; x1: number; z1: number }
   | { t: 'shape'; op: 'add' | 'cut'; a: Pt; b: Pt }
   | { t: 'wallDraw'; a: Pt; b: Pt }
+  | { t: 'bridgeDraw'; a: Pt; b: Pt }
+  | { t: 'structMove'; i: number; dx: number; dz: number }
+  | { t: 'structRot'; i: number }
   | { t: 'fenceDraw'; a: Pt; b: Pt }
   | { t: 'fenceEnd'; i: number; end: 0 | 1 }
   | { t: 'voidDraw'; a: Pt; b: Pt }
@@ -70,7 +74,20 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
         @for (t of tools; track t.id) {
           <button class="btn" [class.on]="tool() === t.id" [disabled]="!!t.indoor && !indoor()" (click)="setTool(t.id)" [title]="t.hint">{{ t.label }}</button>
         }
-        <button class="btn" [class.on]="indoor()" [disabled]="!b()" (click)="toggleIndoor()" title="Take the roof off and edit walls, doors and windows inside the selected building">{{ indoor() ? '✓ Indoors' : 'Edit indoors' }}</button>
+        @if (tool() === 'structure') {
+          <select class="mini" [value]="structKind()" (change)="structKind.set(structKindOf($event))" title="What to place">
+            @for (k of structKinds; track k.id) {
+              <option [value]="k.id" [selected]="k.id === structKind()">{{ k.label }}</option>
+            }
+          </select>
+        }
+        @if (tool() === 'building') {
+          <select class="mini" [value]="buildKind()" (change)="buildKind.set(buildKindOf($event))" title="What to draw">
+            <option value="building" [selected]="buildKind() === 'building'">Building</option>
+            <option value="greenhouse" [selected]="buildKind() === 'greenhouse'">Greenhouse (arched steel frame)</option>
+          </select>
+        }
+        <button class="btn" [class.on]="indoor()" [disabled]="!b() || !!b()!.frame" (click)="toggleIndoor()" title="Take the roof off and edit walls, doors and windows inside the selected building">{{ indoor() ? '✓ Indoors' : 'Edit indoors' }}</button>
         @if (indoor() && b(); as ib) {
           @for (l of ib.levels; track $index) {
             <button class="btn" [class.on]="$index === level()" (click)="level.set($index)" title="Edit this floor">L{{ $index + 1 }}</button>
@@ -118,6 +135,32 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
           @if (zoneRect(); as zr) {
             <rect [attr.x]="zr.x" [attr.y]="zr.z" [attr.width]="zr.w" [attr.height]="zr.d" fill="none" stroke="#ffd166" stroke-width="2" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" />
           }
+          @for (st of ed.draft().structures ?? []; track st.id) {
+            <g class="hit" [attr.transform]="'translate(' + st.x + ' ' + st.z + ') rotate(' + st.rotDeg + ')'" (pointerdown)="structDown($event, $index)">
+              @switch (st.kind) {
+                @case ('bridge') {
+                  <rect [attr.x]="-(st.length ?? 30) / 2" [attr.y]="-st.size / 2" [attr.width]="st.length ?? 30" [attr.height]="st.size" fill="#8d8d86" fill-opacity="0.85" [attr.stroke]="structI() === $index ? '#ffd166' : '#3a3a36'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
+                  <line [attr.x1]="-(st.length ?? 30) / 2" y1="0" [attr.x2]="(st.length ?? 30) / 2" y2="0" stroke="#f2e9b8" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" pointer-events="none" />
+                }
+                @case ('lattice_tower') {
+                  <rect [attr.x]="-st.size" [attr.y]="-st.size" [attr.width]="st.size * 2" [attr.height]="st.size * 2" fill="#c9ced2" fill-opacity="0.6" [attr.stroke]="structI() === $index ? '#ffd166' : '#4c5359'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
+                  <line [attr.x1]="-st.size" [attr.y1]="-st.size" [attr.x2]="st.size" [attr.y2]="st.size" stroke="#4c5359" vector-effect="non-scaling-stroke" pointer-events="none" />
+                  <line [attr.x1]="st.size" [attr.y1]="-st.size" [attr.x2]="-st.size" [attr.y2]="st.size" stroke="#4c5359" vector-effect="non-scaling-stroke" pointer-events="none" />
+                }
+                @default {
+                  <circle [attr.r]="st.size" [attr.fill]="st.kind === 'chimney' ? '#a86b52' : '#c4c8c6'" fill-opacity="0.85" [attr.stroke]="structI() === $index ? '#ffd166' : '#3a3a36'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
+                  <circle [attr.r]="st.size * (st.kind === 'chimney' ? 0.55 : 0.55)" fill="none" stroke="#3a3a36" vector-effect="non-scaling-stroke" pointer-events="none" />
+                }
+              }
+            </g>
+            <text [attr.x]="st.x" [attr.y]="st.z + (st.kind === 'bridge' ? 0 : st.size + 4)" text-anchor="middle" [attr.font-size]="Math.max(2, 11 / ppm())" fill="#1b231e" stroke="#fff" stroke-width="0.35" paint-order="stroke" pointer-events="none">{{ st.name }}</text>
+            @if (structI() === $index && (st.kind === 'bridge' || st.kind === 'lattice_tower')) {
+              <g [attr.transform]="'translate(' + st.x + ' ' + st.z + ') rotate(' + st.rotDeg + ')'">
+                <line x1="0" [attr.y1]="-(st.kind === 'bridge' ? st.size / 2 : st.size)" x2="0" [attr.y2]="-(st.kind === 'bridge' ? st.size / 2 : st.size) - 28 / ppm()" stroke="#b7ed83" vector-effect="non-scaling-stroke" pointer-events="none" />
+                <circle class="hit" cx="0" [attr.cy]="-(st.kind === 'bridge' ? st.size / 2 : st.size) - 28 / ppm()" [attr.r]="hr()" fill="#ffd166" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="structRotDown($event, $index)" />
+              </g>
+            }
+          }
           @for (w of ed.draft().walls ?? []; track $index) {
             <line class="hit" [attr.x1]="w.a.x" [attr.y1]="w.a.z" [attr.x2]="w.b.x" [attr.y2]="w.b.z" [attr.stroke]="fenceI() === $index ? '#ffd166' : (w.color ?? '#d9c9a0')" stroke-width="6" stroke-linecap="round" vector-effect="non-scaling-stroke" (pointerdown)="fenceDown($event, $index)" />
             @if (fenceI() === $index) {
@@ -130,6 +173,11 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
           }
           @for (bd of ed.draft().buildings; track bd.id) {
             <g [attr.transform]="tf(bd)" [attr.opacity]="indoor() && bd.id !== ed.selectedId() ? 0.35 : 1">
+              @if (bd.frame) {
+                @for (x of ribs(bd); track x) {
+                  <line [attr.x1]="x" [attr.y1]="-bd.width / 2" [attr.x2]="x" [attr.y2]="bd.width / 2" stroke="#56655f" vector-effect="non-scaling-stroke" pointer-events="none" />
+                }
+              }
               <polygon class="hit" [attr.points]="outline(bd)" [attr.fill]="bd.color ?? '#d7d0bd'" [attr.fill-opacity]="indoor() && bd.id === ed.selectedId() ? 0.2 : 0.8" [attr.stroke]="bd.id === ed.selectedId() ? '#b7ed83' : '#2d3a33'" [attr.stroke-width]="bd.id === ed.selectedId() ? 3 : 1.5" vector-effect="non-scaling-stroke" (pointerdown)="bldDown($event, bd)" />
             </g>
             <text [attr.x]="bd.pos.x" [attr.y]="bd.pos.z" text-anchor="middle" dominant-baseline="middle" [attr.font-size]="labelSize(bd)" fill="#1b231e" stroke="#fff" stroke-width="0.35" paint-order="stroke" pointer-events="none">{{ bd.name }}</text>
@@ -171,7 +219,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
                   <circle class="hit" [attr.cx]="seg(o).x2" [attr.cy]="seg(o).y2" [attr.r]="hr()" fill="#fff" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="openEndDown($event, o.id, 1)" />
                 }
               }
-              @if (tool() === 'select' && !indoor() && !bd.frame) {
+              @if (tool() === 'select' && !indoor()) {
                 @if (!bd.footprint) {
                   @for (c of corners; track $index) {
                     <rect class="hit" [attr.x]="c[0] * bd.length / 2 - hr()" [attr.y]="c[1] * bd.width / 2 - hr()" [attr.width]="hr() * 2" [attr.height]="hr() * 2" fill="#b7ed83" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="cornerDown($event, c[0], c[1])" />
@@ -188,6 +236,9 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
                 <rect [attr.x]="sh().x" [attr.y]="sh().z" [attr.width]="sh().w" [attr.height]="sh().d" [attr.fill]="sh().op === 'cut' ? '#ff6b6b' : '#b7ed83'" fill-opacity="0.35" [attr.stroke]="sh().op === 'cut' ? '#ff6b6b' : '#b7ed83'" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
               }
             </g>
+          }
+          @if (drag()?.t === 'bridgeDraw') {
+            <line [attr.x1]="bdw().a.x" [attr.y1]="bdw().a.z" [attr.x2]="bdw().b.x" [attr.y2]="bdw().b.z" stroke="#ffd166" [attr.stroke-width]="7" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" pointer-events="none" />
           }
           @if (drag()?.t === 'fenceDraw') {
             <line [attr.x1]="fd().a.x" [attr.y1]="fd().a.z" [attr.x2]="fd().b.x" [attr.y2]="fd().b.z" stroke="#ffd166" stroke-width="5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
@@ -262,6 +313,22 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
                 <button class="btn danger" (click)="deleteSel()">Delete</button></div>
               }
             }
+            @case ('structure') {
+              @if (structSel(); as st) {
+                <div class="f"><label class="grow">name <input type="text" class="grow" [value]="st.name" (change)="setStruct({ name: text($event) })" /></label></div>
+                <div class="f"><span class="dim">{{ structLabel(st.kind) }}</span></div>
+                <div class="f"><label>{{ st.kind === 'bridge' ? 'deck height' : 'height' }} <input type="number" min="2" step="0.5" [value]="st.height" (change)="setStruct({ height: num($event) })" /></label>
+                <label>{{ sizeLabel(st.kind) }} <input type="number" min="0.5" step="0.5" [value]="st.size" (change)="setStruct({ size: num($event) })" /></label></div>
+                @if (st.kind === 'bridge') {
+                  <div class="f"><label>length <input type="number" min="6" step="1" [value]="(st.length ?? 30).toFixed(0)" (change)="setStruct({ length: num($event) })" /></label>
+                  <label>style <select (change)="setStruct({ style: styleOf($event) })"><option value="beam" [selected]="(st.style ?? 'beam') === 'beam'">beam on piers</option><option value="arch" [selected]="st.style === 'arch'">arch</option></select></label></div>
+                }
+                @if (st.kind === 'bridge' || st.kind === 'lattice_tower') {
+                  <div class="f"><label>rotation° <input type="number" step="5" [value]="st.rotDeg.toFixed(0)" (change)="setStruct({ rotDeg: num($event) })" /></label></div>
+                }
+                <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
+              }
+            }
             @case ('fence') {
               @if (fence(); as w) {
                 <div class="f"><span class="dim">Free-standing wall · {{ fenceLen(w).toFixed(1) }} m</span></div>
@@ -300,6 +367,10 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
                   <button class="btn" (click)="mutate(toRectangle, 0)" title="Back to a plain rectangle over the bounding box">Reset shape</button></div>
                 }
                 <div class="f"><label>rotation° <input type="number" step="5" [value]="bd.rotDeg.toFixed(0)" (change)="mutate(setRot, num($event))" /></label></div>
+                @if (bd.frame) {
+                  <div class="f"><span class="dim">Greenhouse · arched steel frame</span></div>
+                  <div class="f"><label>arch height <input type="number" min="0.3" max="1.3" step="0.05" [value]="bd.levels[0]?.vaultK ?? 0.7" (change)="editLevel(setArch, num($event))" /></label></div>
+                }
                 @if (!bd.frame) {
                   <div class="f levels">
                     @for (l of bd.levels; track $index) {
@@ -546,12 +617,14 @@ export class BandoEditor {
   protected readonly checked = checkedFrom;
   protected readonly text = textFrom;
   protected readonly round = Math.round;
+  protected readonly Math = Math;
   protected readonly edgesOf = edgesOf;
   protected readonly handles: readonly Handle[] = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'];
   protected readonly corners: readonly [number, number][] = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
   protected readonly tools: readonly { id: Tool; label: string; hint: string; indoor?: boolean }[] = [
     { id: 'select', label: '↖', hint: 'Select · move · resize · rotate' },
     { id: 'building', label: '＋ Building', hint: 'Drag a rectangle on the map (it cannot overlap another building)' },
+    { id: 'structure', label: '▲ Structure', hint: 'Place a tower (chimney, silo, tank, water tower, lattice mast) or drag a bridge' },
     { id: 'merge', label: '⊎ Merge', hint: 'Select a building, press Merge, then click a touching building to join them' },
     { id: 'cut', label: '✂ Cut', hint: 'Cut a notch out of the selected building (U, H, L shapes)' },
     { id: 'wing', label: '⊕ Wing', hint: 'Add a wing to the selected building' },
@@ -567,6 +640,13 @@ export class BandoEditor {
 
   protected readonly mode = signal<'area' | 'model'>('area');
   protected readonly tool = signal<Tool>('select');
+  /** What the Structure tool places, and what the Building tool draws. */
+  protected readonly structKind = signal<StructureKind>('chimney');
+  protected readonly buildKind = signal<'building' | 'greenhouse'>('building');
+  protected readonly structKinds: readonly { id: StructureKind; label: string }[] = [
+    { id: 'chimney', label: 'Chimney' }, { id: 'silo', label: 'Silo' }, { id: 'tank', label: 'Storage tank' },
+    { id: 'water_tower', label: 'Water tower' }, { id: 'lattice_tower', label: 'Lattice tower' }, { id: 'bridge', label: 'Bridge (drag)' },
+  ];
   protected readonly indoor = signal(false);
   protected readonly level = signal(0);
   protected readonly pick = signal<Pick>(null);
@@ -660,6 +740,15 @@ export class BandoEditor {
     const p = this.pick();
     return p?.t === 'column' ? p.i : -1;
   });
+  protected readonly structI = computed(() => {
+    const p = this.pick();
+    return p?.t === 'structure' ? p.i : -1;
+  });
+  protected readonly structSel = computed(() => this.ed.draft().structures?.[this.structI()] ?? null);
+  protected readonly bdw = computed(() => {
+    const d = this.drag();
+    return d?.t === 'bridgeDraw' ? d : { a: { x: 0, z: 0 }, b: { x: 0, z: 0 } };
+  });
   protected readonly fence = computed(() => this.ed.draft().walls?.[this.fenceI()] ?? null);
   protected readonly voidSel = computed(() => this.lvl()?.voids?.[this.voidI()] ?? null);
   protected readonly colSel = computed(() => this.lvl()?.columns?.[this.colI()] ?? null);
@@ -671,6 +760,10 @@ export class BandoEditor {
     if (p?.t === 'tree') {
       const t = this.tree();
       return t ? { kind: 'tree', t } : null;
+    }
+    if (p?.t === 'structure') {
+      const st = this.structSel();
+      return st ? { kind: 'structure', s: st } : null;
     }
     if (p?.t === 'fence') {
       const w = this.fence();
@@ -742,7 +835,8 @@ export class BandoEditor {
     if (this.mode() === 'area') return 'Pan and zoom the map to place the area, drag the frame\'s edges and corners to size it, then Generate.';
     const t = this.tool();
     if (this.pinMode()) return 'Click the map where the flight ' + (this.pinMode() === 's' ? 'started' : 'ended') + '. Esc cancels.';
-    if (t === 'building') return 'Drag a rectangle to add a building (it cannot overlap another).';
+    if (t === 'structure') return this.structKind() === 'bridge' ? 'Drag from one end of the bridge to the other. Select it to change height, width, style.' : 'Click to place it. Select it to change height and size; drag to move.';
+    if (t === 'building') return this.buildKind() === 'greenhouse' ? 'Drag a rectangle: the long side is the tunnel, the short side the arch span.' : 'Drag a rectangle to add a building (it cannot overlap another).';
     if (t === 'merge') return this.b() ? `Click a touching building to merge it into “${this.b()!.name}”.` : 'Click the building to keep, then the one to merge into it.';
     if (t === 'fence') return 'Drag to draw a free-standing wall or fence. Select it to edit height or drag its ends.';
     if (t === 'void') return 'Drag a hole in the selected floor (on the ground floor tick “water” for a basin).';
@@ -1002,7 +1096,11 @@ export class BandoEditor {
     }
     const t = this.tool();
     const bd = this.b();
-    if (t === 'fence') {
+    if (t === 'structure') {
+      const q = { x: snap(p.x, 0.5), z: snap(p.z, 0.5) };
+      if (this.structKind() === 'bridge') this.drag.set({ t: 'bridgeDraw', a: q, b: { ...q } });
+      else this.placeStructure(this.structKind(), q);
+    } else if (t === 'fence') {
       const q = { x: snap(p.x, 0.5), z: snap(p.z, 0.5) };
       this.drag.set({ t: 'fenceDraw', a: q, b: { ...q } });
     } else if (t === 'building') this.drag.set({ t: 'draw', x0: snap(p.x, 1), z0: snap(p.z, 1), x1: snap(p.x, 1), z1: snap(p.z, 1) });
@@ -1029,7 +1127,7 @@ export class BandoEditor {
 
   protected bldDown(e: PointerEvent, bd: BuildingSpec): void {
     const t = this.tool();
-    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'measure' || t === 'fence') return this.bgDown(e);
+    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
     e.stopPropagation();
     const p = this.toWorld(e);
     this.capture(e);
@@ -1099,7 +1197,7 @@ export class BandoEditor {
 
   protected treeDown(e: PointerEvent, i: number): void {
     const t = this.tool();
-    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'measure' || t === 'fence') return this.bgDown(e);
+    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
     e.stopPropagation();
     this.capture(e);
     const tr = this.ed.draft().trees[i];
@@ -1122,9 +1220,64 @@ export class BandoEditor {
     this.drag.set({ t: 'openEnd', id, end });
   }
 
+  protected structDown(e: PointerEvent, i: number): void {
+    const t = this.tool();
+    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
+    e.stopPropagation();
+    this.capture(e);
+    const st = this.ed.draft().structures?.[i];
+    if (!st) return;
+    const p = this.toWorld(e);
+    this.pick.set({ t: 'structure', i });
+    this.drag.set({ t: 'structMove', i, dx: st.x - p.x, dz: st.z - p.z });
+  }
+
+  protected structRotDown(e: PointerEvent, i: number): void {
+    e.stopPropagation();
+    this.capture(e);
+    this.drag.set({ t: 'structRot', i });
+  }
+
+  private placeStructure(kind: StructureKind, at: Pt, extra: Partial<StructureSpec> = {}): void {
+    const d = STRUCTURE_DEFAULTS[kind];
+    this.ed.commitSite((s) => {
+      (s.structures ??= []).push({ id: uid('st'), kind, name: d.name, x: at.x, z: at.z, rotDeg: 0, height: d.height, size: d.size, ...(kind === 'bridge' ? { length: d.length, style: 'beam' as const } : {}), ...extra });
+    });
+    this.pick.set({ t: 'structure', i: (this.ed.draft().structures?.length ?? 1) - 1 });
+    this.tool.set('select');
+    this.applyNow();
+  }
+
+  protected structKindOf = (e: Event): StructureKind => ((e.target as HTMLSelectElement).value as StructureKind);
+  protected buildKindOf = (e: Event): 'building' | 'greenhouse' => ((e.target as HTMLSelectElement).value === 'greenhouse' ? 'greenhouse' : 'building');
+  protected styleOf = (e: Event): 'beam' | 'arch' => ((e.target as HTMLSelectElement).value === 'arch' ? 'arch' : 'beam');
+  protected structLabel(k: StructureKind): string {
+    return this.structKinds.find((x) => x.id === k)?.label.replace(' (drag)', '') ?? k;
+  }
+  protected sizeLabel(k: StructureKind): string {
+    return k === 'bridge' ? 'deck width' : k === 'lattice_tower' ? 'base half-width' : k === 'water_tower' ? 'tank radius' : k === 'chimney' ? 'base radius' : 'radius';
+  }
+
+  protected setStruct(patch: Partial<StructureSpec>): void {
+    const i = this.structI();
+    this.ed.commitSite((s) => {
+      const st = s.structures?.[i];
+      if (st) Object.assign(st, patch);
+    });
+    this.applyNow();
+  }
+
+  protected readonly setArch = (l: LevelSpec, v: number): void => { l.vaultK = Math.min(1.3, Math.max(0.3, v)); };
+
+  /** X positions (building-local) of the arch ribs of a greenhouse, for the plan drawing. */
+  protected ribs(bd: BuildingSpec): number[] {
+    const n = Math.max(2, Math.round(bd.length / 2.5));
+    return Array.from({ length: n + 1 }, (_, i) => -bd.length / 2 + (i * bd.length) / n);
+  }
+
   protected fenceDown(e: PointerEvent, i: number): void {
     const t = this.tool();
-    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'measure' || t === 'fence') return this.bgDown(e);
+    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
     e.stopPropagation();
     this.capture(e);
     this.pick.set({ t: 'fence', i });
@@ -1314,6 +1467,29 @@ export class BandoEditor {
         });
         break;
       }
+      case 'bridgeDraw':
+        this.drag.set({ ...d, b: { x: snap(p.x, 0.5), z: snap(p.z, 0.5) } });
+        break;
+      case 'structMove':
+        this.gesture((s) => {
+          const st = s.structures?.[d.i];
+          if (st) {
+            st.x = snap(p.x + d.dx, 0.5);
+            st.z = snap(p.z + d.dz, 0.5);
+          }
+        });
+        break;
+      case 'structRot': {
+        const st = this.ed.draft().structures?.[d.i];
+        if (!st) break;
+        const ang = (Math.atan2(p.z - st.z, p.x - st.x) * 180) / Math.PI + 90;
+        const rot = ((snap(ang, e.shiftKey ? 15 : 1) % 360) + 360) % 360;
+        this.gesture((s) => {
+          const x = s.structures?.[d.i];
+          if (x) x.rotDeg = rot;
+        });
+        break;
+      }
       case 'fenceDraw':
         this.drag.set({ ...d, b: { x: snap(p.x, 0.5), z: snap(p.z, 0.5) } });
         break;
@@ -1384,7 +1560,10 @@ export class BandoEditor {
     (e.currentTarget as Element | null)?.releasePointerCapture?.(e.pointerId);
     if (!d) return;
     const bd = this.b();
-    if (d.t === 'fenceDraw') {
+    if (d.t === 'bridgeDraw') {
+      const len = Math.hypot(d.b.x - d.a.x, d.b.z - d.a.z);
+      if (len >= 6) this.placeStructure('bridge', { x: (d.a.x + d.b.x) / 2, z: (d.a.z + d.b.z) / 2 }, { length: Math.round(len), rotDeg: Math.round((Math.atan2(d.b.z - d.a.z, d.b.x - d.a.x) * 180) / Math.PI) });
+    } else if (d.t === 'fenceDraw') {
       if (Math.hypot(d.b.x - d.a.x, d.b.z - d.a.z) >= 0.5) {
         this.ed.commitSite((s) => {
           (s.walls ??= []).push({ a: d.a, b: d.b, height: 2.2, thick: 0.3 });
@@ -1411,7 +1590,11 @@ export class BandoEditor {
       const ghost: BuildingSpec = { id: '~', name: '', pos: { x: (d.x0 + d.x1) / 2, z: (d.z0 + d.z1) / 2 }, rotDeg: 0, length: w, width: h, levels: [] };
       if (w >= 3 && h >= 3 && this.ed.draft().buildings.some((o) => buildingsOverlap(ghost, o))) this.toast.show('Buildings cannot overlap: draw it on free ground (use Merge to join them).');
       else if (w >= 3 && h >= 3) {
-        this.ed.addBuilding({ pos: { x: (d.x0 + d.x1) / 2, z: (d.z0 + d.z1) / 2 }, length: w, width: h, rotDeg: 0, name: `Building ${this.ed.draft().buildings.length + 1}` });
+        const preset: Partial<BuildingSpec> = this.buildKind() === 'greenhouse'
+          ? { name: 'Greenhouse', frame: 'greenhouse', color: '#9ec1b6', levels: [{ baseY: 0, height: 2.4, sides: { n: false, s: false, e: false, w: false }, doors: {}, partitions: [], roof: 'vault', roofRise: 0, vaultK: 0.7 }] }
+          : { name: `Building ${this.ed.draft().buildings.length + 1}` };
+        const gh = this.buildKind() === 'greenhouse'; // a greenhouse tunnel always runs along its long side
+        this.ed.addBuilding({ pos: { x: (d.x0 + d.x1) / 2, z: (d.z0 + d.z1) / 2 }, length: gh ? Math.max(w, h) : w, width: gh ? Math.min(w, h) : h, rotDeg: gh && h > w ? 90 : 0, ...preset });
         this.pick.set({ t: 'building' });
         this.tool.set('select');
         this.applyNow();
@@ -1480,6 +1663,7 @@ export class BandoEditor {
     const bd = this.b();
     const li = bd ? Math.min(this.level(), bd.levels.length - 1) : 0;
     if (p?.t === 'tree') this.ed.removeTree(p.i);
+    else if (p?.t === 'structure') this.ed.commitSite((s) => void s.structures?.splice(p.i, 1));
     else if (p?.t === 'fence') this.ed.commitSite((s) => void s.walls?.splice(p.i, 1));
     else if (p?.t === 'void' && bd) this.ed.commitSite((s) => void this.index(s, bd.id)?.levels[li]?.voids?.splice(p.i, 1));
     else if (p?.t === 'column' && bd) this.ed.commitSite((s) => void this.index(s, bd.id)?.levels[li]?.columns?.splice(p.i, 1));
