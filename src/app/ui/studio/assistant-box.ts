@@ -66,11 +66,21 @@ const EXAMPLES: readonly string[] = [
           }
           @for (m of ai.messages(); track $index) {
             <div class="m" [class.me]="m.role === 'user'">
+              @if (m.role === 'ai' && m.changed) {
+                <div class="ok"><b>Applied.</b> Undo is one click below.</div>
+              }
               @if (m.text) {
-                <div>{{ m.text }}</div>
+                <div [class.bad]="m.role === 'ai' && m.changed === false">{{ m.text }}</div>
               }
               @for (d of m.done ?? []; track $index) {
                 <div class="ok">✓ {{ d }}</div>
+              }
+              @if (m.role === 'ai' && m.understood?.length) {
+                <details class="dim small"><summary>what I understood</summary>
+                  @for (u of m.understood ?? []; track $index) {
+                    <div class="mono">{{ u }}</div>
+                  }
+                </details>
               }
               @for (x of m.errors ?? []; track $index) {
                 <div class="bad">⚠ {{ x }}</div>

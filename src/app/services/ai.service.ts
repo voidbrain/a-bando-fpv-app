@@ -30,6 +30,10 @@ export interface ChatMsg {
   errors?: string[];
   /** What the model asked for (kept so follow-up questions see their own earlier answers). */
   raw?: AiCommand[];
+  /** The commands the app understood, one per line, so the person can check them. */
+  understood?: string[];
+  /** Did this answer actually change the site? (The model's own words are not proof.) */
+  changed?: boolean;
 }
 
 const MODEL_KEY = 'abando-ai-model';
@@ -60,6 +64,8 @@ export class AiService {
   readonly messages = signal<ChatMsg[]>([]);
   /** True while the most recent model answer changed the site and nothing else has been edited since. */
   readonly canUndo = signal(false);
+  /** Set after an edit so the editor can select the building and, for interior work, open it indoors (roof off). */
+  readonly focus = signal<{ id: string; interior: boolean; level: number; n: number } | null>(null);
 
   private engine: MLCEngine | null = null;
 
@@ -197,7 +203,13 @@ export class AiService {
         this.site.applyDraft();
       }
       this.canUndo.set(dry.changed);
-      this.messages.update((m) => [...m, { role: 'ai', text: parsed.reply || (dry.changed ? 'Done.' : 'I could not do that.'), done: dry.done, errors: [...parsed.errors, ...dry.errors], raw: parsed.commands }]);
+      if (dry.changed && dry.touched[0]) this.focus.update((f) => ({ id: dry.touched[0]!, interior: dry.interior, level: Math.max(0, (parsed.commands.find((c) => c.level)?.level ?? 1) - 1), n: (f?.n ?? 0) + 1 }));
+      // The model's own reply is only a claim. What counts is what the app did, so say that first.
+      const text = dry.changed ? parsed.reply : `Nothing was changed.${parsed.reply ? ` (The model said: “${parsed.reply}”, but it gave no usable command.)` : ''}`;
+      this.messages.update((m) => [
+        ...m,
+        { role: 'ai', text, done: dry.done, errors: [...parsed.errors, ...dry.errors], raw: parsed.commands, changed: dry.changed, understood: parsed.commands.map((c) => describe(c)) },
+      ]);
     } catch (e) {
       this.messages.update((m) => [...m, { role: 'ai', text: '', errors: [e instanceof Error ? e.message : String(e)] }]);
     } finally {
@@ -231,4 +243,11 @@ export class AiService {
     this.messages.set([]);
     this.canUndo.set(false);
   }
+}
+
+/** One command as a short readable line, e.g. `split_rooms · Building 12 · count 3 · doors`. */
+function describe(c: AiCommand): string {
+  const { op, ...rest } = c;
+  const parts = Object.entries(rest).map(([k, v]) => (v === true ? k : `${k} ${String(v)}`));
+  return [op, ...parts].join(' · ');
 }

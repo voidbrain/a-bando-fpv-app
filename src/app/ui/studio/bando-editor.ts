@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRender, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRender, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import * as L from 'leaflet';
 import { contains, edgesOf, type Pt, type Rect } from '../../core/footprint';
@@ -134,6 +134,11 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
           }
           @if (b(); as bd) {
             <g [attr.transform]="tf(bd)">
+              @if (!indoor()) {
+                @for (pt of lvl()?.partitions ?? []; track $index) {
+                  <line [attr.x1]="pt[0].x - bd.length / 2" [attr.y1]="pt[0].z - bd.width / 2" [attr.x2]="pt[1].x - bd.length / 2" [attr.y2]="pt[1].z - bd.width / 2" stroke="#3a463f" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke" pointer-events="none" />
+                }
+              }
               @if (indoor()) {
                 @for (pt of lvl()?.partitions ?? []; track $index) {
                   <line class="hit" [attr.x1]="pt[0].x - bd.length / 2" [attr.y1]="pt[0].z - bd.width / 2" [attr.x2]="pt[1].x - bd.length / 2" [attr.y2]="pt[1].z - bd.width / 2" [attr.stroke]="wallI() === $index ? '#ffd166' : '#f1f4f2'" stroke-width="5" stroke-linecap="round" vector-effect="non-scaling-stroke" (pointerdown)="wallDown($event, $index)" />
@@ -713,6 +718,18 @@ export class BandoEditor {
       this.studio.zone.set({ lat: c.lat, lon: c.lon, halfE: h.e, halfN: h.n });
     });
     effect(() => this.applyBase(this.studio.basemap(), this.studio.mapOpacity()));
+    effect(() => {
+      // after the assistant edited something: show it. Select the building; for interior work take the roof off.
+      const f = this.ai.focus();
+      if (!f) return;
+      untracked(() => {
+        if (this.mode() !== 'model') return;
+        this.ed.select(f.id);
+        this.pick.set({ t: 'building' });
+        this.level.set(f.level);
+        if (f.interior && !this.indoor()) this.enterIndoor();
+      });
+    });
   }
 
   // ---- map ----

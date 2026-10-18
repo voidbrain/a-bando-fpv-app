@@ -58,8 +58,12 @@ export interface RunResult {
   done: string[];
   errors: string[];
   changed: boolean;
+  /** Ids of the buildings that were edited, and whether any edit was to their interior (walls, doors, windows). */
+  touched: string[];
+  interior: boolean;
 }
 
+const INTERIOR: readonly AiOp[] = ['add_door', 'add_window', 'remove_openings', 'split_rooms', 'add_partition', 'clear_partitions'];
 const DIR: Record<Compass, [number, number]> = {
   north: [0, -1], northeast: [0.7071, -0.7071], east: [1, 0], southeast: [0.7071, 0.7071],
   south: [0, 1], southwest: [-0.7071, 0.7071], west: [-1, 0], northwest: [-0.7071, -0.7071],
@@ -176,7 +180,7 @@ function findBuilding(spec: SiteSpec, name: string | undefined, selectedId: stri
 
 /** Run a batch on `spec` (mutated in place: pass a draft clone). */
 export function runCommands(spec: SiteSpec, cmds: AiCommand[], selectedId: string): RunResult {
-  const res: RunResult = { done: [], errors: [], changed: false };
+  const res: RunResult = { done: [], errors: [], changed: false, touched: [], interior: false };
   for (const c of cmds) {
     const found = findBuilding(spec, c.building, selectedId);
     if (typeof found === 'string') {
@@ -194,6 +198,8 @@ export function runCommands(spec: SiteSpec, cmds: AiCommand[], selectedId: strin
     const ok = (msg: string): void => {
       res.done.push(msg);
       res.changed = true;
+      if (!res.touched.includes(b.id)) res.touched.push(b.id);
+      if (INTERIOR.includes(c.op)) res.interior = true;
     };
     switch (c.op) {
       case 'add_door':

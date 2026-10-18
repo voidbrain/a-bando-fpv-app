@@ -116,8 +116,9 @@ function buildSide(ctx: Ctx, b: BuildingSpec, l: LevelSpec, side: 'n' | 's' | 'e
   const wall = (from: number, len: number, y: number, hh: number): void => {
     if (len < 0.01 || hh < 0.01) return;
     const m = from + len / 2 - runLen / 2;
-    if (side === 'w' || side === 'e') ctx.addBox(target, acrossPos, y, m, th, hh, len, ctx.mat.wall, true, true);
-    else ctx.addBox(target, m, y, acrossPos, len, hh, th, ctx.mat.wall, true, true);
+    const yy = l.baseY + y; // y is measured from this floor's slab
+    if (side === 'w' || side === 'e') ctx.addBox(target, acrossPos, yy, m, th, hh, len, ctx.mat.wall, true, true);
+    else ctx.addBox(target, m, yy, acrossPos, len, hh, th, ctx.mat.wall, true, true);
   };
   let p = 0;
   for (const o of (l.doors[side] ?? []).slice().sort((x, y) => x.c - y.c)) {
@@ -143,8 +144,9 @@ function buildPolyWalls(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.O
       const len = to - from;
       if (len < 0.01 || hh < 0.01) return;
       const m = (from + to) / 2;
-      if (e.axis === 'x') ctx.addBox(target, m, y, e.at, len, hh, th, ctx.mat.wall, true, true);
-      else ctx.addBox(target, e.at, y, m, th, hh, len, ctx.mat.wall, true, true);
+      const yy = l.baseY + y;
+      if (e.axis === 'x') ctx.addBox(target, m, yy, e.at, len, hh, th, ctx.mat.wall, true, true);
+      else ctx.addBox(target, e.at, yy, m, th, hh, len, ctx.mat.wall, true, true);
     };
     let p = e.from - th / 2;
     for (const { o, c } of ops) {
@@ -172,8 +174,9 @@ function buildWalls(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.Objec
     const len = Math.hypot(c.x - a.x, c.z - a.z);
     if (len < 0.3) continue;
     const mx = (a.x + c.x) / 2 - b.length / 2, mz = (a.z + c.z) / 2 - b.width / 2;
-    if (Math.abs(a.x - c.x) < 0.01) ctx.addBox(target, mx, l.height / 2, mz, 0.3, l.height, len, ctx.mat.wall, true, true);
-    else ctx.addBox(target, mx, l.height / 2, mz, len, l.height, 0.3, ctx.mat.wall, true, true);
+    const my = l.baseY + l.height / 2;
+    if (Math.abs(a.x - c.x) < 0.01) ctx.addBox(target, mx, my, mz, 0.3, l.height, len, ctx.mat.wall, true, true);
+    else ctx.addBox(target, mx, my, mz, len, l.height, 0.3, ctx.mat.wall, true, true);
   }
 }
 
