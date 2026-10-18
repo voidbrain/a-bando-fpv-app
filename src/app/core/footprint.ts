@@ -217,3 +217,30 @@ export function area(poly: Pt[]): number {
   }
   return Math.abs(s / 2);
 }
+
+/** `r` minus `v`: up to four rectangles that cover what is left (used for floor slabs with voids). */
+export function cutRect(r: Rect, v: Rect): Rect[] {
+  const x0 = Math.max(r.x0, Math.min(v.x0, v.x1)), x1 = Math.min(r.x1, Math.max(v.x0, v.x1));
+  const z0 = Math.max(r.z0, Math.min(v.z0, v.z1)), z1 = Math.min(r.z1, Math.max(v.z0, v.z1));
+  if (x1 - x0 < EPS || z1 - z0 < EPS) return [r]; // no overlap
+  const out: Rect[] = [];
+  if (z0 - r.z0 > EPS) out.push({ x0: r.x0, x1: r.x1, z0: r.z0, z1: z0 });
+  if (r.z1 - z1 > EPS) out.push({ x0: r.x0, x1: r.x1, z0: z1, z1: r.z1 });
+  if (x0 - r.x0 > EPS) out.push({ x0: r.x0, x1: x0, z0, z1 });
+  if (r.x1 - x1 > EPS) out.push({ x0: x1, x1: r.x1, z0, z1 });
+  return out;
+}
+
+/** Do two oriented rectangles overlap (separating-axis test)? `a` / `b` are centre, half sizes and rotation (radians). */
+export function obbOverlap(a: { x: number; z: number; hx: number; hz: number; r: number }, b: { x: number; z: number; hx: number; hz: number; r: number }, margin = 0): boolean {
+  const axes = [a.r, a.r + Math.PI / 2, b.r, b.r + Math.PI / 2].map((t) => [Math.cos(t), Math.sin(t)] as const);
+  const proj = (o: typeof a, ax: readonly [number, number]): number => {
+    const c = Math.cos(o.r), s = Math.sin(o.r);
+    return o.hx * Math.abs(c * ax[0] + s * ax[1]) + o.hz * Math.abs(-s * ax[0] + c * ax[1]);
+  };
+  for (const ax of axes) {
+    const d = Math.abs((b.x - a.x) * ax[0] + (b.z - a.z) * ax[1]);
+    if (d > proj(a, ax) + proj(b, ax) - margin) return false;
+  }
+  return true;
+}

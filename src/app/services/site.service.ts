@@ -353,7 +353,7 @@ export class SiteService {
         doors: i === 0 ? doors : {},
         ...(outline && i === 0 ? { wallOpenings } : {}),
         partitions: [] as [Vec2, Vec2][],
-        roof: i === lev - 1 ? roof : ('flat' as const),
+        roof: i === lev - 1 ? roof : ('none' as const),
         roofRise: i === lev - 1 ? (roof === 'gable' ? Math.min(W * 0.35, 6) : 0.4) : 0,
       }));
       buildings.push({

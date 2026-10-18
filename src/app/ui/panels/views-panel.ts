@@ -34,7 +34,7 @@ const GROUPS: readonly { key: PanelDef['group']; title: string }[] = [
         }
       </div>
       <div class="row col">
-        <label class="check"><input type="checkbox" [checked]="view.orbitFollow()" (change)="view.toggleOrbitFollow()" /> Orbit &amp; Top follow the drone</label>
+        <label class="check"><input type="checkbox" [checked]="view.orbitFollow()" (change)="view.toggleOrbitFollow()" /> Orbit &amp; Top follow the drone (pan stops it; double-click recentres)</label>
         <label class="check"><input type="checkbox" [checked]="view.replayFollow()" (change)="view.toggleReplayFollow()" /> Chase &amp; FPV follow the replay</label>
       </div>
       <div class="row">

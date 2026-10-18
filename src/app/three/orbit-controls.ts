@@ -68,6 +68,10 @@ export function attachOrbitControls(el: HTMLElement, target: ControlTarget): () 
     orbitZoom(target.state(), e.deltaY);
   };
   const menu = (e: Event): void => e.preventDefault();
+  // double-click: hand the view back to the follow (it glides to the drone again)
+  const dbl = (): void => {
+    if (interactive()) target.state().manual = false;
+  };
 
   el.addEventListener('pointerdown', down);
   el.addEventListener('pointerup', up);
@@ -75,7 +79,9 @@ export function attachOrbitControls(el: HTMLElement, target: ControlTarget): () 
   el.addEventListener('pointermove', move);
   el.addEventListener('wheel', wheel, { passive: false });
   el.addEventListener('contextmenu', menu);
+  el.addEventListener('dblclick', dbl);
   return () => {
+    el.removeEventListener('dblclick', dbl);
     el.removeEventListener('pointerdown', down);
     el.removeEventListener('pointerup', up);
     el.removeEventListener('pointercancel', up);

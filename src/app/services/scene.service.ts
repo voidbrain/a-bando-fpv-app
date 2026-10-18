@@ -199,6 +199,8 @@ export class SceneService {
   resetCamera(): void {
     this.sim.reset();
     this.mainOrbit.tg.set(-10, 2, 0);
+    this.mainOrbit.manual = false;
+    for (const vp of Object.values(this.viewports)) vp.state.manual = false;
     this.mainOrbit.th = -1.1;
     this.mainOrbit.ph = 1;
     this.mainOrbit.rad = this.view.orbitFollow() ? 110 : 330;

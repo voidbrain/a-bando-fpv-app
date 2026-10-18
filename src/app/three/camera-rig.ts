@@ -10,6 +10,8 @@ export interface OrbitState {
   th: number;
   ph: number;
   rad: number;
+  /** The user panned away: stop following the drone until the view is recentred (double-click / reset). */
+  manual?: boolean;
 }
 
 export const DEFAULT_FOV = 60;
@@ -50,7 +52,7 @@ const tmpE = new THREE.Euler();
 /** Position and aim camera `c` for `view` following `f`. `dt` drives the smooth follow. */
 export function placeCamera(c: THREE.PerspectiveCamera, view: CameraView, st: OrbitState, f: FollowSubject, o: PlaceOptions, dt: number): void {
   c.up.set(0, 1, 0);
-  if (o.orbitFollow && (view === 'orbit' || view === 'top')) {
+  if (o.orbitFollow && !st.manual && (view === 'orbit' || view === 'top')) {
     const k = 1 - Math.exp(-dt * 5);
     st.tg.x += (f.p.x - st.tg.x) * k;
     st.tg.z += (f.p.z - st.tg.z) * k;
@@ -86,6 +88,7 @@ export function orbitRotate(st: OrbitState, dx: number, dy: number): void {
 
 /** Right-drag / shift-drag / any drag in the top view: slide the target over the ground, in screen directions. */
 export function orbitPan(st: OrbitState, dx: number, dy: number, view: CameraView, calRotDeg: number): void {
+  st.manual = true; // a pan means "look over there": the follow would pull the view straight back otherwise
   const k = st.rad * 0.0016;
   const t = view === 'top' ? (-calRotDeg * Math.PI) / 180 : st.th;
   st.tg.x += -dx * k * Math.cos(t) - dy * k * Math.sin(t);

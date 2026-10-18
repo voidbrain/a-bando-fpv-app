@@ -17,8 +17,23 @@ const EXAMPLES: readonly string[] = [
   imports: [FloatBox],
   template: `
     <app-float-box fid="assistant" title="AI assistant" [x]="320" [y]="44" [w]="370" [h]="400">
-      @if (!ai.supported) {
-        <div class="dim">This browser has no WebGPU, which the in-browser model needs. Use a recent desktop Chrome or Edge, or Safari 26 or later.</div>
+      @if (ai.status() !== 'ready' && ai.status() !== 'loading') {
+        <div class="seg">
+          <button [class.on]="ai.provider() === 'browser'" (click)="ai.setProvider('browser')">In this browser</button>
+          <button [class.on]="ai.provider() === 'server'" (click)="ai.setProvider('server')">Server / home PC</button>
+        </div>
+      }
+      @if (ai.provider() === 'server' && (ai.status() === 'idle' || ai.status() === 'error')) {
+        <div class="dim small">Any OpenAI-compatible server: Ollama or LM Studio on your PC (over HTTPS, e.g. Tailscale), a proxy on your hosting, or a cloud API. Your messages and the building list are sent to it.</div>
+        <label class="f">address <input type="text" [value]="ai.server().url" placeholder="https://my-pc.tailnet.ts.net  or  https://site.it/ai-proxy.php" (change)="srv({ url: val($event) })" /></label>
+        <label class="f">model <input type="text" [value]="ai.server().model" placeholder="qwen2.5:7b" (change)="srv({ model: val($event) })" /></label>
+        <label class="f">token (optional) <input type="password" [value]="ai.server().token" autocomplete="off" (change)="srv({ token: val($event) })" /></label>
+        @if (ai.status() === 'error') {
+          <div class="err">{{ ai.error() }}</div>
+        }
+        <button class="btn primary" (click)="ai.connect()">Connect</button>
+      } @else if (ai.provider() === 'browser' && !ai.supported) {
+        <div class="dim">This browser has no WebGPU, which the in-browser model needs. Use a recent desktop Chrome or Edge, or Safari 26 or later, or switch to “Server / home PC”.</div>
       } @else if (ai.status() === 'idle' || ai.status() === 'error') {
         <div class="dim small">A small language model runs inside your browser (nothing is sent anywhere). The first load downloads the model once, then it is cached.</div>
         <label class="f">model
@@ -34,8 +49,10 @@ const EXAMPLES: readonly string[] = [
         <button class="btn primary" (click)="ai.load()">Load model</button>
       } @else if (ai.status() === 'loading') {
         <div class="dim small">{{ ai.progressText() }}</div>
-        <div class="bar"><i [style.width.%]="ai.progress() * 100"></i></div>
-        <div class="dim small">Keep this tab open. The first download can take several minutes.</div>
+        @if (ai.provider() === 'browser') {
+          <div class="bar"><i [style.width.%]="ai.progress() * 100"></i></div>
+          <div class="dim small">Keep this tab open. The first download can take several minutes.</div>
+        }
       } @else {
         <div class="ctx dim small">{{ context() }}</div>
         <div class="msgs" #msgs>
@@ -72,12 +89,34 @@ const EXAMPLES: readonly string[] = [
           <button class="btn" (click)="ai.undoLast()" [disabled]="!ai.canUndo()">Undo last AI change</button>
           <button class="btn" (click)="ai.clear()" [disabled]="ai.messages().length === 0">Clear chat</button>
           <span class="grow"></span>
-          <button class="btn" (click)="ai.unload()" title="Free the GPU memory">Unload</button>
+          <button class="btn" (click)="ai.unload()" [title]="ai.provider() === 'browser' ? 'Free the GPU memory' : 'Disconnect'">{{ ai.provider() === 'browser' ? 'Unload' : 'Disconnect' }}</button>
         </div>
       }
     </app-float-box>
   `,
   styles: `
+    .seg {
+      display: inline-flex;
+      align-self: flex-start;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .seg button {
+      background: none;
+      border: 0;
+      padding: 3px 9px;
+      cursor: pointer;
+      color: var(--dim);
+    }
+    .seg button.on {
+      background: var(--accent);
+      color: var(--accent-ink);
+      font-weight: 700;
+    }
+    .f input {
+      width: 100%;
+    }
     .f {
       display: flex;
       flex-direction: column;
@@ -176,6 +215,14 @@ export class AssistantBox {
   protected context(): string {
     const b = this.site.editor.building();
     return b ? `Selected: ${b.name}` : `No building selected${this.site.editor.draft().buildings.length === 1 ? ' (only one: I will use it)' : ': name the building in your message'}`;
+  }
+
+  protected val(e: Event): string {
+    return (e.target as HTMLInputElement).value;
+  }
+
+  protected srv(patch: Partial<{ url: string; model: string; token: string }>): void {
+    this.ai.saveServer({ ...this.ai.server(), ...patch });
   }
 
   protected pickModel(e: Event): void {

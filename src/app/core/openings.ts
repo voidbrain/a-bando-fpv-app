@@ -184,6 +184,11 @@ export function reshapeBuilding(b: BuildingSpec, localRect: Rect, op: 'add' | 'c
       { x: q.x - oldL / 2 - shift.x + b.length / 2, z: q.z - oldW / 2 - shift.z + b.width / 2 },
     ]);
     l.wallOpenings = (l.wallOpenings ?? []).map((o) => ({ ...o, x: o.x - shift.x, z: o.z - shift.z })).filter((o) => !!edgeFor(b, o));
+    // voids and columns are in the same min-corner frame as the partitions
+    const mx = (x: number): number => x - oldL / 2 - shift.x + b.length / 2;
+    const mz = (z: number): number => z - oldW / 2 - shift.z + b.width / 2;
+    if (l.voids) l.voids = l.voids.map((v) => ({ ...v, x0: mx(v.x0), x1: mx(v.x1), z0: mz(v.z0), z1: mz(v.z1) }));
+    if (l.columns) l.columns = l.columns.map((c) => ({ ...c, x: mx(c.x), z: mz(c.z) }));
   }
   // 4. a shape that is a plain rectangle again goes back to the rectangular representation (gable roofs, side flags)
   if (b.footprint.length === 4) toRect(b);

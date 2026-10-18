@@ -1,6 +1,7 @@
 import { computed, signal } from '@angular/core';
 import type { BuildingSpec, LevelSpec, SiteSpec } from '../core/site-spec';
 import { cloneSpec, roomsAt, uid } from '../core/site-spec';
+import { addFloor, removeFloor } from './building-ops';
 
 /** A room cut by the partition tool: which level and its building-local rectangle. */
 export interface RoomInfo {
@@ -152,20 +153,18 @@ export class SiteEditor {
     });
   }
 
+  /** Add a floor on top, copied from the last one; the roof moves up (see building-ops). */
   addLevel(): void {
     this.commit((s) => {
       const b = s.buildings.find((x) => x.id === this.selectedId());
-      if (!b || b.frame === 'greenhouse') return;
-      const top = b.levels.reduce((a, l) => Math.max(a, l.baseY + l.height), 0);
-      const prev = b.levels[b.levels.length - 1]!;
-      b.levels.push({ baseY: top, height: prev.height, sides: { n: true, s: true, e: true, w: true }, doors: {}, partitions: [], roof: prev.roof, roofRise: prev.roofRise, roofColor: prev.roofColor });
+      if (b) addFloor(b);
     });
   }
 
   removeLevel(li: number): void {
     this.commit((s) => {
       const b = s.buildings.find((x) => x.id === this.selectedId());
-      if (b && b.levels.length > 1) b.levels.splice(li, 1);
+      if (b) removeFloor(b, li);
     });
   }
 

@@ -34,6 +34,17 @@ describe('openings & reshaping', () => {
     expect(b.pos.z).toBeCloseTo(before.z, 3);
   });
 
+  it('carries columns and voids along when the building re-centres', () => {
+    const b = building();
+    b.levels[0]!.columns = [{ x: 15, z: 6, size: 0.6 }];
+    b.levels[0]!.voids = [{ x0: 14, z0: 2, x1: 16, z1: 4 }];
+    // cut the west end away: the bounding box shrinks from the left and the min corner moves 4 m east
+    expect(reshapeBuilding(b, { x0: -10, x1: -6, z0: -6, z1: 6 }, 'cut')).toBe(true);
+    expect(b.length).toBeCloseTo(16, 3);
+    expect(b.levels[0]!.columns![0]!.x).toBeCloseTo(11, 3);
+    expect(b.levels[0]!.voids![0]!.x0).toBeCloseTo(10, 3);
+  });
+
   it('drops an opening whose wall was cut away', () => {
     const b = building();
     addOpening(b, 0, { x: 2, z: -6 }, 'window', 3);

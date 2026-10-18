@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import type { MLCEngine } from '@mlc-ai/web-llm';
 import { AI_SCHEMA, SYSTEM_PROMPT, buildContext, parseReply } from '../core/ai-prompt';
 import { runCommands, type AiCommand } from '../core/ai-commands';
+import { serverChat, type ChatMessage, type ServerConfig } from '../core/ai-server';
 import { cloneSpec } from '../core/site-spec';
 import { SiteService } from './site.service';
 
@@ -32,6 +33,8 @@ export interface ChatMsg {
 }
 
 const MODEL_KEY = 'abando-ai-model';
+const PROVIDER_KEY = 'abando-ai-provider';
+const SERVER_KEY = 'abando-ai-server';
 
 /**
  * The assistant: a small language model running in the browser (WebLLM / WebGPU) that turns a chat message into a
@@ -46,6 +49,9 @@ export class AiService {
   readonly open = signal(false);
   readonly supported = typeof navigator !== 'undefined' && 'gpu' in navigator;
   readonly modelId = signal(AiService.storedModel());
+  /** Where the model runs: in this browser (WebGPU), or on a server speaking the OpenAI chat protocol. */
+  readonly provider = signal<'browser' | 'server'>(AiService.storedProvider());
+  readonly server = signal<ServerConfig>(AiService.storedServer());
   readonly status = signal<'idle' | 'loading' | 'ready' | 'error'>('idle');
   readonly progress = signal(0);
   readonly progressText = signal('');
@@ -57,6 +63,23 @@ export class AiService {
 
   private engine: MLCEngine | null = null;
 
+  private static storedProvider(): 'browser' | 'server' {
+    try {
+      return localStorage.getItem(PROVIDER_KEY) === 'server' ? 'server' : 'browser';
+    } catch {
+      return 'browser';
+    }
+  }
+
+  private static storedServer(): ServerConfig {
+    try {
+      const o = JSON.parse(localStorage.getItem(SERVER_KEY) ?? '{}') as Partial<ServerConfig>;
+      return { url: o.url ?? '', model: o.model ?? 'qwen2.5:7b', token: o.token ?? '' };
+    } catch {
+      return { url: '', model: 'qwen2.5:7b', token: '' };
+    }
+  }
+
   private static storedModel(): string {
     try {
       const v = localStorage.getItem(MODEL_KEY);
@@ -65,6 +88,42 @@ export class AiService {
       /* no storage */
     }
     return 'Qwen2.5-3B-Instruct-q4f16_1-MLC';
+  }
+
+  setProvider(p: 'browser' | 'server'): void {
+    if (p === this.provider()) return;
+    void this.unload();
+    this.provider.set(p);
+    this.error.set('');
+    try {
+      localStorage.setItem(PROVIDER_KEY, p);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  saveServer(cfg: ServerConfig): void {
+    this.server.set(cfg);
+    try {
+      localStorage.setItem(SERVER_KEY, JSON.stringify(cfg));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** Check the server with a tiny request; ready on success. */
+  async connect(): Promise<void> {
+    this.status.set('loading');
+    this.error.set('');
+    this.progress.set(0);
+    this.progressText.set('Contacting the server…');
+    try {
+      await serverChat(this.server(), [{ role: 'user', content: 'Reply with {"reply":"ok","commands":[]}' }], 20);
+      this.status.set('ready');
+    } catch (e) {
+      this.error.set(e instanceof Error ? e.message : String(e));
+      this.status.set('error');
+    }
   }
 
   setModel(id: string): void {
@@ -117,7 +176,7 @@ export class AiService {
   /** Send one chat message: ask the model, run what it answers, record the outcome. */
   async send(text: string): Promise<void> {
     const t = text.trim();
-    if (!t || this.busy() || !this.engine) return;
+    if (!t || this.busy() || this.status() !== 'ready') return;
     this.busy.set(true);
     const ed = this.site.editor;
     const spec = ed.draft();
@@ -127,15 +186,8 @@ export class AiService {
       const history = this.messages()
         .slice(-7, -1)
         .map((m) => (m.role === 'user' ? { role: 'user' as const, content: m.text } : { role: 'assistant' as const, content: JSON.stringify({ reply: m.text, commands: m.raw ?? [] }) }));
-      const qwen3 = /^Qwen3-/.test(this.modelId());
-      const out = await this.engine.chat.completions.create({
-        messages: [{ role: 'system', content: `${SYSTEM_PROMPT}\n\n${buildContext(spec, sel)}` }, ...history, { role: 'user', content: t }],
-        temperature: 0.1,
-        max_tokens: 700,
-        response_format: { type: 'json_object', schema: JSON.stringify(AI_SCHEMA) },
-        ...(qwen3 ? { extra_body: { enable_thinking: false } } : {}),
-      });
-      const parsed = parseReply(out.choices[0]?.message?.content ?? '');
+      const msgs: ChatMessage[] = [{ role: 'system', content: `${SYSTEM_PROMPT}\n\n${buildContext(spec, sel)}` }, ...history, { role: 'user', content: t }];
+      const parsed = parseReply(await this.complete(msgs));
       const probe = cloneSpec(spec);
       const dry = runCommands(probe, parsed.commands, sel);
       if (dry.changed) {
@@ -151,6 +203,21 @@ export class AiService {
     } finally {
       this.busy.set(false);
     }
+  }
+
+  /** One model call on whichever provider is selected; returns the raw text. */
+  private async complete(messages: ChatMessage[]): Promise<string> {
+    if (this.provider() === 'server') return serverChat(this.server(), messages);
+    if (!this.engine) throw new Error('The model is not loaded.');
+    const qwen3 = /^Qwen3-/.test(this.modelId());
+    const out = await this.engine.chat.completions.create({
+      messages,
+      temperature: 0.1,
+      max_tokens: 700,
+      response_format: { type: 'json_object', schema: JSON.stringify(AI_SCHEMA) },
+      ...(qwen3 ? { extra_body: { enable_thinking: false } } : {}),
+    });
+    return out.choices[0]?.message?.content ?? '';
   }
 
   undoLast(): void {

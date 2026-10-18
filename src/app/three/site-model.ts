@@ -1,4 +1,4 @@
-import { edgesOf, slabs } from '../core/footprint';
+import { cutRect, edgesOf, slabs } from '../core/footprint';
 import * as THREE from 'three';
 import { type BuildingSpec, type LevelSpec, type OpeningSpec, type SiteSpec, type TreeSpec, createRandom } from '../core/site-spec';
 import { SiteCollider, type SolidBox, type TreeCylinder } from '../core/sim/collider';
@@ -178,6 +178,7 @@ function buildWalls(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.Objec
 }
 
 function buildRoof(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.Object3D): void {
+  if (l.roof === 'none') return; // a floor above covers this level
   const top = l.baseY + l.height;
   const rise = Math.max(0.5, l.roofRise);
   const rc = ctx.matFor(l.roofColor);
@@ -191,17 +192,65 @@ function buildRoof(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.Object
     ctx.solids.push(rotBoxLocal(ctx.at[0], ctx.at[1], b.length, b.width, ctx.rot, top, top + 0.3, true));
     return;
   }
+  // gable / vault: `n` identical modules side by side. By default a gable ridge runs along the length (modules split
+  // the width) and barrels run along the width (modules split the length); `roofTurn` swaps the two.
+  const n = Math.max(1, Math.round(l.roofCount ?? l.vaultCount ?? 1));
+  const turn = !!l.roofTurn;
   if (l.roof === 'gable') {
-    ctx.addMesh(target, gable(b.length, b.width, rise, rc), 0, top + rise * 0.45, 0, rotBoxLocal(ctx.at[0], ctx.at[1], b.length, b.width, ctx.rot, top, top + rise, true));
+    const run = turn ? b.width : b.length; // ridge length
+    const across = turn ? b.length : b.width; // split into n modules
+    const span = across / n;
+    for (let i = 0; i < n; i++) {
+      const m = gable(run, span, rise, rc);
+      const c = -across / 2 + span / 2 + i * span;
+      if (turn) {
+        m.rotation.y = Math.PI / 2;
+        ctx.addMesh(target, m, c, top + rise * 0.45, 0);
+      } else ctx.addMesh(target, m, 0, top + rise * 0.45, c);
+    }
+    ctx.solids.push(rotBoxLocal(ctx.at[0], ctx.at[1], b.length, b.width, ctx.rot, top, top + rise, true));
     return;
   }
-  // vault: n barrels across the width (local X), running along Z
-  const n = Math.max(1, l.vaultCount ?? 1);
-  const VW = b.length / n, VR = VW / 2, VK = l.vaultK ?? 0.58;
+  const run = turn ? b.length : b.width; // barrel length
+  const across = turn ? b.width : b.length;
+  const VW = across / n, VR = VW / 2, VK = l.vaultK ?? 0.58;
   for (let i = 0; i < n; i++) {
-    ctx.addMesh(target, vault(b.width, VR, VK, rc), -b.length / 2 + VW / 2 + i * VW, top, 0);
+    const m = vault(run, VR, VK, rc);
+    const c = -across / 2 + VW / 2 + i * VW;
+    if (turn) {
+      m.rotation.y = Math.PI / 2;
+      ctx.addMesh(target, m, 0, top, c);
+    } else ctx.addMesh(target, m, c, top, 0);
   }
   ctx.solids.push(rotBoxLocal(ctx.at[0], ctx.at[1], b.length, b.width, ctx.rot, top + 0.4, top + VR * VK + 0.2, true));
+}
+
+/** Floor slab of a level (minus its voids), plus the water basin of a ground-floor void, plus its columns. */
+function buildFloorAndColumns(ctx: Ctx, b: BuildingSpec, l: LevelSpec, inner: THREE.Object3D, floorMat: THREE.Material): void {
+  const L = b.length, W = b.width;
+  const voids = (l.voids ?? []).map((v) => ({ x0: v.x0 - L / 2, x1: v.x1 - L / 2, z0: v.z0 - W / 2, z1: v.z1 - W / 2, water: !!v.water }));
+  let rects = b.footprint ? slabs(b.footprint) : [{ x0: -L / 2, x1: L / 2, z0: -W / 2, z1: W / 2 }];
+  for (const v of voids) rects = rects.flatMap((r) => cutRect(r, v));
+  for (const r of rects) {
+    const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2, w = r.x1 - r.x0, d = r.z1 - r.z0;
+    if (l.baseY === 0) ctx.addBox(inner, cx, 0.05, cz, w, 0.1, d, floorMat, false, false);
+    else ctx.addBox(inner, cx, l.baseY, cz, w, 0.2, d, floorMat, false, false);
+  }
+  if (l.baseY === 0) {
+    const water = material('#3d86b6', { transparent: true, opacity: 0.78, roughness: 0.15 });
+    for (const v of voids) if (v.water) ctx.addBox(inner, (v.x0 + v.x1) / 2, 0.03, (v.z0 + v.z1) / 2, v.x1 - v.x0, 0.06, v.z1 - v.z0, water, false, false);
+  }
+  const colMat = material('#b8b4a8');
+  for (const c of l.columns ?? []) {
+    const cx = c.x - L / 2, cz = c.z - W / 2, y = l.baseY + l.height / 2;
+    if (c.round) {
+      const cyl = new THREE.Mesh(new THREE.CylinderGeometry(c.size / 2, c.size / 2, l.height, 14), colMat);
+      cyl.castShadow = true;
+      cyl.receiveShadow = true;
+      ctx.addMesh(inner, cyl, cx, y, cz);
+      ctx.addBox(inner, cx, y, cz, c.size, l.height, c.size, colMat, true, false).visible = false; // the collision box
+    } else ctx.addBox(inner, cx, y, cz, c.size, l.height, c.size, colMat, true, true);
+  }
 }
 
 /** Greenhouse tunnel: elliptical glass vault (middle third torn away), steel ribs every ~2.5 m, bar-only ends. */
@@ -340,11 +389,7 @@ export function buildSiteFromSpec(spec: SiteSpec): SiteModel {
     ctx.rot = b.rotDeg;
     const floorMat = material(b.floorColor ?? '#a9aaa0');
     for (const l of b.levels) {
-      for (const r of b.footprint ? slabs(b.footprint) : [{ x0: -b.length / 2, x1: b.length / 2, z0: -b.width / 2, z1: b.width / 2 }]) {
-        const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2, w = r.x1 - r.x0, d = r.z1 - r.z0;
-        if (l.baseY === 0) ctx.addBox(inner, cx, 0.05, cz, w, 0.1, d, floorMat, false, false);
-        if (l.baseY > 0) ctx.addBox(inner, cx, l.baseY, cz, w, 0.2, d, floorMat, false, false);
-      }
+      buildFloorAndColumns(ctx, b, l, inner, floorMat);
       if (b.frame === 'greenhouse') {
         buildGreenhouse(ctx, b, inner, localRoof);
         break;
@@ -354,6 +399,27 @@ export function buildSiteFromSpec(spec: SiteSpec): SiteModel {
     }
     // roofs live under the building but belong to the global roof group for hide/show
     roof.attach(localRoof);
+  }
+
+  // ---- free-standing walls / fences
+  for (const w of spec.walls ?? []) {
+    const dx = w.b.x - w.a.x, dz = w.b.z - w.a.z, len = Math.hypot(dx, dz);
+    if (len < 0.3) continue;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(len, w.height, w.thick), material(w.color ?? '#b9b2a2'));
+    m.position.set((w.a.x + w.b.x) / 2, w.height / 2, (w.a.z + w.b.z) / 2);
+    m.rotation.y = -Math.atan2(dz, dx);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    group.add(m);
+    // collision: a staircase of small boxes along the wall (the collider only knows axis-aligned boxes)
+    const n = Math.max(1, Math.ceil(len / 1.0));
+    const seg = len / n, ca = Math.abs(dx / len), sa = Math.abs(dz / len);
+    const hw = (seg * ca + w.thick * sa) / 2, hd = (seg * sa + w.thick * ca) / 2;
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / n;
+      const cx = w.a.x + dx * t, cz = w.a.z + dz * t;
+      solids.push([cx - hw, cx + hw, 0, w.height, cz - hd, cz + hd, false]);
+    }
   }
 
   // ---- trees (instanced, fixed layout from the spec)

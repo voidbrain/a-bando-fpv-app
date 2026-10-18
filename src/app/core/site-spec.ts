@@ -37,6 +37,32 @@ export interface WallOpening {
 }
 
 /** One storey of a building: a slab at `baseY`, walls up to `baseY + height`, roof on top, interior partitions. */
+/** A rectangular opening in a floor slab; on the ground floor `water` fills it with a basin instead. */
+export interface VoidSpec {
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+  water?: boolean;
+}
+
+export interface ColumnSpec {
+  x: number;
+  z: number;
+  /** Side (square) or diameter (round), metres. */
+  size: number;
+  round?: boolean;
+}
+
+/** A free-standing wall or fence on the site (not part of a building). */
+export interface WallSpec {
+  a: Vec2;
+  b: Vec2;
+  height: number;
+  thick: number;
+  color?: string;
+}
+
 export interface LevelSpec {
   /** Floor / ceiling slab at this height (the ground floor sits at 0). */
   baseY: number;
@@ -51,7 +77,15 @@ export interface LevelSpec {
   /** Interior partition walls (solid, no openings): segment endpoints in building-local metres. */
   partitions: [Vec2, Vec2][];
   /** 'gable' = pitched roof over the long axis, 'vault' = barrel vault(s), 'flat' = parapet slab. */
-  roof: 'gable' | 'vault' | 'flat';
+  roof: 'gable' | 'vault' | 'flat' | 'none';
+  /** Turn the roof a quarter: the ridge / barrels run across the building instead of along it. */
+  roofTurn?: boolean;
+  /** Repeat the roof module this many times (3 side-by-side gables, 4 barrels ...). Default 1. */
+  roofCount?: number;
+  /** Holes in this floor (a stairwell, an atrium) or, on the ground floor, a water basin. Building-local, from the min corner. */
+  voids?: VoidSpec[];
+  /** Columns standing on this floor, from its slab up to the next one. Building-local, from the min corner. */
+  columns?: ColumnSpec[];
   /** Extra rise of the roof above the wall head (ridge / vault rise). */
   roofRise: number;
   /** Barrel vaults: how many across the width. */
@@ -110,6 +144,8 @@ export interface ZoneSpec {
 }
 
 export interface SiteSpec {
+  /** Free-standing walls / fences. */
+  walls?: WallSpec[];
   version: 1;
   id: string;
   name: string;
@@ -361,6 +397,7 @@ export function sanitizeSpec(raw: unknown): SiteSpec | null {
     groundColor: typeof s.groundColor === 'string' ? s.groundColor : '#789b52',
     buildings: s.buildings.filter((b) => b && typeof b.length === 'number') as BuildingSpec[],
     pads: Array.isArray(s.pads) ? (s.pads as PadSpec[]) : [],
+    walls: Array.isArray(s.walls) ? (s.walls as WallSpec[]) : [],
     trees: Array.isArray(s.trees) ? (s.trees as TreeSpec[]) : [],
     seed: typeof s.seed === 'number' ? s.seed : 7,
     extent: typeof s.extent === 'number' ? s.extent : 500,

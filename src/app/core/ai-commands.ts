@@ -1,3 +1,4 @@
+import { addFloor } from './building-ops';
 import { contains, type Rect } from './footprint';
 import { addOpening, listOpenings, outlineOf, patchOpening, removeOpening, reshapeBuilding, wallsOf } from './openings';
 import type { BuildingSpec, SiteSpec } from './site-spec';
@@ -46,6 +47,8 @@ export interface AiCommand {
   value?: number;
   name?: string;
   roof?: 'gable' | 'flat' | 'vault';
+  /** set_roof: turn the roof a quarter, and repeat the module `count` times (3 gables ...). */
+  turn?: boolean;
   degrees?: number;
   east?: number;
   north?: number;
@@ -85,10 +88,11 @@ export function normalizeCommands(raw: unknown): { cmds: AiCommand[]; errors: st
     if (o['axis'] === 'length' || o['axis'] === 'width') c.axis = o['axis'];
     if (o['roof'] === 'gable' || o['roof'] === 'flat' || o['roof'] === 'vault') c.roof = o['roof'];
     if (typeof o['doors'] === 'boolean') c.doors = o['doors'];
+    if (typeof o['turn'] === 'boolean') c.turn = o['turn'];
     const level = num(o['level']);
     if (level !== undefined) c.level = clamp(Math.round(level), 1, 20);
     const count = num(o['count']);
-    if (count !== undefined) c.count = clamp(Math.round(count), 2, 12);
+    if (count !== undefined) c.count = clamp(Math.round(count), 1, 12);
     for (const k of ['position', 'x0', 'z0', 'x1', 'z1'] as const) {
       const v = num(o[k]);
       if (v !== undefined) c[k] = clamp(v, 0, 1);
@@ -234,7 +238,7 @@ export function runCommands(spec: SiteSpec, cmds: AiCommand[], selectedId: strin
         break;
       }
       case 'split_rooms': {
-        const n = c.count ?? 2;
+        const n = Math.max(2, c.count ?? 2);
         const axis = c.axis ?? (b.length >= b.width ? 'length' : 'width');
         const gap = c.doors === false ? 0 : 1.2;
         lev.partitions = [];
@@ -271,13 +275,10 @@ export function runCommands(spec: SiteSpec, cmds: AiCommand[], selectedId: strin
         lev.partitions = [];
         ok(`removed the interior walls of ${label} (floor ${li + 1})`);
         break;
-      case 'add_floor': {
-        const top = b.levels.reduce((m, l) => Math.max(m, l.baseY + l.height), 0);
-        const prev = b.levels[b.levels.length - 1]!;
-        b.levels.push({ baseY: top, height: prev.height, sides: { n: true, s: true, e: true, w: true }, doors: {}, partitions: [], roof: prev.roof, roofRise: prev.roofRise, roofColor: prev.roofColor });
-        ok(`added floor ${b.levels.length} to ${label}`);
+      case 'add_floor':
+        addFloor(b);
+        ok(`added floor ${b.levels.length} to ${label} (a copy of the floor below; the roof moved up)`);
         break;
-      }
       case 'set_wall_height': {
         if (c.value === undefined) {
           res.errors.push('set_wall_height: needs a value in metres');
@@ -297,8 +298,11 @@ export function runCommands(spec: SiteSpec, cmds: AiCommand[], selectedId: strin
         if (!c.roof) res.errors.push('set_roof: needs gable, flat or vault');
         else if (b.footprint) res.errors.push(`set_roof: shaped building ${label} always has a flat roof`);
         else {
-          b.levels[b.levels.length - 1]!.roof = c.roof;
-          ok(`${c.roof} roof on ${label}`);
+          const top = b.levels[b.levels.length - 1]!;
+          top.roof = c.roof;
+          if (c.turn !== undefined) top.roofTurn = c.turn;
+          if (c.count !== undefined) top.roofCount = c.count;
+          ok(`${c.count && c.count > 1 ? `${c.count} × ` : ''}${c.roof} roof${top.roofTurn ? ' (turned)' : ''} on ${label}`);
         }
         break;
       case 'cut_notch':
