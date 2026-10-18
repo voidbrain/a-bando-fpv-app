@@ -303,7 +303,7 @@ function rotBoxLocal(x: number, z: number, w: number, d: number, deg: number, y0
 }
 
 /** Build the whole site from a {@link SiteSpec}. Deterministic: the same spec always produces the same scene. */
-export function buildSiteFromSpec(spec: SiteSpec): SiteModel {
+export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {}): SiteModel {
   const group = new THREE.Group();
   const roof = new THREE.Group();
   group.add(roof);
@@ -348,37 +348,39 @@ export function buildSiteFromSpec(spec: SiteSpec): SiteModel {
     },
   };
 
-  // ---- ground + meadow patches (patches ignore depth; everything drawn after them covers them)
-  const grass = material(spec.groundColor);
-  const ground = new THREE.Mesh(new THREE.BoxGeometry(spec.extent * 2.2, 1, spec.extent * 2.2), grass);
-  ground.position.set(0, -0.5, 0);
-  ground.receiveShadow = true;
-  ground.renderOrder = GROUND_ORDER;
-  group.add(ground);
-  const patchMats = ['#6f9350', '#86a35a', '#8a8656', '#7d7a52', '#98a262', '#9a8a5c'].map((c) => material(c, { depthWrite: false, depthTest: false }));
-  for (let i = 0; i < 300; i++) {
-    const p = new THREE.Mesh(new THREE.CircleGeometry(3 + rnd() * 13, 6), patchMats[i % 6]);
-    p.rotation.set(-Math.PI / 2, 0, rnd() * 6);
-    p.position.set((rnd() - 0.5) * spec.extent * 2.1, 0.01, (rnd() - 0.5) * spec.extent * 1.9);
-    p.renderOrder = DECAL_ORDER + i;
-    p.receiveShadow = true;
-    group.add(p);
-  }
+  if (!opts.bare) {
+    // ---- ground + meadow patches (patches ignore depth; everything drawn after them covers them)
+    const grass = material(spec.groundColor);
+    const ground = new THREE.Mesh(new THREE.BoxGeometry(spec.extent * 2.2, 1, spec.extent * 2.2), grass);
+    ground.position.set(0, -0.5, 0);
+    ground.receiveShadow = true;
+    ground.renderOrder = GROUND_ORDER;
+    group.add(ground);
+    const patchMats = ['#6f9350', '#86a35a', '#8a8656', '#7d7a52', '#98a262', '#9a8a5c'].map((c) => material(c, { depthWrite: false, depthTest: false }));
+    for (let i = 0; i < 300; i++) {
+      const p = new THREE.Mesh(new THREE.CircleGeometry(3 + rnd() * 13, 6), patchMats[i % 6]);
+      p.rotation.set(-Math.PI / 2, 0, rnd() * 6);
+      p.position.set((rnd() - 0.5) * spec.extent * 2.1, 0.01, (rnd() - 0.5) * spec.extent * 1.9);
+      p.renderOrder = DECAL_ORDER + i;
+      p.receiveShadow = true;
+      group.add(p);
+    }
 
-  // ---- pads / roads / take-off pad
-  let order = DECAL_ORDER + 300;
-  for (const pd of spec.pads) {
-    const o = new THREE.Mesh(new THREE.BoxGeometry(pd.w, 0.16, pd.d), material(pd.color ?? '#a9aaa0'));
-    o.position.set(pd.x, 0.08, pd.z);
-    o.rotation.y = (-(pd.rotDeg ?? 0) * Math.PI) / 180;
-    o.receiveShadow = true;
-    o.renderOrder = order++;
-    group.add(o);
+    // ---- pads / roads / take-off pad
+    let order = DECAL_ORDER + 300;
+    for (const pd of spec.pads) {
+      const o = new THREE.Mesh(new THREE.BoxGeometry(pd.w, 0.16, pd.d), material(pd.color ?? '#a9aaa0'));
+      o.position.set(pd.x, 0.08, pd.z);
+      o.rotation.y = (-(pd.rotDeg ?? 0) * Math.PI) / 180;
+      o.receiveShadow = true;
+      o.renderOrder = order++;
+      group.add(o);
+    }
+    const start = new THREE.Mesh(new THREE.BoxGeometry(4, 0.04, 4), material('#e8c65a'));
+    start.position.set(spec.droneStart.x, 0.2, spec.droneStart.z);
+    start.receiveShadow = true;
+    group.add(start);
   }
-  const start = new THREE.Mesh(new THREE.BoxGeometry(4, 0.04, 4), material('#e8c65a'));
-  start.position.set(spec.droneStart.x, 0.2, spec.droneStart.z);
-  start.receiveShadow = true;
-  group.add(start);
 
   // ---- buildings
   for (const b of spec.buildings) {

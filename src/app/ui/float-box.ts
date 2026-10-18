@@ -31,9 +31,25 @@ interface Geo {
     </header>
     @if (open()) {
       <div class="body"><ng-content /></div>
+      <div class="blgrip" title="Drag to resize" (pointerdown)="blDown($event)" (pointermove)="blMove($event)" (pointerup)="blUp()" (pointercancel)="blUp()"></div>
     }
   `,
   styles: `
+    .blgrip {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 16px;
+      height: 16px;
+      z-index: 5;
+      cursor: nesw-resize;
+      touch-action: none;
+      opacity: 0.6;
+      background: linear-gradient(135deg, transparent 0 46%, var(--dim) 46% 54%, transparent 54% 66%, var(--dim) 66% 74%, transparent 74%);
+    }
+    .blgrip:hover {
+      opacity: 1;
+    }
     :host {
       position: absolute;
       z-index: 1200;
@@ -166,6 +182,39 @@ export class FloatBox {
     const par = this.host.nativeElement.parentElement?.getBoundingClientRect();
     if (!par) return;
     this.geo.update((g) => this.clamp({ ...g, x: e.clientX - par.left - this.drag!.dx, y: e.clientY - par.top - this.drag!.dy }));
+  }
+
+  private bl: { x: number; y: number; g: Geo } | null = null;
+
+  /** Bottom-left corner: the left edge and the bottom edge follow the pointer. */
+  protected blDown(e: PointerEvent): void {
+    this.init();
+    this.bl = { x: e.clientX, y: e.clientY, g: { ...this.geo() } };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  protected blMove(e: PointerEvent): void {
+    const d = this.bl;
+    if (!d) return;
+    const dx = e.clientX - d.x;
+    let x = d.g.x + dx, w = d.g.w - dx;
+    if (w < 160) {
+      x -= 160 - w;
+      w = 160;
+    }
+    if (x < 0) {
+      w += x;
+      x = 0;
+    }
+    this.geo.set(this.clamp({ x, y: d.g.y, w, h: d.g.h + (e.clientY - d.y) }));
+  }
+
+  protected blUp(): void {
+    if (!this.bl) return;
+    this.bl = null;
+    this.save();
   }
 
   protected dragEnd(): void {

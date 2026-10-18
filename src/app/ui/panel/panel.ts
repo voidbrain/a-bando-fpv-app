@@ -38,8 +38,28 @@ import { PANEL_BY_ID, type PanelId } from '../panel-defs';
       <button class="gb" title="Collapse / expand" (pointerdown)="$event.stopPropagation()" (click)="layout.toggleMinimized(id())">▾</button>
     </header>
     <div class="body"><ng-content /></div>
+    @if (def().resizable && !state().minimized) {
+      <div class="blgrip" title="Drag to resize" (pointerdown)="blDown($event)" (pointermove)="blMove($event)" (pointerup)="blUp($event)" (pointercancel)="blUp($event)"></div>
+    }
   `,
   styles: `
+    /* the browser's own resize grip is bottom-right only: this one does the bottom-left corner */
+    .blgrip {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 16px;
+      height: 16px;
+      z-index: 5;
+      cursor: nesw-resize;
+      touch-action: none;
+      opacity: 0.6;
+      background: linear-gradient(135deg, transparent 0 46%, var(--dim) 46% 54%, transparent 54% 66%, var(--dim) 66% 74%, transparent 74%);
+      border-bottom-left-radius: var(--radius);
+    }
+    .blgrip:hover {
+      opacity: 1;
+    }
     :host {
       position: absolute;
       display: flex;
@@ -150,6 +170,39 @@ export class Panel {
    * ever stored while the panel is hidden, collapsed or ghosted, and re-opening restores exactly the saved size.
    */
   private resizing = false;
+  private bl: { x: number; y: number; left: number; top: number; w: number; h: number } | null = null;
+
+  protected blDown(e: PointerEvent): void {
+    const el = this.host.nativeElement;
+    this.layout.raise(this.id());
+    this.bl = { x: e.clientX, y: e.clientY, left: el.offsetLeft, top: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  /** Bottom-left corner: the left edge follows the pointer (position and width change), the bottom edge too. */
+  protected blMove(e: PointerEvent): void {
+    const d = this.bl;
+    if (!d) return;
+    let left = d.left + (e.clientX - d.x);
+    let w = d.w - (e.clientX - d.x);
+    if (w < 160) {
+      left -= 160 - w;
+      w = 160;
+    }
+    if (left < 0) {
+      w += left;
+      left = 0;
+    }
+    this.layout.moveTo(this.id(), Math.round(left), d.top);
+    this.layout.resizeTo(this.id(), Math.round(w), Math.round(Math.max(100, d.h + (e.clientY - d.y))));
+  }
+
+  protected blUp(e: PointerEvent): void {
+    this.bl = null;
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+  }
 
   /** A press in the bottom-right corner is the start of a native resize drag. */
   protected gripDown(e: PointerEvent): void {

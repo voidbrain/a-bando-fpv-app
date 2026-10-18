@@ -16,6 +16,8 @@ import { ViewStore } from '../../state/view.store';
 import { checkedFrom, numberFrom, selectedFrom, textFrom } from '../dom';
 import { FloatBox } from '../float-box';
 import { AssistantBox } from './assistant-box';
+import { ElementPreview } from './element-preview';
+import type { PreviewTarget } from '../../three/element-preview';
 
 type Tool = 'select' | 'building' | 'merge' | 'cut' | 'wing' | 'tree' | 'fence' | 'door' | 'window' | 'wall' | 'void' | 'column' | 'measure';
 type Pick = { t: 'building' } | { t: 'tree'; i: number } | { t: 'opening'; id: string } | { t: 'wall'; i: number } | { t: 'fence'; i: number } | { t: 'void'; i: number } | { t: 'column'; i: number } | null;
@@ -56,7 +58,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
 @Component({
   selector: 'app-bando-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, FloatBox, AssistantBox],
+  imports: [FormsModule, FloatBox, AssistantBox, ElementPreview],
   host: { class: 'be' },
   template: `
     <div class="bar">
@@ -235,7 +237,10 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
       }
 
       @if (mode() === 'model' && overlayOn()) {
-        <app-float-box fid="inspector" title="Inspector" [x]="8" [y]="40" [w]="280" [h]="250">
+        <app-float-box fid="inspector-v2" title="Inspector" [x]="8" [y]="40" [w]="300" [h]="430">
+          @if (previewTarget(); as pt) {
+            <app-element-preview [target]="pt" [key]="previewKey()" [caption]="previewCaption()" />
+          }
           @switch (pick()?.t) {
             @case ('opening') {
               @if (op(); as o) {
@@ -658,6 +663,48 @@ export class BandoEditor {
   protected readonly fence = computed(() => this.ed.draft().walls?.[this.fenceI()] ?? null);
   protected readonly voidSel = computed(() => this.lvl()?.voids?.[this.voidI()] ?? null);
   protected readonly colSel = computed(() => this.lvl()?.columns?.[this.colI()] ?? null);
+  /** What the inspector's 3D view shows: the selected thing alone, or a part of a building in place with the rest ghosted. */
+  protected readonly previewTarget = computed<PreviewTarget | null>(() => {
+    const p = this.pick();
+    const bd = this.b();
+    const li = Math.min(this.level(), (bd?.levels.length ?? 1) - 1);
+    if (p?.t === 'tree') {
+      const t = this.tree();
+      return t ? { kind: 'tree', t } : null;
+    }
+    if (p?.t === 'fence') {
+      const w = this.fence();
+      return w ? { kind: 'fence', w } : null;
+    }
+    if (!bd) return null;
+    if (p?.t === 'opening') {
+      const o = this.op();
+      return o ? { kind: 'part', b: bd, li, part: { t: 'opening', seg: o } } : null;
+    }
+    if (p?.t === 'wall') {
+      const pt = this.lvl()?.partitions[p.i];
+      return pt ? { kind: 'part', b: bd, li, part: { t: 'wall', a: pt[0], c: pt[1] } } : null;
+    }
+    if (p?.t === 'void') {
+      const v = this.voidSel();
+      return v ? { kind: 'part', b: bd, li, part: { t: 'void', v } } : null;
+    }
+    if (p?.t === 'column') {
+      const c = this.colSel();
+      return c ? { kind: 'part', b: bd, li, part: { t: 'column', c } } : null;
+    }
+    return { kind: 'building', b: bd };
+  });
+  protected readonly previewKey = computed(() => {
+    const p = this.pick();
+    const idx = p && 'i' in p ? p.i : p && 'id' in p ? p.id : '';
+    return `${this.ed.selectedId()}|${p?.t ?? 'building'}|${idx}|${this.level()}`;
+  });
+  protected readonly previewCaption = computed(() => {
+    const t = this.previewTarget();
+    if (t?.kind === 'part') return `floor ${this.level() + 1} · the rest is ghosted · drag to rotate`;
+    return 'drag to rotate · wheel to zoom';
+  });
   protected readonly topLevel = computed<LevelSpec | null>(() => {
     const bd = this.b();
     return bd ? (bd.levels[bd.levels.length - 1] ?? null) : null;
