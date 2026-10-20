@@ -59,10 +59,7 @@ export function listOpenings(b: BuildingSpec, li: number): OpenSeg[] {
   return out;
 }
 
-/** Add a door / window on the wall nearest to `p` (building-centred); returns its id, or null when no wall is close. */
-export function addOpening(b: BuildingSpec, li: number, p: Pt, kind: 'door' | 'window', maxDist: number): string | null {
-  const l = b.levels[li];
-  if (!l) return null;
+function nearestWall(b: BuildingSpec, p: Pt, maxDist: number): { wall: ReturnType<typeof wallsOf>[number]; along: number } | null {
   let best: ReturnType<typeof wallsOf>[number] | null = null;
   let bd = Infinity;
   for (const w of wallsOf(b)) {
@@ -71,13 +68,53 @@ export function addOpening(b: BuildingSpec, li: number, p: Pt, kind: 'door' | 'w
     if (d < bd) { bd = d; best = w; }
   }
   if (!best || bd > maxDist) return null;
+  return { wall: best, along: best.axis === 'x' ? p.x : p.z };
+}
+
+const openingSize = (l: LevelSpec, kind: 'door' | 'window'): { w: number; h: number; sill: number | undefined } => {
   const w = kind === 'door' ? 2.2 : 1.2;
-  const len = best.to - best.from;
-  if (len < w + 0.3) return null;
-  const along = best.axis === 'x' ? p.x : p.z;
-  const c = Math.min(best.to - w / 2 - 0.1, Math.max(best.from + w / 2 + 0.1, Math.round(along * 10) / 10));
   const sill = kind === 'door' ? undefined : Math.min(0.9, Math.max(0.3, l.height * 0.3));
   const h = kind === 'door' ? Math.min(2.6, l.height * 0.8) : Math.min(1.2, Math.max(0.4, l.height - (sill ?? 0) - 0.3));
+  return { w, h, sill };
+};
+
+/** Where a door / window would go for a click at `p` (building-centred), and the gaps to its neighbours; null when no wall is close. */
+export interface OpeningPreview {
+  axis: 'x' | 'z';
+  at: number;
+  c: number;
+  w: number;
+  /** Free stretches next to it along the wall (to the wall end or the next opening): from, to (building-centred) and their length. */
+  gaps: { from: number; to: number; d: number }[];
+}
+
+export function previewOpening(b: BuildingSpec, li: number, p: Pt, kind: 'door' | 'window', maxDist: number): OpeningPreview | null {
+  const l = b.levels[li];
+  if (!l) return null;
+  const hit = nearestWall(b, p, maxDist);
+  if (!hit) return null;
+  const { w } = openingSize(l, kind);
+  const { wall, along } = hit;
+  if (wall.to - wall.from < w + 0.3) return null;
+  const c = Math.min(wall.to - w / 2 - 0.1, Math.max(wall.from + w / 2 + 0.1, Math.round(along * 10) / 10));
+  const others = listOpenings(b, li).filter((o) => o.axis === wall.axis && Math.abs(o.at - wall.at) < 0.1).sort((x, y) => x.c - y.c);
+  const left = others.filter((o) => o.c < c).pop(), right = others.find((o) => o.c > c);
+  const lo = left ? left.c + left.w / 2 : wall.from, hi = right ? right.c - right.w / 2 : wall.to;
+  const gaps = [{ from: lo, to: c - w / 2, d: c - w / 2 - lo }, { from: c + w / 2, to: hi, d: hi - (c + w / 2) }].filter((g) => g.d > 0.05);
+  return { axis: wall.axis, at: wall.at, c, w, gaps };
+}
+
+/** Add a door / window on the wall nearest to `p` (building-centred); returns its id, or null when no wall is close. */
+export function addOpening(b: BuildingSpec, li: number, p: Pt, kind: 'door' | 'window', maxDist: number): string | null {
+  const l = b.levels[li];
+  if (!l) return null;
+  const hit = nearestWall(b, p, maxDist);
+  if (!hit) return null;
+  const best = hit.wall;
+  const { w, h, sill } = openingSize(l, kind);
+  const len = best.to - best.from;
+  if (len < w + 0.3) return null;
+  const c = Math.min(best.to - w / 2 - 0.1, Math.max(best.from + w / 2 + 0.1, Math.round(hit.along * 10) / 10));
   if (b.footprint) {
     const o: WallOpening = best.axis === 'x' ? { kind, x: c, z: best.at, w, h, sill } : { kind, x: best.at, z: c, w, h, sill };
     (l.wallOpenings ??= []).push(o);

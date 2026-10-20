@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addFloor, buildingsOverlap, columnGrid, columnRow, convertBuilding, duplicateColumn, mergeBuildings, overlapsOthers, removeFloor, repeatOpening } from './building-ops';
+import { stairsFor, addFloor, buildingsOverlap, columnGrid, columnRow, convertBuilding, duplicateColumn, mergeBuildings, overlapsOthers, removeFloor, repeatOpening } from './building-ops';
 import { addOpening, listOpenings, patchOpening } from './openings';
 import { emptySpec, type BuildingSpec } from './site-spec';
 
@@ -98,5 +98,23 @@ describe('repeating and converting', () => {
     convertBuilding(b, 'building');
     expect(b.frame).toBeUndefined();
     expect(b.levels[0]!.roof).toBe('gable');
+  });
+});
+
+describe('stairs on a floor', () => {
+  it('stands on its floor, follows the building axes, and opens a hole in the floor above only where it arrives', () => {
+    const b = mk('s', 100, 50, 20, 10, 30);
+    addFloor(b);
+    const r = stairsFor(b, 0, { x: 6, z: 5 }, 'stairs', { length: 5.4, size: 1.4, name: 'Stairs' });
+    expect(r.structure).toMatchObject({ kind: 'stairs', y: 0, height: 4, rotDeg: 30, size: 1.4 });
+    // 4 m at an 18 cm riser: about 22 steps of 28 cm = 6.2 m of run
+    expect(r.structure.length).toBeCloseTo(6.2, 1);
+    // world position: the point (6, 5) from the min corner is (-4, 0) from the centre, turned by 30 degrees
+    expect(r.structure.x).toBeCloseTo(100 + -4 * Math.cos(Math.PI / 6), 3);
+    expect(r.structure.z).toBeCloseTo(50 + -4 * Math.sin(Math.PI / 6), 3);
+    expect(r.voidAbove).toMatchObject({ x0: 6, z0: 5 - 0.7 - 0.15, z1: 5 + 0.7 + 0.15 });
+    expect(r.voidAbove!.x1).toBeCloseTo(6 + 6.2 / 2 + 0.3, 3);
+    // the top floor has nothing above it
+    expect(stairsFor(b, 1, { x: 6, z: 5 }, 'ramp', { length: 10, size: 3, name: 'Ramp' }).voidAbove).toBeNull();
   });
 });

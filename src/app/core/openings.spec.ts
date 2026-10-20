@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addOpening, listOpenings, moveOpening, patchOpening, reshapeBuilding } from './openings';
+import { addOpening, listOpenings, moveOpening, patchOpening, previewOpening, reshapeBuilding } from './openings';
 import { emptySpec, type BuildingSpec } from './site-spec';
 
 const building = (): BuildingSpec => ({
@@ -56,5 +56,24 @@ describe('openings & reshaping', () => {
     const b = building();
     expect(reshapeBuilding(b, { x0: -1, x1: 1, z0: -7, z1: 7 }, 'cut')).toBe(false);
     expect(emptySpec().buildings.length).toBe(0);
+  });
+});
+
+describe('opening preview', () => {
+  it('shows exactly where a door would go, and the gaps to the wall ends and the neighbours', () => {
+    const b = building();
+    const first = addOpening(b, 0, { x: -5, z: 6 }, 'window', 2)!;
+    expect(first).toBeTruthy();
+    const pv = previewOpening(b, 0, { x: 3.04, z: 5.2 }, 'window', 2)!;
+    expect(pv.axis).toBe('x');
+    expect(pv.at).toBe(6); // the south wall of the 20 x 12 building
+    expect(pv.c).toBeCloseTo(3, 1);
+    expect(pv.gaps.length).toBe(2);
+    expect(pv.gaps[1]!.d).toBeCloseTo(10 - 3 - 0.6, 1); // to the east end of the wall
+    expect(pv.gaps[0]!.d).toBeCloseTo(3 - 0.6 - (-5 + 0.6), 1); // to the window at x = -5
+    expect(previewOpening(b, 0, { x: 0, z: 0 }, 'door', 1)).toBeNull(); // the middle of the room is not near a wall
+    // the preview and the real thing agree
+    const id = addOpening(b, 0, { x: 3.04, z: 5.2 }, 'window', 2)!;
+    expect(listOpenings(b, 0).find((o) => o.id === id)!.c).toBeCloseTo(pv.c, 5);
   });
 });

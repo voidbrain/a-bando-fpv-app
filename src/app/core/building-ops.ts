@@ -247,3 +247,21 @@ export function convertBuilding(b: BuildingSpec, to: 'greenhouse' | 'building'):
     b.levels = [{ baseY: 0, height: 4, sides: { n: true, s: true, e: true, w: true }, doors: {}, partitions: [], roof: 'gable', roofRise: 2.5, roofColor: '#b5683f' }];
   }
 }
+
+/**
+ * Stairs (or a ramp) standing on floor `li` of a building at `centre` (min-corner frame), aligned with the building's
+ * own axes and climbing along +x to the next floor. Returns the structure to add and, when there is a floor above, the
+ * hole to cut in it where the flight arrives.
+ */
+export function stairsFor(b: BuildingSpec, li: number, centre: Pt, kind: 'stairs' | 'ramp', defaults: { length: number; size: number; name: string }): {
+  structure: { kind: 'stairs' | 'ramp'; name: string; x: number; z: number; rotDeg: number; y: number; height: number; size: number; length: number };
+  voidAbove: { x0: number; z0: number; x1: number; z1: number } | null;
+} {
+  const lev = b.levels[li]!;
+  const length = kind === 'ramp' ? Math.max(defaults.length, lev.height * 6) : Math.max(2, Math.round((lev.height / 0.18) * 0.28 * 10) / 10);
+  const w = toWorld(b, { x: centre.x - b.length / 2, z: centre.z - b.width / 2 });
+  return {
+    structure: { kind, name: `${defaults.name} ${li + 1}→${li + 2}`, x: w.x, z: w.z, rotDeg: b.rotDeg, y: lev.baseY, height: lev.height, size: defaults.size, length },
+    voidAbove: b.levels[li + 1] ? { x0: centre.x, x1: centre.x + length / 2 + 0.3, z0: centre.z - defaults.size / 2 - 0.15, z1: centre.z + defaults.size / 2 + 0.15 } : null,
+  };
+}
