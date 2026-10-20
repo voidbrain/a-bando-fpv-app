@@ -1,11 +1,11 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRender, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, afterNextRender, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import * as L from 'leaflet';
 import { contains, edgesOf, type Pt, type Rect } from '../../core/footprint';
-import { buildingsOverlap, mergeBuildings, overlapsOthers } from '../../core/building-ops';
+import { buildingsOverlap, columnGrid, columnRow, convertBuilding, duplicateColumn, mergeBuildings, overlapsOthers, repeatOpening } from '../../core/building-ops';
 import { addOpening, insideBuilding, listOpenings, moveOpening, outlineOf, patchOpening, removeOpening, reshapeBuilding, resetToRect, resizeOpening, type OpenSeg } from '../../core/openings';
 import { cloneSpec, uid, type BuildingSpec, type LevelSpec, type LocationInfo, type SiteSpec, type StructureKind, type StructureSpec } from '../../core/site-spec';
-import { STRUCTURE_DEFAULTS } from '../../three/structures';
+import { RECT_KINDS, STRUCTURE_DEFAULTS } from '../../three/structures';
 import { AiService } from '../../services/ai.service';
 import { FlightService } from '../../services/flight.service';
 import { GeoService } from '../../services/geo.service';
@@ -18,6 +18,7 @@ import { checkedFrom, numberFrom, selectedFrom, textFrom } from '../dom';
 import { FloatBox } from '../float-box';
 import { AssistantBox } from './assistant-box';
 import { ElementPreview } from './element-preview';
+import { SiteView } from './site-view';
 import type { PreviewTarget } from '../../three/element-preview';
 
 type Tool = 'select' | 'building' | 'structure' | 'merge' | 'cut' | 'wing' | 'tree' | 'fence' | 'door' | 'window' | 'wall' | 'void' | 'column' | 'measure';
@@ -61,8 +62,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
  */
 @Component({
   selector: 'app-bando-editor',
-  changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, FloatBox, AssistantBox, ElementPreview],
+  imports: [FormsModule, FloatBox, AssistantBox, ElementPreview, SiteView],
   host: { class: 'be' },
   template: `
     <div class="bar">
@@ -71,6 +71,10 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
         <button [class.on]="mode() === 'model'" [disabled]="!hasModel()" (click)="setMode('model')" [title]="hasModel() ? '' : 'Generate the model first'">2 · Model</button>
       </div>
       @if (mode() === 'model') {
+        <div class="seg" title="2D edits the plan; 3D just looks around the whole bando">
+          <button [class.on]="!view3d()" (click)="view3d.set(false)">2D</button>
+          <button [class.on]="view3d()" (click)="setView3d()">3D</button>
+        </div>
         @for (t of tools; track t.id) {
           <button class="btn" [class.on]="tool() === t.id" [disabled]="!!t.indoor && !indoor()" (click)="setTool(t.id)" [title]="t.hint">{{ t.label }}</button>
         }
@@ -99,7 +103,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
         <button class="btn" [class.on]="pinMode() === 'e'" [disabled]="!hasPath()" (click)="armPin('e')" title="Needs a loaded flight path: click where the flight ended">Pin end</button>
         <button class="btn" [disabled]="!ed.canUndo()" (click)="undo()" title="Undo (Ctrl+Z)">↶</button>
         <button class="btn" [disabled]="!ed.canRedo()" (click)="redo()" title="Redo">↷</button>
-        <button class="btn" [class.on]="ai.open()" (click)="ai.open.set(!ai.open())" title="Chat with the in-browser AI assistant to edit buildings and interiors">💬 AI</button>
+        <button class="btn" [class.on]="ai.open()" (click)="ai.open.set(!ai.open())" title="Chat with the AI assistant to edit buildings and interiors">💬 AI @if (ai.busy()) { <i class="spin"></i> }</button>
         <button class="btn primary" (click)="save()">Save</button>
       }
       <span class="sp"></span>
@@ -113,10 +117,10 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
       <label class="lay" title="Map opacity"><input type="range" min="0.2" max="1" step="0.05" [value]="studio.mapOpacity()" (input)="setOpacity($event)" /></label>
     </div>
 
-    <div class="wrap" #wrap tabindex="0" (keydown)="key($event)">
+    <div class="wrap" #wrap tabindex="0" [class.v3]="view3d() && overlayOn()" (keydown)="key($event)">
       <div class="map" #el></div>
 
-      @if (overlayOn()) {
+      @if (overlayOn() && !view3d()) {
         <svg
           #svg
           class="ov"
@@ -147,17 +151,27 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
                   <line [attr.x1]="-st.size" [attr.y1]="-st.size" [attr.x2]="st.size" [attr.y2]="st.size" stroke="#4c5359" vector-effect="non-scaling-stroke" pointer-events="none" />
                   <line [attr.x1]="st.size" [attr.y1]="-st.size" [attr.x2]="-st.size" [attr.y2]="st.size" stroke="#4c5359" vector-effect="non-scaling-stroke" pointer-events="none" />
                 }
+                @case ('tower_crane') {
+                  <line [attr.x1]="-(st.length ?? 45) * 0.25" y1="0" [attr.x2]="st.length ?? 45" y2="0" stroke="#e0b020" stroke-width="5" vector-effect="non-scaling-stroke" />
+                  <rect [attr.x]="-st.size" [attr.y]="-st.size" [attr.width]="st.size * 2" [attr.height]="st.size * 2" fill="#e0b020" [attr.stroke]="structI() === $index ? '#ffd166' : '#4c4220'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
+                }
                 @default {
-                  <circle [attr.r]="st.size" [attr.fill]="st.kind === 'chimney' ? '#a86b52' : '#c4c8c6'" fill-opacity="0.85" [attr.stroke]="structI() === $index ? '#ffd166' : '#3a3a36'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
-                  <circle [attr.r]="st.size * (st.kind === 'chimney' ? 0.55 : 0.55)" fill="none" stroke="#3a3a36" vector-effect="non-scaling-stroke" pointer-events="none" />
+                  @if (isRect(st.kind)) {
+                    <rect [attr.x]="-(st.length ?? 6) / 2" [attr.y]="-st.size / 2" [attr.width]="st.length ?? 6" [attr.height]="st.size" [attr.fill]="rectFill(st.kind)" fill-opacity="0.85" [attr.stroke]="structI() === $index ? '#ffd166' : '#2b2b28'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
+                    <line [attr.x1]="-(st.length ?? 6) * 0.32" y1="0" [attr.x2]="(st.length ?? 6) * 0.32" y2="0" stroke="#1d1d1b" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none" />
+                    <polygon [attr.points]="arrowHead(st.length ?? 6, st.size)" fill="#1d1d1b" pointer-events="none" />
+                  } @else {
+                    <circle [attr.r]="st.size" [attr.fill]="st.kind === 'chimney' ? '#a86b52' : '#c4c8c6'" fill-opacity="0.85" [attr.stroke]="structI() === $index ? '#ffd166' : '#3a3a36'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
+                    <circle [attr.r]="st.size * 0.55" fill="none" stroke="#3a3a36" vector-effect="non-scaling-stroke" pointer-events="none" />
+                  }
                 }
               }
             </g>
-            <text [attr.x]="st.x" [attr.y]="st.z + (st.kind === 'bridge' ? 0 : st.size + 4)" text-anchor="middle" [attr.font-size]="Math.max(2, 11 / ppm())" fill="#1b231e" stroke="#fff" stroke-width="0.35" paint-order="stroke" pointer-events="none">{{ st.name }}</text>
-            @if (structI() === $index && (st.kind === 'bridge' || st.kind === 'lattice_tower')) {
+            <text [attr.x]="st.x" [attr.y]="st.z + (isRect(st.kind) ? 0 : st.size + 4)" text-anchor="middle" [attr.font-size]="Math.max(2, 11 / ppm())" fill="#1b231e" stroke="#fff" stroke-width="0.35" paint-order="stroke" pointer-events="none">{{ st.name }}</text>
+            @if (structI() === $index && (isRect(st.kind) || st.kind === 'lattice_tower' || st.kind === 'tower_crane')) {
               <g [attr.transform]="'translate(' + st.x + ' ' + st.z + ') rotate(' + st.rotDeg + ')'">
-                <line x1="0" [attr.y1]="-(st.kind === 'bridge' ? st.size / 2 : st.size)" x2="0" [attr.y2]="-(st.kind === 'bridge' ? st.size / 2 : st.size) - 28 / ppm()" stroke="#b7ed83" vector-effect="non-scaling-stroke" pointer-events="none" />
-                <circle class="hit" cx="0" [attr.cy]="-(st.kind === 'bridge' ? st.size / 2 : st.size) - 28 / ppm()" [attr.r]="hr()" fill="#ffd166" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="structRotDown($event, $index)" />
+                <line x1="0" [attr.y1]="-(isRect(st.kind) ? st.size / 2 : st.size)" x2="0" [attr.y2]="-(isRect(st.kind) ? st.size / 2 : st.size) - 28 / ppm()" stroke="#b7ed83" vector-effect="non-scaling-stroke" pointer-events="none" />
+                <circle class="hit" cx="0" [attr.cy]="-(isRect(st.kind) ? st.size / 2 : st.size) - 28 / ppm()" [attr.r]="hr()" fill="#ffd166" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="structRotDown($event, $index)" />
               </g>
             }
           }
@@ -257,10 +271,30 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
               <circle [attr.cx]="mb.x" [attr.cy]="mb.z" [attr.r]="4 / ppm()" fill="#ffd166" pointer-events="none" />
             }
           }
+          @if (!meas().b && measHover(); as mh) {
+            @if (meas().a; as ma) {
+              <line [attr.x1]="ma.x" [attr.y1]="ma.z" [attr.x2]="mh.x" [attr.y2]="mh.z" stroke="#ffd166" stroke-width="2" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" pointer-events="none" />
+              <text [attr.x]="(ma.x + mh.x) / 2" [attr.y]="(ma.z + mh.z) / 2" text-anchor="middle" [attr.font-size]="13 / ppm()" fill="#ffe9ad" stroke="#222" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ hoverLabel() }}</text>
+            }
+          }
           <circle [attr.cx]="ed.draft().droneStart.x" [attr.cy]="ed.draft().droneStart.z" [attr.r]="2" fill="#ff6b6b" pointer-events="none" />
         </svg>
       }
 
+      @if (overlayOn() && view3d()) {
+        <app-site-view [spec]="ed.draft()" [roofHidden]="view.roofHidden()" [frameKey]="ed.draft().id" />
+      }
+      @if (!(overlayOn() && view3d())) {
+        <svg class="compass" viewBox="-30 -30 60 60" aria-label="North is up">
+          <circle r="27" fill="rgba(10,16,12,0.75)" stroke="#6f8577" />
+          <polygon points="0,-23 5,-3 -5,-3" fill="#ff5a4d" />
+          <polygon points="0,23 5,3 -5,3" fill="#8a948d" />
+          <text y="-14" x="0" text-anchor="middle" dominant-baseline="middle" font-size="9" font-weight="700" fill="#fff" stroke="#000" stroke-width="2" paint-order="stroke">N</text>
+          @if (mode() === 'model' && b(); as cb) {
+            <line x1="0" y1="0" [attr.x2]="axisEnd(cb)[0]" [attr.y2]="axisEnd(cb)[1]" stroke="#b7ed83" stroke-width="2.5" stroke-linecap="round" />
+          }
+        </svg>
+      }
       @if (mode() === 'area') {
         <div class="frame" [style.left.px]="fb().l" [style.top.px]="fb().t" [style.width.px]="fb().w" [style.height.px]="fb().h">
           @for (h of handles; track h) {
@@ -302,6 +336,10 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
                   <div class="f"><label>sill (bottom) <input type="number" min="0" step="0.1" [value]="o.sill.toFixed(2)" (change)="setOpening({ sill: num($event) })" /></label></div>
                 }
                 <div class="f"><label>position on wall <input type="number" step="0.1" [value]="(o.c - o.from).toFixed(2)" (change)="setOpening({ c: o.from + num($event) })" /></label></div>
+                <div class="f"><label><input type="checkbox" [checked]="o.closed" (change)="setOpening({ closed: checked($event) })" /> closed ({{ o.kind === 'door' ? 'a door leaf' : 'a pane' }}; open = just the hole)</label></div>
+                <div class="f"><span class="dim">repeat along the wall</span><label>× <input type="number" min="2" max="40" step="1" [value]="repN()" (change)="repN.set(num($event))" /></label>
+                <label>every <input type="number" min="0.5" step="0.5" [value]="repS()" (change)="repS.set(num($event))" /> m</label>
+                <button class="btn" (click)="repeatSel()">Repeat</button></div>
                 <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
               }
             }
@@ -317,16 +355,19 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
               @if (structSel(); as st) {
                 <div class="f"><label class="grow">name <input type="text" class="grow" [value]="st.name" (change)="setStruct({ name: text($event) })" /></label></div>
                 <div class="f"><span class="dim">{{ structLabel(st.kind) }}</span></div>
-                <div class="f"><label>{{ st.kind === 'bridge' ? 'deck height' : 'height' }} <input type="number" min="2" step="0.5" [value]="st.height" (change)="setStruct({ height: num($event) })" /></label>
-                <label>{{ sizeLabel(st.kind) }} <input type="number" min="0.5" step="0.5" [value]="st.size" (change)="setStruct({ size: num($event) })" /></label></div>
-                @if (st.kind === 'bridge') {
-                  <div class="f"><label>length <input type="number" min="6" step="1" [value]="(st.length ?? 30).toFixed(0)" (change)="setStruct({ length: num($event) })" /></label>
-                  <label>style <select (change)="setStruct({ style: styleOf($event) })"><option value="beam" [selected]="(st.style ?? 'beam') === 'beam'">beam on piers</option><option value="arch" [selected]="st.style === 'arch'">arch</option></select></label></div>
+                <div class="f"><label>{{ heightLabel(st.kind) }} <input type="number" min="0.3" step="0.5" [value]="st.height" (change)="setStruct({ height: num($event) })" /></label>
+                <label>{{ sizeLabel(st.kind) }} <input type="number" min="0.3" step="0.1" [value]="st.size" (change)="setStruct({ size: num($event) })" /></label></div>
+                @if (hasLength(st.kind)) {
+                  <div class="f"><label>{{ st.kind === 'tower_crane' ? 'jib length' : 'length' }} <input type="number" min="1" step="0.5" [value]="(st.length ?? 6).toFixed(1)" (change)="setStruct({ length: num($event) })" /></label>
+                  @if (st.kind === 'bridge') {
+                    <label>style <select (change)="setStruct({ style: styleOf($event) })"><option value="beam" [selected]="(st.style ?? 'beam') === 'beam'">beam on piers</option><option value="arch" [selected]="st.style === 'arch'">arch</option></select></label>
+                  }</div>
                 }
-                @if (st.kind === 'bridge' || st.kind === 'lattice_tower') {
-                  <div class="f"><label>rotation° <input type="number" step="5" [value]="st.rotDeg.toFixed(0)" (change)="setStruct({ rotDeg: num($event) })" /></label></div>
-                }
-                <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
+                <div class="f"><label>raised by <input type="number" min="0" step="0.5" [value]="st.y ?? 0" (change)="setStruct({ y: num($event) })" /> m</label>
+                @if (st.kind !== 'chimney' && st.kind !== 'silo' && st.kind !== 'tank' && st.kind !== 'water_tower') {
+                  <label>rotation° <input type="number" step="5" [value]="st.rotDeg.toFixed(0)" (change)="setStruct({ rotDeg: num($event) })" /></label>
+                }</div>
+                <div class="f"><button class="btn" (click)="duplicateStruct()">⧉ Duplicate</button> <button class="btn danger" (click)="deleteSel()">Delete</button></div>
               }
             }
             @case ('fence') {
@@ -350,6 +391,12 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
               @if (colSel(); as c) {
                 <div class="f"><label>size <input type="number" min="0.15" step="0.05" [value]="c.size" (change)="setColumn({ size: num($event) })" /></label>
                 <label><input type="checkbox" [checked]="!!c.round" (change)="setColumn({ round: checked($event) })" /> round</label></div>
+                <div class="f"><span class="dim">repeat</span><label>× <input type="number" min="2" max="60" step="1" [value]="colN()" (change)="colN.set(num($event))" /></label>
+                <label>every <input type="number" min="0.8" step="0.5" [value]="colS()" (change)="colS.set(num($event))" /> m</label>
+                <select (change)="colAxis.set(axisOf($event))"><option value="x" [selected]="colAxis() === 'x'">along x (east)</option><option value="z" [selected]="colAxis() === 'z'">along z (south)</option></select></div>
+                <div class="f"><button class="btn" (click)="colDup()" title="One copy, spacing away along the chosen direction">⧉ Duplicate</button>
+                <button class="btn" (click)="colRowAdd()">Make a row</button>
+                <button class="btn" (click)="colFill()" title="Fill the whole floor with columns like this one on a grid of the spacing above (not inside voids)">Fill floor</button></div>
                 <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
               }
             }
@@ -394,6 +441,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
                     </div>
                   }
                 }
+                <div class="f"><button class="btn" (click)="convertTo(bd.frame ? 'building' : 'greenhouse')" title="Rebuilds it as the other kind: the interior, openings and outline are lost">{{ bd.frame ? '→ Convert to building' : '→ Convert to greenhouse' }}</button></div>
                 <div class="f"><button class="btn" (click)="duplicate()">⧉ Duplicate</button> <button class="btn danger" (click)="deleteSel()">Delete</button></div>
               } @else {
                 <div class="dim">Click a building, tree, door or window on the map. Use the tools above to add or reshape.</div>
@@ -468,6 +516,9 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
     .map {
       position: absolute;
       inset: 0;
+    }
+    .wrap.v3 .map {
+      visibility: hidden;
     }
     .ov {
       position: absolute;
@@ -546,6 +597,30 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
     }
     .hits button:hover {
       background: #31443a;
+    }
+    .compass {
+      position: absolute;
+      z-index: 1100;
+      right: 8px;
+      top: 8px;
+      width: 46px;
+      height: 46px;
+      pointer-events: none;
+    }
+    .spin {
+      display: inline-block;
+      width: 11px;
+      height: 11px;
+      border: 2px solid var(--dim);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      vertical-align: -1px;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
     }
     .read {
       position: absolute;
@@ -639,13 +714,24 @@ export class BandoEditor {
   ];
 
   protected readonly mode = signal<'area' | 'model'>('area');
+  /** 2D edits the plan on the map; 3D shows the whole bando in an orbit view. */
+  protected readonly view3d = signal(false);
+  protected readonly repN = signal(4);
+  protected readonly repS = signal(3);
+  protected readonly colN = signal(4);
+  protected readonly colS = signal(4);
+  protected readonly colAxis = signal<'x' | 'z'>('x');
+  /** The pointer on the map while the measure tool waits for its second point (the live line). */
+  protected readonly measHover = signal<Pt | null>(null);
   protected readonly tool = signal<Tool>('select');
   /** What the Structure tool places, and what the Building tool draws. */
   protected readonly structKind = signal<StructureKind>('chimney');
   protected readonly buildKind = signal<'building' | 'greenhouse'>('building');
   protected readonly structKinds: readonly { id: StructureKind; label: string }[] = [
     { id: 'chimney', label: 'Chimney' }, { id: 'silo', label: 'Silo' }, { id: 'tank', label: 'Storage tank' },
-    { id: 'water_tower', label: 'Water tower' }, { id: 'lattice_tower', label: 'Lattice tower' }, { id: 'bridge', label: 'Bridge (drag)' },
+    { id: 'water_tower', label: 'Water tower' }, { id: 'lattice_tower', label: 'Lattice tower / pylon' }, { id: 'tower_crane', label: 'Tower crane' },
+    { id: 'bridge', label: 'Bridge (drag)' }, { id: 'stairs', label: 'Stairs' }, { id: 'ramp', label: 'Ramp' },
+    { id: 'container', label: 'Container' }, { id: 'car', label: 'Car' }, { id: 'truck', label: 'Truck' }, { id: 'excavator', label: 'Excavator' },
   ];
   protected readonly indoor = signal(false);
   protected readonly level = signal(0);
@@ -786,7 +872,8 @@ export class BandoEditor {
       const c = this.colSel();
       return c ? { kind: 'part', b: bd, li, part: { t: 'column', c } } : null;
     }
-    return { kind: 'building', b: bd };
+    // editing a floor: that floor stays solid, the other floors and the roof turn transparent
+    return this.indoor() ? { kind: 'floor', b: bd, li } : { kind: 'building', b: bd };
   });
   protected readonly previewKey = computed(() => {
     const p = this.pick();
@@ -795,7 +882,7 @@ export class BandoEditor {
   });
   protected readonly previewCaption = computed(() => {
     const t = this.previewTarget();
-    if (t?.kind === 'part') return `floor ${this.level() + 1} · the rest is ghosted · drag to rotate`;
+    if (t?.kind === 'part' || t?.kind === 'floor') return `floor ${this.level() + 1} · the rest is ghosted · drag to rotate`;
     return 'drag to rotate · wheel to zoom';
   });
   protected readonly topLevel = computed<LevelSpec | null>(() => {
@@ -1024,6 +1111,7 @@ export class BandoEditor {
     this.tool.set(t);
     if (t === 'wall' && this.b()) this.enterIndoor();
     if (t !== 'measure') this.meas.set({ a: null, b: null });
+    this.measHover.set(null);
   }
 
   protected toggleIndoor(): void {
@@ -1110,8 +1198,10 @@ export class BandoEditor {
     } else if (t === 'measure') {
       const m = this.meas();
       if (m.a && m.b) this.meas.set({ a: p, b: null });
-      else if (m.a) this.meas.set({ a: m.a, b: p });
-      else this.meas.set({ a: p, b: null });
+      else if (m.a) {
+        this.meas.set({ a: m.a, b: p });
+        this.measHover.set(null);
+      } else this.meas.set({ a: p, b: null });
     } else if ((t === 'cut' || t === 'wing') && bd) {
       const l = this.toLocal(bd, p);
       const a = { x: snap(l.x, 0.5), z: snap(l.z, 0.5) };
@@ -1123,6 +1213,7 @@ export class BandoEditor {
   protected measureLineDown(e: PointerEvent): void {
     e.stopPropagation();
     this.meas.set({ a: null, b: null });
+    this.measHover.set(null);
   }
 
   protected bldDown(e: PointerEvent, bd: BuildingSpec): void {
@@ -1238,6 +1329,100 @@ export class BandoEditor {
     this.drag.set({ t: 'structRot', i });
   }
 
+  protected isRect(k: StructureKind): boolean {
+    return RECT_KINDS.includes(k);
+  }
+
+  protected hasLength(k: StructureKind): boolean {
+    return RECT_KINDS.includes(k) || k === 'tower_crane';
+  }
+
+  protected rectFill(k: StructureKind): string {
+    return k === 'bridge' ? '#8d8d86' : k === 'stairs' || k === 'ramp' ? '#b9b9b1' : k === 'container' ? '#9a5a3e' : k === 'excavator' ? '#e0a100' : '#7e93a8';
+  }
+
+  /** The little triangle at the front (+x) of a rectangular structure, so you can tell which way stairs climb / a vehicle faces. */
+  protected arrowHead(length: number, width: number): string {
+    const x = length * 0.32, h = Math.min(1.4, width * 0.3);
+    return `${x + h * 1.6},0 ${x},${-h} ${x},${h}`;
+  }
+
+  protected heightLabel(k: StructureKind): string {
+    return k === 'bridge' ? 'deck height' : k === 'stairs' || k === 'ramp' ? 'rise' : 'height';
+  }
+
+  /** Where the long axis of a building points on the compass rose (SVG units around the centre). */
+  protected axisEnd(b: BuildingSpec): [number, number] {
+    const a = (b.rotDeg * Math.PI) / 180;
+    return [Math.cos(a) * 22, Math.sin(a) * 22];
+  }
+
+  protected axisOf = (e: Event): 'x' | 'z' => ((e.target as HTMLSelectElement).value === 'z' ? 'z' : 'x');
+
+  protected setView3d(): void {
+    this.view3d.set(true);
+    this.measHover.set(null);
+  }
+
+  protected readonly hoverLabel = computed(() => {
+    const a = this.meas().a, h = this.measHover();
+    if (!a || !h) return '';
+    const d = Math.hypot(h.x - a.x, h.z - a.z);
+    return d >= 1000 ? `${(d / 1000).toFixed(2)} km` : `${d.toFixed(1)} m`;
+  });
+
+  /** Repeat the selected door / window along its wall. */
+  protected repeatSel(): void {
+    const id = this.openId();
+    if (!id) return;
+    let n = 0;
+    this.mutate((b) => {
+      n = repeatOpening(b, Math.min(this.level(), b.levels.length - 1), id, this.repN(), this.repS());
+    }, 0);
+    this.toast.show(n ? `${n} copies added.` : 'No room for copies along this wall with that spacing.');
+  }
+
+  protected colDup(): void {
+    const i = this.colI();
+    let idx = -1;
+    this.mutate((b) => {
+      idx = duplicateColumn(b, Math.min(this.level(), b.levels.length - 1), i, this.colAxis() === 'x' ? this.colS() : 0, this.colAxis() === 'z' ? this.colS() : 0);
+    }, 0);
+    if (idx < 0) this.toast.show('The copy would fall outside the building, in a void, or on another column.');
+    else this.pick.set({ t: 'column', i: idx });
+  }
+
+  protected colRowAdd(): void {
+    const i = this.colI();
+    let n = 0;
+    this.mutate((b) => {
+      n = columnRow(b, Math.min(this.level(), b.levels.length - 1), i, this.colN(), this.colS(), this.colAxis());
+    }, 0);
+    this.toast.show(n ? `${n} columns added.` : 'Nothing fits in that direction.');
+  }
+
+  protected colFill(): void {
+    const i = this.colI();
+    let n = 0;
+    this.mutate((b) => {
+      n = columnGrid(b, Math.min(this.level(), b.levels.length - 1), i, this.colS(), this.colS(), 1);
+    }, 0);
+    this.toast.show(n ? `${n} columns added.` : 'No room for more columns with that spacing.');
+  }
+
+  protected convertTo(to: 'greenhouse' | 'building'): void {
+    if (!confirm(`Convert to a ${to}? Its interior walls, doors, windows, columns, voids and outline are lost (you can still Undo).`)) return;
+    if (this.indoor()) this.exitIndoor();
+    this.mutate((b) => convertBuilding(b, to), 0);
+    this.level.set(0);
+  }
+
+  protected duplicateStruct(): void {
+    const st = this.structSel();
+    if (!st) return;
+    this.placeStructure(st.kind, { x: st.x + (st.length ?? st.size * 2) + 2, z: st.z }, { name: st.name, rotDeg: st.rotDeg, height: st.height, size: st.size, length: st.length, style: st.style, y: st.y, color: st.color });
+  }
+
   private placeStructure(kind: StructureKind, at: Pt, extra: Partial<StructureSpec> = {}): void {
     const d = STRUCTURE_DEFAULTS[kind];
     this.ed.commitSite((s) => {
@@ -1255,7 +1440,7 @@ export class BandoEditor {
     return this.structKinds.find((x) => x.id === k)?.label.replace(' (drag)', '') ?? k;
   }
   protected sizeLabel(k: StructureKind): string {
-    return k === 'bridge' ? 'deck width' : k === 'lattice_tower' ? 'base half-width' : k === 'water_tower' ? 'tank radius' : k === 'chimney' ? 'base radius' : 'radius';
+    return RECT_KINDS.includes(k) ? 'width' : k === 'lattice_tower' ? 'base half-width' : k === 'tower_crane' ? 'mast half-width' : k === 'water_tower' ? 'tank radius' : k === 'chimney' ? 'base radius' : 'radius';
   }
 
   protected setStruct(patch: Partial<StructureSpec>): void {
@@ -1382,7 +1567,11 @@ export class BandoEditor {
 
   protected move(e: PointerEvent): void {
     const d = this.drag();
-    if (!d) return;
+    if (!d) {
+      // measuring: after the first point, a live line follows the pointer
+      if (this.tool() === 'measure' && this.meas().a && !this.meas().b) this.measHover.set(this.toWorld(e));
+      return;
+    }
     const p = this.toWorld(e);
     const bd = this.b();
     const li = bd ? Math.min(this.level(), bd.levels.length - 1) : 0;
@@ -1702,7 +1891,7 @@ export class BandoEditor {
   protected readonly setRot = (b: BuildingSpec, v: number): void => { b.rotDeg = v; };
   protected readonly toRectangle = (b: BuildingSpec): void => resetToRect(b);
 
-  protected setOpening(patch: Partial<{ kind: 'door' | 'window'; w: number; h: number; sill: number; c: number }>): void {
+  protected setOpening(patch: Partial<{ kind: 'door' | 'window'; w: number; h: number; sill: number; c: number; closed: boolean }>): void {
     const id = this.openId();
     if (!id) return;
     this.mutate((b) => patchOpening(b, Math.min(this.level(), b.levels.length - 1), id, patch), 0);

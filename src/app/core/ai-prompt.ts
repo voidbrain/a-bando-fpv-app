@@ -1,4 +1,4 @@
-import { OPS, COMPASS, normalizeCommands, type AiCommand } from './ai-commands';
+import { OPS, COMPASS, STRUCTURE_KINDS, normalizeCommands, type AiCommand } from './ai-commands';
 import { listOpenings } from './openings';
 import type { SiteSpec } from './site-spec';
 
@@ -35,6 +35,12 @@ export const AI_SCHEMA = {
           name: { type: 'string' },
           roof: { type: 'string', enum: ['gable', 'flat', 'vault'] },
           turn: { type: 'boolean' },
+          structure: { type: 'string', enum: [...STRUCTURE_KINDS] },
+          state: { type: 'string', enum: ['open', 'closed'] },
+          what: { type: 'string', enum: ['door', 'window'] },
+          pattern: { type: 'string', enum: ['row', 'grid'] },
+          spacing: { type: 'number' },
+          to: { type: 'string', enum: ['greenhouse', 'building'] },
           degrees: { type: 'number' },
           east: { type: 'number' },
           north: { type: 'number' },
@@ -58,6 +64,9 @@ Commands (all fields optional except op; distances in metres; "position" and x0.
 - cut_notch: side or corner (north, northeast, east ...), size (along the side), depth (into the building), position. Makes L, U, T, H shapes.
 - add_wing: side (north|south|east|west), size, depth, position.
 - rename: name. rotate: degrees. move: east, north. resize: length, depth.
+- add_structure: structure (chimney|silo|tank|water_tower|lattice_tower|bridge|stairs|ramp|tower_crane|container|car|truck|excavator), east / north (metres from the building, default beside it), height, size (radius or width), length, degrees, level (puts it on that floor), name. remove_structure: name or structure.
+- set_openings: state (open|closed), what (door|window), side, level: opens or closes existing doors / windows. Doors and windows are open (just a hole) unless closed.
+- add_columns: pattern (row|grid), count, spacing, axis (length|width), size, level. convert: to (greenhouse|building): the building is rebuilt, its interior is lost.
 "building" is the building's name; leave it out for the selected one.
 
 Rules: use only these commands. Do not invent buildings. Prefer a few simple commands. If the request is unclear or impossible, return "commands": [] and ask one short question in "reply". Windows go on walls, doors on walls; a door gap is the way to connect rooms.
@@ -65,6 +74,8 @@ Rules: use only these commands. Do not invent buildings. Prefer a few simple com
 Examples
 User: "split the warehouse into 3 rooms with doors" -> {"reply":"Splitting it into three rooms.","commands":[{"op":"split_rooms","building":"warehouse","count":3,"doors":true}]}
 User: "a door in the middle of the south wall and two windows on the north wall" -> {"reply":"Added a door and two windows.","commands":[{"op":"add_door","side":"south","position":0.5},{"op":"add_window","side":"north","position":0.3},{"op":"add_window","side":"north","position":0.7}]}
+User: "close all the windows on the north wall" -> {"reply":"Closing them.","commands":[{"op":"set_openings","state":"closed","what":"window","side":"north"}]}
+User: "put a container and a crane next to it" -> {"reply":"Adding them.","commands":[{"op":"add_structure","structure":"container","east":6,"north":4},{"op":"add_structure","structure":"tower_crane","east":18,"north":0}]}
 User: "make it an L: cut the north-east corner, 10 by 8 metres" -> {"reply":"Cutting the corner.","commands":[{"op":"cut_notch","side":"northeast","size":10,"depth":8}]}`;
 
 /** A compact description of the site for the model: what exists, what is selected. */
@@ -80,9 +91,13 @@ export function buildContext(spec: SiteSpec, selectedId: string): string {
       doors: all.filter((o) => o.kind === 'door').length,
       windows: all.filter((o) => o.kind === 'window').length,
       interior_walls: b.levels.reduce((n, l) => n + l.partitions.length, 0),
+      closed_openings: all.filter((o) => o.closed).length,
+      columns: b.levels.reduce((n, l) => n + (l.columns?.length ?? 0), 0),
+      type: b.frame ? 'greenhouse' : undefined,
     };
   });
-  return `Site "${spec.name}", ${spec.buildings.length} building(s):\n${JSON.stringify(items)}`;
+  const structs = (spec.structures ?? []).slice(0, 30).map((s) => ({ name: s.name, kind: s.kind, height: s.height }));
+  return `Site "${spec.name}", ${spec.buildings.length} building(s):\n${JSON.stringify(items)}${structs.length ? `\nStructures: ${JSON.stringify(structs)}` : ''}`;
 }
 
 export interface AiReply {

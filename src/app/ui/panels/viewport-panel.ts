@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRender, computed, inject, input, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, afterNextRender, computed, inject, input, viewChild } from '@angular/core';
 import { attachOrbitControls } from '../../three/orbit-controls';
 import { SceneService, type ViewportType } from '../../services/scene.service';
 import { CalibrationStore } from '../../state/calibration.store';
@@ -13,7 +13,6 @@ const PANEL_IDS: Record<ViewportType, PanelId> = { orbit: 'vpOrbit', chase: 'vpC
  */
 @Component({
   selector: 'app-viewport-panel',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Panel],
   template: `
     <app-panel [id]="panelId()">

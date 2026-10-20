@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { COMPASS_SIZE, cameraUpAngle, drawCompass } from '../../core/drawing/compass';
 import { eulerYXZ } from '../../core/math3d';
 import { FlightService } from '../../services/flight.service';
@@ -12,7 +12,6 @@ import { Panel } from '../panel/panel';
 
 @Component({
   selector: 'app-compass-panel',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Panel, CanvasWidget],
   template: `<app-panel id="compass"><div class="keep"><app-canvas panel="compass" [width]="size" [height]="size" [draw]="draw" /></div></app-panel>`,
 })

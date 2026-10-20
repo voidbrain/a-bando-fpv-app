@@ -1,4 +1,4 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Service, computed, inject, signal } from '@angular/core';
 import type { SiteSpec } from '../core/site-spec';
 import { MAX_HALF_EXTENT, SiteService } from './site.service';
 import { ToastService } from './toast.service';
@@ -24,7 +24,7 @@ const DEFAULT_START: MapStart = { lat: 45.6669, lon: 12.2431, zoom: 17 }; // Tre
  * The Bandos workflow: pick a bando from the list, or create / edit one on the zone map. The panel shows either the
  * list or the zone editor; this service holds which, what is being edited and the zone currently framed on the map.
  */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class StudioService {
   private readonly site = inject(SiteService);
   private readonly toast = inject(ToastService);

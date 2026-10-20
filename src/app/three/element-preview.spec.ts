@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { buildPreviewGroup } from './element-preview';
+import { buildPreviewGroup, targetRotationDeg } from './element-preview';
 import { addOpening, listOpenings } from '../core/openings';
 import type { BuildingSpec } from '../core/site-spec';
 
@@ -20,6 +20,27 @@ const opacities = (g: THREE.Object3D): number[] => {
   });
   return o;
 };
+
+describe('inspector 3D preview: floors and compass', () => {
+  it('a floor being edited is opaque and every other floor and the roof is ghosted', () => {
+    const bd = b();
+    const g = buildPreviewGroup({ kind: 'floor', b: bd, li: 0 });
+    const ops = opacities(g);
+    expect(ops.filter((o) => o < 0.3).length).toBeGreaterThan(5); // the ghost of the whole building
+    expect(ops.filter((o) => o === 1).length).toBeGreaterThan(3); // floor 1: slab, walls, partition
+    const solid = new THREE.Box3();
+    g.children[1]!.traverse((x) => {
+      if ((x as THREE.Mesh).isMesh) solid.expandByObject(x);
+    });
+    expect(solid.max.y).toBeLessThanOrEqual(4.01); // only the first floor, no second floor or roof
+  });
+
+  it('knows which way north is for things that are turned', () => {
+    expect(targetRotationDeg({ kind: 'building', b: b() })).toBe(37);
+    expect(targetRotationDeg({ kind: 'structure', s: { id: 's', kind: 'bridge', name: '', x: 0, z: 0, rotDeg: 90, height: 5, size: 5 } })).toBe(90);
+    expect(targetRotationDeg({ kind: 'tree', t: { x: 0, z: 0, h: 5, r: 1, kind: 'd' } })).toBe(0);
+  });
+});
 
 describe('inspector 3D preview', () => {
   it('shows a selected building opaque, centred and unrotated', () => {

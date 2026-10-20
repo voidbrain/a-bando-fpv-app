@@ -87,7 +87,3 @@ export function toGeo(x: number, z: number, cal: Calibration): [number, number] 
   return toGeoAt(siteOrigin(), x, z, cal);
 }
 
-/** {@link solveCalibration} with the active site origin. */
-export function solveCalibrationHere(real1: GeoPoint, real2: GeoPoint, model1: PlanePoint, model2: PlanePoint): CalibrationSolution | null {
-  return solveCalibration(real1, real2, model1, model2, siteOrigin());
-}

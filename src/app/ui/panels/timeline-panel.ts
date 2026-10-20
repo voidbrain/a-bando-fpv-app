@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { TIMELINE_HEIGHT, drawTimeline, timeAtX } from '../../core/drawing/timeline';
 import { flightSpeedMax, pointTimes } from '../../core/flight/flight';
 import { FlightService } from '../../services/flight.service';
@@ -10,7 +10,6 @@ import { Panel } from '../panel/panel';
 
 @Component({
   selector: 'app-timeline-panel',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Panel, CanvasWidget],
   template: `
     <app-panel id="timeline">

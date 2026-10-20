@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRender, effect, inject, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, afterNextRender, effect, inject, viewChild } from '@angular/core';
 import { attachOrbitControls } from '../../three/orbit-controls';
 import { FlightService } from '../../services/flight.service';
 import { SceneService } from '../../services/scene.service';
@@ -15,7 +15,6 @@ import { ViewStore } from '../../state/view.store';
  */
 @Component({
   selector: 'app-stage',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div #gl class="gl" [hidden]="view.mainSource() !== '3d'" [style.cursor]="scene.pin() ? 'crosshair' : null"></div>
     <div #videoSlot class="vmain" [hidden]="view.mainSource() !== 'video'">

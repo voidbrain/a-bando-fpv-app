@@ -1,11 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { LiveLinkService } from '../../services/live-link.service';
 import { textFrom } from '../dom';
 import { Panel } from '../panel/panel';
 
 @Component({
   selector: 'app-live-panel',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Panel],
   template: `
     <app-panel id="live">

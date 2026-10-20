@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, computed, inject, input } from '@angular/core';
+import { Component, ElementRef, computed, inject, input } from '@angular/core';
 import { LayoutStore } from '../../state/layout.store';
 import { PANEL_BY_ID, type PanelId } from '../panel-defs';
 
@@ -9,7 +9,6 @@ import { PANEL_BY_ID, type PanelId } from '../panel-defs';
  */
 @Component({
   selector: 'app-panel',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     'data-panel': '',
     '[attr.data-id]': 'id()',
@@ -144,7 +143,6 @@ export class Panel {
   readonly state = computed(() => this.layout.panels()[this.id()]);
   private drag: { dx: number; dy: number } | null = null;
   /** True while the user drags the header (move) — suppresses the re-open size guard. */
-  private get dragging(): boolean { return this.drag !== null; }
 
   /** Width: the remembered size, else the default. */
   protected panelWidth(): number | null {

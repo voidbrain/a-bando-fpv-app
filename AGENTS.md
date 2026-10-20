@@ -57,3 +57,52 @@ You are an expert in TypeScript, Angular, and scalable web application developme
 - Use the `providedIn: 'root'` option for singleton services
 - Prefer the `@Service` decorator over `@Injectable({providedIn: 'root'})` for new singleton services (Angular v22+)
 - Use the `inject()` function instead of constructor injection
+
+## Project conventions (a-bando-fpv-app)
+
+### Architecture
+
+- `core/` is plain TypeScript with no Angular imports: keep it that way so it stays unit-testable. Put logic there, keep
+  components thin. `three/` builds Three.js objects from the spec; `services/` and `state/` hold signals; `ui/` is templates.
+- The **spec is the source of truth** (`core/site-spec.ts`). The 3D model, the plan overlay, the inspector preview and the
+  AI context are all derived from it. Edit the spec through `SiteEditor` (`commitSite` = one undo step; `beginGesture` +
+  `live` for drags) and then `SiteService.applyDraft()` to rebuild the 3D scene.
+- Coordinates: x east, z south, y up, metres. Building-local frames differ by element (see README, "Data and units"); mixing
+  the min-corner frame (partitions, voids, columns) with the centred frame (openings of shaped buildings, footprints) is the
+  usual source of bugs. Convert in one place and test it.
+- Every wall builder must add `level.baseY`. A new geometry builder needs a collider: the collider only knows axis-aligned
+  boxes and vertical cylinders (ground based); cut long or rotated parts into short boxes.
+
+### Adding things
+
+- **A structure kind**: add it to `StructureKind` and `STRUCTURE_DEFAULTS` / `RECT_KINDS` (`three/structures.ts`), build it
+  in `buildStructure` (geometry + collider), list it in `structKinds` and the plan symbol in `ui/studio/bando-editor.ts`,
+  add it to `STRUCTURE_KINDS` in `core/ai-commands.ts` if the assistant may place it, optionally map an OSM tag in
+  `GeoService.areaData`. Add a case to `three/structures.spec.ts`.
+- **An AI command**: add the op to `OPS`, fields to `AiCommand` + `normalizeCommands` (clamp every number), a `case` in
+  `runCommands`, the property to `AI_SCHEMA`, a line (and ideally an example) to `SYSTEM_PROMPT`. Cover it in
+  `core/ai-commands.spec.ts`. The model's `reply` is only a claim: report from `RunResult`.
+- **A spec field**: add it to the type, keep `sanitizeSpec` (it rebuilds the object) and `cloneSpec` (JSON) in step, and
+  make old saved specs load (optional field with a default).
+
+### Checks before you finish
+
+```bash
+npx ng test --watch=false
+npx ng build
+npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
+```
+
+- A test that fails because the code changed is stale: fix the test deliberately and say why. Tests that encoded the old
+  demo site now set their site up explicitly (origin, take-off pad).
+- UI code (templates, pointer handling) is not covered by tests; keep logic in `core/` so it is.
+- Do not leave dead code behind when replacing a feature: a panel removed means its store, helpers and tests go too.
+
+### Known pitfalls
+
+- Angular signals in `effect()` that write other signals are fine in v22, but wrap reads you do not want tracked in
+  `untracked()`.
+- WebGL canvases (inspector preview, 3D editor view) skip rendering while hidden; they must not be assumed to exist in tests
+  (the scene builders are testable without a renderer).
+- Overpass answers 429 / 500 without CORS headers: do not treat the browser's "access control" error as a code bug.
+- Never claim an AI edit worked from the model's own words.

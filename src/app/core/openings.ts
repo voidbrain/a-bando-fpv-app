@@ -12,6 +12,7 @@ export interface OpenSeg {
   w: number;
   h: number;
   sill: number;
+  closed: boolean;
   axis: 'x' | 'z';
   /** The wall's constant coordinate (z for an 'x' wall, x for a 'z' wall), building-centred. */
   at: number;
@@ -46,13 +47,13 @@ export function listOpenings(b: BuildingSpec, li: number): OpenSeg[] {
   if (b.footprint) {
     (l.wallOpenings ?? []).forEach((o, i) => {
       const e = edgeFor(b, o);
-      if (e) out.push({ id: `p:${i}`, kind: o.kind, w: o.w, h: o.h, sill: o.sill ?? defaultSill(l, o.kind), axis: e.axis, at: e.at, c: e.axis === 'x' ? o.x : o.z, from: e.from, to: e.to });
+      if (e) out.push({ id: `p:${i}`, kind: o.kind, w: o.w, h: o.h, sill: o.sill ?? defaultSill(l, o.kind), closed: !!o.closed, axis: e.axis, at: e.at, c: e.axis === 'x' ? o.x : o.z, from: e.from, to: e.to });
     });
     return out;
   }
   for (const wall of wallsOf(b)) {
     (l.doors[wall.side!] ?? []).forEach((o, i) => {
-      out.push({ id: `r:${wall.side}:${i}`, kind: o.kind, w: o.w, h: o.h, sill: o.sill ?? defaultSill(l, o.kind), axis: wall.axis, at: wall.at, c: wall.from + o.c, from: wall.from, to: wall.to });
+      out.push({ id: `r:${wall.side}:${i}`, kind: o.kind, w: o.w, h: o.h, sill: o.sill ?? defaultSill(l, o.kind), closed: !!o.closed, axis: wall.axis, at: wall.at, c: wall.from + o.c, from: wall.from, to: wall.to });
     });
   }
   return out;
@@ -122,12 +123,16 @@ export function resizeOpening(b: BuildingSpec, li: number, id: string, end: 0 | 
   setCentre(r.seg, r.o, (lo + hi) / 2, hi - lo, r.seg.from, b);
 }
 
-export function patchOpening(b: BuildingSpec, li: number, id: string, patch: Partial<{ kind: 'door' | 'window'; w: number; h: number; sill: number; c: number }>): void {
+export function patchOpening(b: BuildingSpec, li: number, id: string, patch: Partial<{ kind: 'door' | 'window'; w: number; h: number; sill: number; c: number; closed: boolean }>): void {
   const r = ref(b, li, id);
   if (!r) return;
   if (patch.kind) {
     r.o.kind = patch.kind;
     if (patch.kind === 'door') delete r.o.sill;
+  }
+  if (patch.closed !== undefined) {
+    if (patch.closed) r.o.closed = true;
+    else delete r.o.closed;
   }
   if (patch.h !== undefined) r.o.h = Math.max(0.3, patch.h);
   if (patch.sill !== undefined) r.o.sill = Math.max(0, patch.sill);
@@ -163,7 +168,7 @@ export function reshapeBuilding(b: BuildingSpec, localRect: Rect, op: 'add' | 'c
       l.wallOpenings = listOpenings(b, li).map((s): WallOpening => {
         const src = s.id.split(':');
         const o = l.doors[src[1] as Side]![Number(src[2])]!;
-        return s.axis === 'x' ? { kind: o.kind, x: s.c, z: s.at, w: o.w, h: o.h, sill: o.sill } : { kind: o.kind, x: s.at, z: s.c, w: o.w, h: o.h, sill: o.sill };
+        return s.axis === 'x' ? { kind: o.kind, x: s.c, z: s.at, w: o.w, h: o.h, sill: o.sill, closed: o.closed } : { kind: o.kind, x: s.at, z: s.c, w: o.w, h: o.h, sill: o.sill, closed: o.closed };
       });
       l.doors = {};
     }
@@ -202,7 +207,7 @@ function toRect(b: BuildingSpec): void {
     for (const o of l.wallOpenings ?? []) {
       const side: Side | null = Math.abs(o.z + W) < TOL ? 'n' : Math.abs(o.z - W) < TOL ? 's' : Math.abs(o.x + L) < TOL ? 'w' : Math.abs(o.x - L) < TOL ? 'e' : null;
       if (!side) continue;
-      (l.doors[side] ??= []).push({ kind: o.kind, c: side === 'n' || side === 's' ? o.x + L : o.z + W, w: o.w, h: o.h, sill: o.sill });
+      (l.doors[side] ??= []).push({ kind: o.kind, c: side === 'n' || side === 's' ? o.x + L : o.z + W, w: o.w, h: o.h, sill: o.sill, closed: o.closed });
     }
     delete l.wallOpenings;
   }

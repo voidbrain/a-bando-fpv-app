@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRender, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, afterNextRender, inject, input, signal } from '@angular/core';
 
 interface Geo {
   x: number;
@@ -13,7 +13,6 @@ interface Geo {
  */
 @Component({
   selector: 'app-float-box',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '[style.left.px]': 'geo().x',
     '[style.top.px]': 'geo().y',

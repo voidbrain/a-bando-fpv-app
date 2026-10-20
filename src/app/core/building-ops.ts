@@ -1,5 +1,5 @@
 import { obbOverlap, slabs, type Pt, type Rect } from './footprint';
-import { addOpening, listOpenings, outlineOf, patchOpening, reshapeBuilding } from './openings';
+import { addOpening, insideBuilding, listOpenings, outlineOf, patchOpening, reshapeBuilding } from './openings';
 import { cloneSpec, type BuildingSpec, type SiteSpec } from './site-spec';
 
 /** Add a floor on top: a full copy of the last one (walls, doors, windows, interior walls, columns, voids). The roof moves up. */
@@ -124,7 +124,7 @@ export function mergeBuildings(spec: SiteSpec, aId: string, bId: string): string
     for (const o of listOpenings(b, li)) {
       const centre = o.axis === 'x' ? { x: o.c, z: o.at } : { x: o.at, z: o.c };
       const id = addOpening(probe, li, toA(centre), o.kind, 0.35);
-      if (id) patchOpening(probe, li, id, { w: o.w, h: o.h, sill: o.kind === 'window' ? o.sill : undefined });
+      if (id) patchOpening(probe, li, id, { w: o.w, h: o.h, sill: o.kind === 'window' ? o.sill : undefined, closed: o.closed });
     }
   });
   const i = spec.buildings.findIndex((x) => x.id === aId);
@@ -149,4 +149,101 @@ export function trackShift(b: BuildingSpec, before: Pt): void {
   const a = rad(b.rotDeg);
   const dx = b.pos.x - before.x, dz = b.pos.z - before.z;
   lastShift.set(b, { x: dx * Math.cos(a) + dz * Math.sin(a), z: -dx * Math.sin(a) + dz * Math.cos(a) });
+}
+
+// ---- repeating things: columns and openings -------------------------------------------------------------------
+
+/** Is the point (min-corner coordinates of a floor) inside the building's outline and outside every void? */
+function usable(b: BuildingSpec, li: number, x: number, z: number): boolean {
+  const L = b.length / 2, W = b.width / 2;
+  if (!insideBuilding(b, { x: x - L, z: z - W })) return false;
+  return !(b.levels[li]?.voids ?? []).some((v) => x > Math.min(v.x0, v.x1) && x < Math.max(v.x0, v.x1) && z > Math.min(v.z0, v.z1) && z < Math.max(v.z0, v.z1));
+}
+
+const near = (cols: { x: number; z: number }[], x: number, z: number, d = 0.35): boolean => cols.some((c) => Math.hypot(c.x - x, c.z - z) < d);
+
+/** Copy column `i` with an offset; returns the index of the copy (or -1 when it would fall outside / on another). */
+export function duplicateColumn(b: BuildingSpec, li: number, i: number, dx: number, dz: number): number {
+  const l = b.levels[li];
+  const c = l?.columns?.[i];
+  if (!l || !c) return -1;
+  const x = c.x + dx, z = c.z + dz;
+  if (!usable(b, li, x, z) || near(l.columns!, x, z)) return -1;
+  l.columns!.push({ ...c, x, z });
+  return l.columns!.length - 1;
+}
+
+/** `count` columns in a row starting at column `i` (it counts as the first), `spacing` metres apart along x or z. Returns how many were added. */
+export function columnRow(b: BuildingSpec, li: number, i: number, count: number, spacing: number, axis: 'x' | 'z'): number {
+  const l = b.levels[li];
+  const c = l?.columns?.[i];
+  if (!l || !c) return 0;
+  let added = 0;
+  for (let k = 1; k < Math.min(60, count); k++) {
+    const x = c.x + (axis === 'x' ? k * spacing : 0), z = c.z + (axis === 'z' ? k * spacing : 0);
+    if (usable(b, li, x, z) && !near(l.columns!, x, z)) {
+      l.columns!.push({ ...c, x, z });
+      added++;
+    }
+  }
+  return added;
+}
+
+/** Fill the floor with columns like column `i`, on a grid `sx` × `sz` metres, at least `margin` from the walls. Returns how many were added. */
+export function columnGrid(b: BuildingSpec, li: number, i: number, sx: number, sz: number, margin = 1): number {
+  const l = b.levels[li];
+  const c = l?.columns?.[i];
+  if (!l || !c || sx < 0.8 || sz < 0.8) return 0;
+  let added = 0;
+  for (let x = margin; x <= b.length - margin + 1e-6 && added < 400; x += sx) {
+    for (let z = margin; z <= b.width - margin + 1e-6 && added < 400; z += sz) {
+      const gx = Math.round(x * 10) / 10, gz = Math.round(z * 10) / 10;
+      const h = c.size / 2 + 0.3; // keep clear of walls and voids: all four corners must be usable
+      if (![[h, h], [-h, h], [h, -h], [-h, -h]].every(([ox, oz]) => usable(b, li, gx + ox!, gz + oz!))) continue;
+      if (near(l.columns!, gx, gz)) continue;
+      l.columns!.push({ ...c, x: gx, z: gz });
+      added++;
+    }
+  }
+  return added;
+}
+
+/** Repeat a door / window along its wall: `count` in total (the original is the first), every `spacing` metres. Returns how many were added. */
+export function repeatOpening(b: BuildingSpec, li: number, id: string, count: number, spacing: number): number {
+  const seg = listOpenings(b, li).find((o) => o.id === id);
+  if (!seg) return 0;
+  let added = 0;
+  for (let k = 1; k < Math.min(40, count); k++) {
+    const c = seg.c + k * spacing;
+    if (c - seg.w / 2 < seg.from + 0.1 || c + seg.w / 2 > seg.to - 0.1) break;
+    if (listOpenings(b, li).some((o) => o.axis === seg.axis && Math.abs(o.at - seg.at) < 0.1 && Math.abs(o.c - c) < (o.w + seg.w) / 2)) continue;
+    const p = seg.axis === 'x' ? { x: c, z: seg.at } : { x: seg.at, z: c };
+    const nid = addOpening(b, li, p, seg.kind, 0.3);
+    if (nid) {
+      patchOpening(b, li, nid, { w: seg.w, h: seg.h, sill: seg.kind === 'window' ? seg.sill : undefined, closed: seg.closed });
+      added++;
+    }
+  }
+  return added;
+}
+
+/**
+ * Turn a building into a greenhouse (arched steel frame) or the other way round. Interior walls, doors, windows,
+ * columns, voids and the shaped outline are lost: the footprint becomes its bounding box.
+ */
+export function convertBuilding(b: BuildingSpec, to: 'greenhouse' | 'building'): void {
+  delete b.footprint;
+  if (to === 'greenhouse') {
+    if (b.width > b.length) {
+      [b.length, b.width] = [b.width, b.length];
+      b.rotDeg = (b.rotDeg + 90) % 360; // the tunnel runs along the long side
+    }
+    b.frame = 'greenhouse';
+    b.color = '#9ec1b6';
+    b.levels = [{ baseY: 0, height: 2.4, sides: { n: false, s: false, e: false, w: false }, doors: {}, partitions: [], roof: 'vault', roofRise: 0, vaultK: 0.7 }];
+  } else {
+    delete b.frame;
+    b.color = '#d7d0bd';
+    b.levels = [{ baseY: 0, height: 4, sides: { n: true, s: true, e: true, w: true }, doors: {}, partitions: [], roof: 'gable', roofRise: 2.5, roofColor: '#b5683f' }];
+  }
 }

@@ -1,7 +1,10 @@
-import { DEFAULT_CALIBRATION } from './constants';
+import { DEFAULT_CALIBRATION, setSiteOrigin } from './constants';
 import { courseDegrees, solveCalibration, toGeo, toLocal } from './geo';
 
 describe('geo', () => {
+  beforeAll(() => setSiteOrigin({ lat: 45.528698, lon: 12.133305 })); // these cases are written against this site
+  afterAll(() => setSiteOrigin({ lat: 0, lon: 0 }));
+
   it('maps the site origin through the default calibration to (dx, dz)', () => {
     const [x, z] = toLocal(45.528698, 12.133305, DEFAULT_CALIBRATION);
     expect(x).toBeCloseTo(DEFAULT_CALIBRATION.dx, 6);
@@ -24,17 +27,26 @@ describe('geo', () => {
     expect(z).toBeLessThan(-10);
   });
 
-  it('solves a calibration from two synthetic corner pairs', () => {
-    // Model corners 40 m apart along the model +X axis; real corners due east, 80 m apart -> rot 0, ratio 2.
+  it('solves a calibration from two corner pairs that match in size', () => {
+    // Model corners 40 m apart along +X; real corners due east and ~40 m apart -> rot 0, ratio ~1, tiny corner error.
     const p1 = { lat: 45.5287, lon: 12.1333 };
-    const p2 = { lat: 45.5287, lon: 12.134364 }; // ~80 m east of p1 at this latitude
+    const p2 = { lat: 45.5287, lon: 12.1333 + 40 / (111320 * Math.cos((45.5287 * Math.PI) / 180)) };
     const r = solveCalibration(p1, p2, { x: -20, z: 0 }, { x: 20, z: 0 });
     expect(r).toBeTruthy();
     if (!r) return;
-    expect(r.distanceRatio).toBeCloseTo(2, 1);
+    expect(r.distanceRatio).toBeCloseTo(1, 2);
     expect(Math.abs(r.calibration.rot)).toBeLessThan(2);
     expect(r.cornerError).toBeLessThan(2);
   });
+
+  it('reports a size mismatch through the ratio (model / real) and splits the error between the corners', () => {
+    const p1 = { lat: 45.5287, lon: 12.1333 };
+    const p2 = { lat: 45.5287, lon: 12.134364 }; // ~83 m east of p1: twice the model's 40 m
+    const r = solveCalibration(p1, p2, { x: -20, z: 0 }, { x: 20, z: 0 });
+    expect(r!.distanceRatio).toBeCloseTo(40 / 82.9, 2);
+    expect(r!.cornerError).toBeCloseTo((82.9 - 40) / 2, 0);
+  });
+
 
   it('refuses corners that are too close to give a rotation', () => {
     const p = { lat: 45.5287, lon: 12.1333 };

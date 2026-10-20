@@ -1,10 +1,9 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { SimulatorService } from '../../services/simulator.service';
 import { Panel } from '../panel/panel';
 
 @Component({
   selector: 'app-simulator-panel',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Panel],
   template: `
     <app-panel id="simulator">

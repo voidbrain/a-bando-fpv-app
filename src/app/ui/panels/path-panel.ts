@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { createPathView, dragPathView, drawFlightPath, resetPathView, zoomPathView, type PathViewMode } from '../../core/drawing/flight-path';
 import { FlightService } from '../../services/flight.service';
 import { PlaybackService } from '../../services/playback.service';
@@ -9,7 +9,6 @@ import { Panel } from '../panel/panel';
 
 @Component({
   selector: 'app-path-panel',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Panel, CanvasWidget],
   template: `
     <app-panel id="path">

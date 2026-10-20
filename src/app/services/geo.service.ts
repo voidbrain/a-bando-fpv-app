@@ -177,7 +177,7 @@ export class GeoService {
     const bbox = `${south.toFixed(4)},${west.toFixed(4)},${north.toFixed(4)},${east.toFixed(4)}`; // south,west,north,east
     const buildingsQ = `way["building"]["building"!~"^(roof|hangar)$"](${bbox});`;
     const fullQ = `[out:json][timeout:25];(${buildingsQ}node["natural"="tree"](${bbox});way["natural"="tree_row"](${bbox});way["highway"~"^(primary|secondary|tertiary|residential|unclassified|service)$"](${bbox});` +
-      `node["man_made"~"^(tower|mast|chimney|silo|storage_tank|water_tower)$"](${bbox});way["man_made"~"^(chimney|silo|storage_tank|water_tower)$"](${bbox});node["power"="tower"](${bbox});` +
+      `node["man_made"~"^(tower|mast|chimney|silo|storage_tank|water_tower|crane)$"](${bbox});way["man_made"~"^(chimney|silo|storage_tank|water_tower)$"](${bbox});node["power"="tower"](${bbox});way["highway"="steps"](${bbox});` +
       `way["bridge"]["bridge"!="no"](${bbox}););out geom 1500;`;
     let partial = false;
     let data: { elements: OsmElement[] };
@@ -224,9 +224,30 @@ export class GeoService {
             style: tags['bridge:structure'] === 'arch' ? 'arch' : 'beam',
           });
         }
+      } else if (tags['highway'] === 'steps' && el.type === 'way' && el.geometry && el.geometry.length >= 2) {
+        // a flight of steps: from its first to its last point, going up unless the way is tagged incline=down
+        const g = el.geometry;
+        let p0 = g[0]!, p1 = g[g.length - 1]!;
+        if (tags['incline'] === 'down') [p0, p1] = [p1, p0];
+        const dx = (p1.lon - p0.lon) * mLon, dz = -(p1.lat - p0.lat) * M_LAT;
+        const len = Math.hypot(dx, dz);
+        const mid = { lat: (p0.lat + p1.lat) / 2, lon: (p0.lon + p1.lon) / 2 };
+        if (len >= 1.5 && structures.length < 60 && inZone(mid.lat, mid.lon)) {
+          structures.push({
+            id: uid('st'),
+            kind: 'stairs',
+            name: tags['name'] ?? 'Steps',
+            x: (mid.lon - lon) * mLon,
+            z: -(mid.lat - lat) * M_LAT,
+            rotDeg: (Math.atan2(dz, dx) * 180) / Math.PI,
+            height: Math.min(30, Math.max(0.5, len * 0.57)), // a usual tread of 30 cm with a 17 cm riser
+            size: parseFloat(tags['width'] ?? '') || 1.6,
+            length: len,
+          });
+        }
       } else if (manMade && (el.type === 'node' || (el.type === 'way' && el.geometry && el.geometry.length >= 4)) && structures.length < 60) {
         const kind: StructureSpec['kind'] | null =
-          manMade === 'chimney' ? 'chimney' : manMade === 'silo' ? 'silo' : manMade === 'storage_tank' ? 'tank' : manMade === 'water_tower' ? 'water_tower' :
+          manMade === 'crane' ? 'tower_crane' : manMade === 'chimney' ? 'chimney' : manMade === 'silo' ? 'silo' : manMade === 'storage_tank' ? 'tank' : manMade === 'water_tower' ? 'water_tower' :
           manMade === 'pylon' || ((manMade === 'tower' || manMade === 'mast') && (tags['tower:construction'] === 'lattice' || tags['tower:type'] === 'communication' || tags['tower:type'] === 'transmission' || manMade === 'mast')) ? 'lattice_tower' : null;
         if (!kind) continue;
         let tx: number, tz: number, radius: number | null = null;

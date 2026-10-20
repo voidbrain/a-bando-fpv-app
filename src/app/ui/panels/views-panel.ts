@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { CAMERA_VIEWS, SceneService } from '../../services/scene.service';
 import { ToastService } from '../../services/toast.service';
 import { LayoutStore } from '../../state/layout.store';
@@ -17,7 +17,6 @@ const GROUPS: readonly { key: PanelDef['group']; title: string }[] = [
 
 @Component({
   selector: 'app-views-panel',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Panel],
   template: `
     <app-panel id="views">

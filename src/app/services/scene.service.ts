@@ -138,6 +138,7 @@ export class SceneService {
     this.stopTasks = [
       this.loop.add(FrameOrder.camera, (dt) => this.updateCameras(dt)),
       this.loop.add(FrameOrder.xray, (dt) => this.updateXray(dt)),
+      this.loop.add(FrameOrder.xray, () => this.host?.paths.setProgress()),
       this.loop.add(FrameOrder.render, (dt) => this.renderAll(dt)),
     ];
     this.ready.set(true);

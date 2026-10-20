@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { FlightService } from '../../services/flight.service';
 import { FlightStore } from '../../state/flight.store';
 import { PlaybackService } from '../../services/playback.service';
@@ -6,7 +6,6 @@ import { Panel } from '../panel/panel';
 
 @Component({
   selector: 'app-flights-panel',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Panel],
   template: `
     <app-panel id="flights">

@@ -1,7 +1,7 @@
 import { cutRect, edgesOf, slabs } from '../core/footprint';
 import { buildStructure } from './structures';
 import * as THREE from 'three';
-import { type BuildingSpec, type LevelSpec, type OpeningSpec, type SiteSpec, type TreeSpec, createRandom } from '../core/site-spec';
+import { type BuildingSpec, type LevelSpec, type SiteSpec, type TreeSpec, createRandom } from '../core/site-spec';
 import { SiteCollider, type SolidBox, type TreeCylinder } from '../core/sim/collider';
 
 export type TreeKind = 'd' | 'c';
@@ -110,8 +110,18 @@ function gable(w: number, d: number, rise: number, mat: THREE.Material): THREE.M
 }
 
 /** Wall strips of one side with openings punched out (doors from the floor, windows on a high sill). */
+/** The leaf of a closed door / the pane of a closed window, solid for the drone. Open ones are just the hole. */
+function openingLeaf(ctx: Ctx, target: THREE.Object3D, l: LevelSpec, o: { kind: 'door' | 'window'; w: number; h: number; sill?: number }, along: number, across: number, alongX: boolean): void {
+  const gy0 = o.kind === 'door' ? 0 : Math.min(l.height - 0.2, o.sill ?? Math.max(0.4, l.height * 0.75));
+  const h = Math.min(l.height - gy0, o.h);
+  const mat = o.kind === 'door' ? material('#7a5a3d') : material('#9ec7d8', { transparent: true, opacity: 0.4, roughness: 0.1 });
+  const y = l.baseY + gy0 + h / 2;
+  if (alongX) ctx.addBox(target, along, y, across, o.w, h, 0.12, mat, true, o.kind === 'door');
+  else ctx.addBox(target, across, y, along, 0.12, h, o.w, mat, true, o.kind === 'door');
+}
+
 function buildSide(ctx: Ctx, b: BuildingSpec, l: LevelSpec, side: 'n' | 's' | 'e' | 'w', target: THREE.Object3D): void {
-  const runLen = side === 'n' || side === 'w' ? b.length : b.width;
+  const runLen = side === 'n' || side === 's' ? b.length : b.width; // n and s run along the length, e and w along the width
   const acrossPos = side === 'w' ? -b.length / 2 : side === 'e' ? b.length / 2 : side === 'n' ? -b.width / 2 : b.width / 2;
   const th = 0.5;
   const wall = (from: number, len: number, y: number, hh: number): void => {
@@ -128,6 +138,7 @@ function buildSide(ctx: Ctx, b: BuildingSpec, l: LevelSpec, side: 'n' | 's' | 'e
     const gy1 = Math.min(l.height, gy0 + o.h);
     if (gy0 > 0) wall(o.c - o.w / 2, o.w, gy0 / 2, gy0);
     if (gy1 < l.height) wall(o.c - o.w / 2, o.w, (gy1 + l.height) / 2, l.height - gy1);
+    if (o.closed) openingLeaf(ctx, target, l, o, o.c - runLen / 2, acrossPos, side === 'n' || side === 's');
     p = o.c + o.w / 2;
   }
   wall(p, runLen - p, l.height / 2, l.height);
@@ -157,6 +168,7 @@ function buildPolyWalls(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.O
       const gy1 = Math.min(l.height, gy0 + o.h);
       if (gy0 > 0) wall(a, z, gy0 / 2, gy0);
       if (gy1 < l.height) wall(a, z, (gy1 + l.height) / 2, l.height - gy1);
+      if (o.closed) openingLeaf(ctx, target, l, o, c, e.at, e.axis === 'x');
       p = z;
     }
     wall(p, e.to + th / 2, l.height / 2, l.height);

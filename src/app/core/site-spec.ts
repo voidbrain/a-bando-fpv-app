@@ -21,6 +21,8 @@ export interface OpeningSpec {
   h: number;
   /** Windows: height of the bottom edge above the floor (doors always start at the floor). Default 75 % of the wall. */
   sill?: number;
+  /** Closed (a door leaf / window pane is there, and solid). Default: open, i.e. just the hole. */
+  closed?: boolean;
 }
 
 /**
@@ -34,6 +36,7 @@ export interface WallOpening {
   w: number;
   h: number;
   sill?: number;
+  closed?: boolean;
 }
 
 /** One storey of a building: a slab at `baseY`, walls up to `baseY + height`, roof on top, interior partitions. */
@@ -54,7 +57,7 @@ export interface ColumnSpec {
   round?: boolean;
 }
 
-export type StructureKind = 'chimney' | 'silo' | 'tank' | 'water_tower' | 'lattice_tower' | 'bridge';
+export type StructureKind = 'chimney' | 'silo' | 'tank' | 'water_tower' | 'lattice_tower' | 'bridge' | 'stairs' | 'ramp' | 'tower_crane' | 'container' | 'car' | 'truck' | 'excavator';
 
 /**
  * A free-standing structure that is not a building: towers (chimney, silo, storage tank, water tower, lattice mast
@@ -68,11 +71,13 @@ export interface StructureSpec {
   z: number;
   /** Rotation about Y in degrees (same convention as buildings). */
   rotDeg: number;
-  /** Towers: total height. Bridge: height of the deck's top surface above the ground. */
+  /** Raised by this many metres (a container on a container, stairs on the first floor). Default 0. */
+  y?: number;
+  /** Towers: total height. Bridge: deck top above the ground. Stairs / ramp: total rise. Vehicles, container: body height. */
   height: number;
-  /** Chimney / silo / tank / water tower: radius. Lattice tower: half-width at the base. Bridge: deck width. */
+  /** Chimney / silo / tank / water tower: radius. Lattice tower / crane mast: half-width. Bridge, stairs, ramp, container, vehicles: width. */
   size: number;
-  /** Bridge only: length along its direction. */
+  /** Bridge, stairs, ramp, container, vehicles: length along its direction. Tower crane: length of the jib. */
   length?: number;
   /** Bridge only: flat beam on piers, or an arch below the deck. */
   style?: 'beam' | 'arch';
@@ -221,7 +226,6 @@ export function roomsAt(b: BuildingSpec, level: number, v: number): RoomRect[] {
   };
   // cut every partition pair plus the outer shell
   const xs = [0, b.length, ...l.partitions.flatMap(([a, c]) => [a.x, c.x])].sort((p, q) => p - q);
-  const zs = [0, b.width, ...l.partitions.flatMap(([a, c]) => [a.z, c.z])].sort((p, q) => p - q);
   for (let i = 0; i < xs.length - 1; i++) {
     if (xs[i] === xs[i + 1]) continue;
     for (const seg of l.partitions) {
@@ -254,19 +258,6 @@ export function pointInBuilding(b: BuildingSpec, x: number, z: number): { lx: nu
   return lx >= -0.5 && lx <= b.length + 0.5 && lz >= -0.5 && lz <= b.width + 0.5 ? { lx, lz } : null;
 }
 
-/** The rooms around a world point (for the x-ray "reveal the room you are in"). */
-export function enclosingRooms(spec: SiteSpec, x: number, z: number, y: number): RoomRect[] {
-  for (const b of spec.buildings) {
-    const p = pointInBuilding(b, x, z);
-    if (!p) continue;
-    for (let li = 0; li < b.levels.length; li++) {
-      const l = b.levels[li];
-      if (y >= l.baseY - 0.5 && y <= l.baseY + l.height + 0.5) return roomsAt(b, li, p.lz);
-    }
-  }
-  return [];
-}
-
 // ---- generation from a location (Google Maps click / geocoded address) -------------------------------
 
 export interface LocationInfo {
@@ -280,7 +271,6 @@ export interface LocationInfo {
   footprintHeading?: number;
 }
 
-const clampNum = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
 /** Park-Miller generator: the tree layout depends on its exact sequence, so it is part of the spec definition. */
 export function createRandom(seed = 7): () => number {
@@ -317,92 +307,6 @@ export function emptySpec(origin: { lat: number; lon: number } = { lat: 0, lon: 
   };
 }
 
-/**
- * Generate a starter site from a location when no OSM footprint data is available: one main building sized from the
- * footprint guess (or a plausible default), a take-off pad in front of it and a seeded tree ring. No annex /
- * greenhouse attached — everything else comes from the real data or the editor.
- */
-export function generateSite(info: LocationInfo, opts: { scale?: number; seed?: number } = {}): SiteSpec {
-  const k = clampNum(opts.scale ?? 1, 0.2, 5);
-  const BL = clampNum((info.footprintLength ?? 120) * k, 30, 400);
-  const BW = clampNum((info.footprintWidth ?? BL * 0.36) * k, 12, BL * 0.9);
-  const EH = clampNum(BW * 0.105, 3.5, 12);
-  const rnd = createRandom(opts.seed ?? 7);
-
-  const vaultCount = Math.max(1, Math.round(BW / 13.75));
-  const nb = Math.max(6, Math.round(BL / 6.6));
-  const bay = BL / nb;
-  const westDoors: OpeningSpec[] = [];
-  for (let i = 1; i < nb; i++) {
-    if (i % 3 === 2) westDoors.push({ kind: 'door', c: (i + 0.5) * bay, w: Math.min(bay - 1, 6), h: EH * 0.85 });
-  }
-  const main: BuildingSpec = {
-    id: 'main',
-    name: info.label || 'Main building',
-    pos: { x: 0, z: 0 },
-    rotDeg: 0,
-    length: BW,
-    width: BL,
-    color: '#d7d0bd',
-    floorColor: '#a9aaa0',
-    levels: [
-      {
-        baseY: 0,
-        height: EH,
-        sides: { n: true, s: true, e: true, w: true },
-        doors: {
-          w: westDoors,
-          e: [{ kind: 'door', c: BL / 2, w: 4, h: Math.min(5, EH * 0.8) }],
-          n: [{ kind: 'door', c: BW / 2, w: 3, h: Math.min(4, EH * 0.7) }],
-        },
-        partitions: [],
-        roof: 'vault',
-        roofRise: (BW / vaultCount / 2) * 0.58,
-        vaultCount,
-        vaultK: 0.58,
-        roofColor: '#b5683f',
-      },
-    ],
-  };
-
-  // scattered trees: a ring outside the buildings, denser where nothing stands
-  const trees: TreeSpec[] = [];
-  const R = Math.max(BL, BW) * 1.35 + 60;
-  const insideAny = (x: number, z: number, pad: number): boolean =>
-    [main].some((b) => {
-      const p = pointInBuilding(b, x, z);
-      return !!p && p.lx > -pad && p.lx < b.length + pad && p.lz > -pad && p.lz < b.width + pad;
-    });
-  for (let i = 0; i < 420; i++) {
-    const ang = rnd() * Math.PI * 2;
-    const rad = R * (0.55 + rnd() * 0.75);
-    const x = Math.cos(ang) * rad, z = Math.sin(ang) * rad;
-    if (insideAny(x, z, 6)) continue;
-    const h = 5 + rnd() * 6, r = 1.6 + rnd() * 1.6;
-    trees.push({ x, z, h, r, kind: rnd() < 0.28 ? 'c' : 'd' });
-  }
-
-  return {
-    version: 1,
-    id: uid(),
-    name: info.label || 'New site',
-    createdAt: Date.now(),
-    origin: { lat: info.lat, lon: info.lon },
-    bearingDeg: info.footprintHeading ?? 0,
-    genScale: k,
-    groundColor: '#789b52',
-    buildings: [main],
-    pads: [
-      { x: -BW * 0.82, z: BL * 0.19, w: Math.min(34, BW * 0.62), d: Math.min(94, BL * 0.62), color: '#a9aaa0' },
-      { x: 0, z: BL / 2 + 12, w: BW * 6.5, d: 7, color: '#4a4d4b' },
-    ],
-    trees,
-    seed: opts.seed ?? 7,
-    extent: R * 1.9,
-    droneStart: { x: -BW * 0.8, z: BL * 0.17 },
-    calibCorners: { p1: { x: main.pos.x - BW / 2, z: main.pos.z - BL / 2 }, p2: { x: main.pos.x + BW / 2, z: main.pos.z + BL / 2 } },
-  };
-}
 
 /** Keep only the fields we understand (localStorage content may be old or corrupt). */
 export function sanitizeSpec(raw: unknown): SiteSpec | null {

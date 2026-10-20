@@ -1,58 +1,99 @@
-# ABandoFpvApp
+# a-bando-fpv-app
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.2.2.
+A browser tool for **FPV drone pilots who fly in abandoned places** ("bandos"): replay your flights from Betaflight / Blackbox
+logs in a 3D model of the place, practise in a simulator, and build that model yourself from the map.
 
-## Development server
+Everything runs in the browser (Angular 22, Three.js, signals). There is no backend. Data stays in `localStorage`.
 
-To start a local development server, run:
+## What it does
 
-```bash
-ng serve
-```
+- **Flights**: load blackbox / telemetry logs, replay them in several camera views (orbit, top, chase, FPV), with instruments
+  (speed, attitude, compass, timeline, radio sticks). The path is coloured by speed; the part already flown is dimmed.
+- **Simulator**: fly the same site with a physics model and a radio / gamepad; collisions use the real model.
+- **Bandos** (the map and model editor): create a site from OpenStreetMap, then edit it.
+  1. *Area*: search a place, pan the map, drag the dashed frame's edges to set the area (metres, independent of the window
+     size). **Generate** pulls buildings, trees, roads, greenhouses, towers, bridges, steps and cranes from OpenStreetMap.
+  2. *Model*: the 3D model's plan is drawn over the map (street / satellite / hidden, adjustable opacity) in its real position.
+     Move, resize, rotate and reshape buildings (cut notches, add wings, merge), plant trees, draw fences, place structures.
+     **Edit indoors** takes the roof off and edits one floor at a time: interior walls, doors and windows (open or closed),
+     voids (water on the ground floor), columns (duplicate, row, fill the floor). 2D / 3D switch, compass, measure tool,
+     flight-path start / end pins, floating inspector with a 3D preview of the selection.
+- **AI assistant** (optional): a chat that turns sentences like "3 rooms with doors, close the north windows, add a crane"
+  into editor commands. See *AI assistant* below.
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+## Structure types
 
-## Code scaffolding
+| Kind | Notes |
+|---|---|
+| Building | rectangle or shaped (L, T, U, H: rectilinear outline), several floors, gable / vault / flat roof (turnable, repeatable) |
+| Greenhouse | the arched steel-skeleton tunnel (`frame: 'greenhouse'`); convert to / from a building (loses the interior) |
+| Tower | chimney, silo, storage tank, water tower (fly under the tank), lattice mast / pylon, tower crane |
+| Bridge | beam on piers or arch, you can fly under it |
+| Stairs, ramp | optionally raised (`y`), e.g. on a floor |
+| Container, car, truck, excavator | stackable with `y` |
+| Fence | free-standing wall |
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+Collision uses axis-aligned boxes and vertical cylinders only; long or rotated parts are cut into short boxes.
 
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+## Run it
 
 ```bash
-ng test
+npm install
+npm start          # http://localhost:4200
+npm test           # Vitest through the Angular builder
+npm run build      # production build into dist/
+npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters   # dead-code check
 ```
 
-## Running end-to-end tests
+## Where things are
 
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
+```
+src/app/
+  core/        framework-free logic (pure TypeScript, unit-tested): site spec, footprints, openings, building ops,
+               AI commands, flight analysis, sim physics, geo / calibration
+  three/       Three.js: site builder (site-model), structures, path renderer, camera rig, 3D previews
+  state/       signal stores (layout, view, calibration, playback, flights, radio)
+  services/    services: SiteService (generate / library), GeoService (Overpass), AiService, StudioService, SceneService ...
+  ui/          panels and widgets; ui/studio is the Bandos editor
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+Key files: `core/site-spec.ts` (the data model), `three/site-model.ts` (spec to 3D + colliders), `ui/studio/bando-editor.ts`
+(the editor), `services/geo.service.ts` (OpenStreetMap), `core/ai-commands.ts` (what the assistant may do).
+
+## Data and units
+
+- Site coordinates: metres, **x east, z south** (north is up the map), y up. `SiteSpec.origin` is the lat / lon of (0, 0).
+- Generated bandos are not rotated, so the plan lines up with the map; `bearingDeg` is only non-zero for old specs.
+- Buildings: `pos` is the centre, `rotDeg` follows the SVG convention (x axis to (cos, sin) in x, z). Interior elements
+  (partitions, voids, columns) are in a frame **from the bounding box's min corner**; openings of shaped buildings and
+  footprints are **centred** on the building.
+- A floor's walls stand on `levels[i].baseY`. Only the top floor has a roof (the others use `roof: 'none'`).
+
+## OpenStreetMap data (Overpass)
+
+`GeoService.areaData` makes one Overpass request for the whole area (buildings, trees, roads, structures), caches it for 12 h
+in the browser, and falls back to buildings only. The public servers are often busy and answer 429 / 500 without CORS
+headers; the browser then shows an opaque "access control" error. Mitigations:
+
+- several mirrors are tried in turn;
+- **Data server...** in the Area tab sets your own endpoint, e.g. [`tools/overpass-proxy.php`](tools/overpass-proxy.php) on shared hosting
+  (it caches answers on disk and adds CORS for your site).
+
+## AI assistant
+
+The assistant never writes geometry. A language model answers with JSON `{ reply, commands }`; the app validates the commands
+(`core/ai-commands.ts`), runs them through the same helpers the mouse tools use, and records one undo step. Only the
+application result counts: the chat shows "Nothing was changed" when no command ran, and "what I understood" lists the commands.
+
+Two providers, one chat:
+
+- **In this browser**: WebLLM on WebGPU (Qwen2.5 / Llama / Phi / Qwen3). Nothing leaves the machine; the first load downloads
+  the model (1 to 5 GB, cached). Loaded lazily, so it does not affect the normal start-up.
+- **Server / home PC**: any OpenAI-compatible endpoint: Ollama or LM Studio on your PC over HTTPS (e.g. Tailscale; set
+  `OLLAMA_ORIGINS` to your site), or [`tools/ai-proxy.php`](tools/ai-proxy.php) on shared hosting, which keeps an API key off the browser.
+  The token typed in the app is stored in `localStorage`.
+
+The model sees text only (building names, sizes, floors, counts, structures), not images.
 
 ## Deploying to GitHub Pages
 
@@ -95,6 +136,13 @@ npx ng deploy --base-href /<repo-name>/
 This pushes the production build to the `gh-pages` branch. Note that if you go
 this route, set **Settings → Pages → Source** to the `gh-pages` branch instead
 of GitHub Actions.
+
+## Known limits
+
+- Rectilinear footprints only (no diagonal walls); shaped buildings have flat roofs.
+- Curved bridges become one straight deck; bell / observation towers are not imported.
+- The AI does not check for overlapping buildings.
+- Satellite tiles come from Esri World Imagery; check its terms before any bulk or automated use.
 
 ## Additional Resources
 

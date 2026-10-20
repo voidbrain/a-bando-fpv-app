@@ -2,7 +2,6 @@ import { TestBed } from '@angular/core/testing';
 import { CalibrationStore } from './calibration.store';
 import { FlightStore } from './flight.store';
 import { LayoutStore } from './layout.store';
-import { MapStore, mergeMapState } from './map.store';
 import { PlaybackStore } from './playback.store';
 import { RadioStore } from './radio.store';
 import { ViewStore } from './view.store';
@@ -82,9 +81,9 @@ describe('stores', () => {
   });
 
   describe('CalibrationStore', () => {
-    it('defaults to the solved site calibration', () => {
+    it('defaults to the neutral calibration (a site solves its own from its corner landmarks)', () => {
       const c = TestBed.inject(CalibrationStore);
-      expect(c.calibration().rot).toBeCloseTo(-6.7608, 4);
+      expect(c.calibration()).toEqual({ rot: 0, dx: 0, dz: 0 });
       expect(c.modelScale()).toBe(1);
     });
 
@@ -108,7 +107,7 @@ describe('stores', () => {
       c.apply({ rot: 12, dx: 1, dz: 2 });
       expect(c.calibration()).toEqual({ rot: 12, dx: 1, dz: 2 });
       c.reset();
-      expect(c.rot()).toBeCloseTo(-6.7608, 4);
+      expect(c.calibration()).toEqual({ rot: 0, dx: 0, dz: 0 });
     });
   });
 
@@ -158,34 +157,4 @@ describe('stores', () => {
     });
   });
 
-  describe('MapStore', () => {
-    it('defaults to the live OpenStreetMap background, not the fixed screenshot', () => {
-      const m = TestBed.inject(MapStore);
-      expect(m.background()).toBe('osm');
-      expect(m.osmUrl()).toContain('openstreetmap.org/export/embed.html');
-    });
-
-    it('migrates a persisted "img" background (old builds) to the live map but keeps other saved values', () => {
-      localStorage.setItem('abando-ng-map', JSON.stringify({ background: 'img', rotation: 12.5, dx: 3 }));
-      const m = TestBed.inject(MapStore);
-      expect(m.background()).toBe('osm');
-      expect(m.rotation()).toBe(12.5);
-      expect(m.dx()).toBe(3);
-    });
-
-    it('drops removed backgrounds (Google / satellite image) and legacy fields, keeping only OSM or 3D-only', () => {
-      expect(mergeMapState({ background: 'goog' as never }).background).toBe('osm');
-      expect(mergeMapState({ background: 'img' as never }).background).toBe('osm');
-      expect(mergeMapState({ background: 'none' }).background).toBe('none');
-      const migrated = mergeMapState({ background: 'goog' as never, googleUrl: 'https://maps.google.com/x', scale: { goog: 0.5 } });
-      expect(migrated.scale.osm).toBe(0.5); // old Google backdrop scale carries over to OSM
-      expect((migrated as unknown as Record<string, unknown>)['googleUrl']).toBeUndefined();
-    });
-
-    it('locate() points the embed at a chosen place; otherwise it follows the active site origin', () => {
-      const m = TestBed.inject(MapStore);
-      m.locate(45.521, 12.134);
-      expect(m.osmUrl()).toContain('marker=45.521000%2C12.134000');
-    });
-  });
 });

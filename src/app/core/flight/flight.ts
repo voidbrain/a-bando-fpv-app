@@ -37,7 +37,7 @@ export function prepareFlight(f: Flight, cal: Calibration): void {
     return new Vec3(x, Math.max(0.2, p.alt - minAlt + 0.3), z);
   });
   const last = f.loc.length - 1;
-  f.spd = f.loc.map((p, i) => {
+  f.spd = f.loc.map((_, i) => {
     const j = Math.min(last, i + 3);
     const k = Math.max(0, i - 3);
     const dt = (f.pts[j] as GeoSample).t - (f.pts[k] as GeoSample).t;

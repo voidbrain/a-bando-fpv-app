@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, inject, input, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, inject, input, viewChild } from '@angular/core';
 import { fitCanvas } from '../../core/drawing/canvas-util';
 import { FrameLoopService, FrameOrder } from '../../services/frame-loop.service';
 import { LayoutStore } from '../../state/layout.store';
@@ -14,7 +14,6 @@ export type DrawFn = (g: CanvasRenderingContext2D, w: number, h: number) => void
  */
 @Component({
   selector: 'app-canvas',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '[style.width]': 'width() === null ? "100%" : width() + "px"', '[style.height]': 'height() === null ? "100%" : height() + "px"' },
   template: `<canvas #cv [attr.data-capture]="capture() ? '' : null"></canvas>`,
   styles: `

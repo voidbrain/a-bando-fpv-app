@@ -22,8 +22,11 @@ describe('expo', () => {
 });
 
 describe('drone physics', () => {
+  // the take-off pad these cases were written against (a blank site starts at 0,0)
+  const PAD = { x: -44, z: 26 };
+
   it('starts disarmed on the apron facing the store and stays put', () => {
-    const d = createDroneState();
+    const d = createDroneState(1, PAD);
     expect(d.armed).toBe(false);
     expect(d.p.x).toBe(-44);
     expect(d.p.y).toBeCloseTo(0.06, 6);
@@ -33,7 +36,7 @@ describe('drone physics', () => {
   });
 
   it('scales the start position with the model scale', () => {
-    const d = createDroneState(1.5);
+    const d = createDroneState(1.5, PAD);
     expect(d.p.x).toBeCloseTo(-66, 6);
     expect(d.p.z).toBeCloseTo(39, 6);
   });
@@ -124,7 +127,7 @@ describe('drone physics', () => {
     d.armed = true;
     d.p.set(5, 5, 5);
     d.v.set(1, 1, 1);
-    resetDroneState(d, 1);
+    resetDroneState(d, 1, PAD);
     expect(d.armed).toBe(false);
     expect(d.p.x).toBe(-44);
     expect(eulerYXZ(d.q).y).toBeCloseTo(-Math.PI / 2, 6);

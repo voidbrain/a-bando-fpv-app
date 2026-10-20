@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { ExportService, type RenderBackground } from '../../services/export.service';
 import { selectedFrom } from '../dom';
 import { Panel } from '../panel/panel';
@@ -11,7 +11,6 @@ const RESOLUTIONS = [
 
 @Component({
   selector: 'app-render-panel',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Panel],
   template: `
     <app-panel id="render">

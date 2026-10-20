@@ -2,15 +2,14 @@ import { Injectable, computed, inject, signal, untracked, type WritableSignal } 
 import * as THREE from 'three';
 import type { Calibration, GeoPoint } from '../core/models';
 import { setSiteOrigin } from '../core/constants';
-import { solveCalibration, toGeo, toGeoAt, toLocalAt } from '../core/geo';
+import { solveCalibration, toGeo } from '../core/geo';
 import { bounds, edgesOf, recentre, rectilinear, type Pt } from '../core/footprint';
 import type { BuildingSpec, LocationInfo, PadSpec, SiteSpec, StructureSpec, TreeSpec, Vec2, WallOpening } from '../core/site-spec';
-import { cloneSpec, createRandom, emptySpec, generateSite, uid } from '../core/site-spec';
+import { emptySpec, uid } from '../core/site-spec';
 import { setTakeoff } from '../core/takeoff';
 import type { Footprint } from './geo.service';
 import { SiteEditor } from '../core/site-editor';
 import { CalibrationStore } from '../state/calibration.store';
-import { MapStore } from '../state/map.store';
 import { GeoService } from './geo.service';
 import { SceneService } from './scene.service';
 import { SiteLibraryService } from './site-library.service';
@@ -47,7 +46,6 @@ export class SiteService {
   private readonly library = inject(SiteLibraryService);
   private readonly scene = inject(SceneService);
   private readonly calibration = inject(CalibrationStore);
-  private readonly map = inject(MapStore);
   private readonly toast = inject(ToastService);
 
   /** The editor draft (the "Sites" panel binds to this; apply() pushes it into the scene). */
@@ -64,7 +62,6 @@ export class SiteService {
   readonly stagePick: WritableSignal<((clientX: number, clientY: number) => void) | null> = signal(null);
 
   /** The last geocoded search ("Show on map" points the OSM embed here without generating anything). */
-  private lastSearch: { lat: number; lon: number } | null = null;
 
   constructor() {
     // start where the user left off: the stored active spec, otherwise the blank canvas
@@ -163,7 +160,6 @@ export class SiteService {
         this.toast.show('No location found for that search.');
         return [];
       }
-      this.lastSearch = { lat: hits[0]!.lat, lon: hits[0]!.lon };
       return hits;
     } catch {
       // offline / rate-limited: accept plain "lat, lon" input so the flow still works
@@ -173,19 +169,8 @@ export class SiteService {
         return [];
       }
       const hit = { label: 'Entered position', lat: p[0], lon: p[1] };
-      this.lastSearch = { lat: p[0], lon: p[1] };
       return [hit];
     }
-  }
-
-  /** Point the OpenStreetMap embed at the last searched location — preview without generating a model. */
-  showOnMap(): boolean {
-    if (!this.lastSearch) {
-      this.toast.show('Search a location first.');
-      return false;
-    }
-    this.map.locate(this.lastSearch.lat, this.lastSearch.lon);
-    return true;
   }
 
   private async searchOne(address: string): Promise<LocationInfo | null> {
@@ -420,7 +405,6 @@ export class SiteService {
     writeStoredId(spec.id);
     setSiteOrigin(spec.origin);
     setTakeoff(spec.droneStart);
-    this.map.locate(spec.origin.lat, spec.origin.lon); // the OSM embed follows the newly loaded site
     this.calibration.apply(calibrationForSpec(spec));
     if (resetView) this.scene.resetCamera();
     if (this.scene.host) {
@@ -473,13 +457,6 @@ export function parseLatLng(text: string): [number, number] | null {
   if (!m) return null;
   const lat = +m[1]!, lon = +m[2]!;
   return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? [lat, lon] : null;
-}
-
-/** A unique-ish id for adopted specs (imports of the same file twice must not collide). */
-export function freshSpecId(spec: SiteSpec): SiteSpec {
-  const c = cloneSpec(spec);
-  c.id = uid('site');
-  return c;
 }
 
 /** Structural equality of two specs (cheap: they are small plain objects). */

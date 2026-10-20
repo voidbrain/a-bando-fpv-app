@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SiteService } from '../../services/site.service';
 import { StudioService } from '../../services/studio.service';
@@ -13,7 +13,6 @@ import { BandoEditor } from './bando-editor';
  */
 @Component({
   selector: 'app-studio-panel',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Panel, FormsModule, BandoEditor],
   template: `
     <app-panel id="studio">

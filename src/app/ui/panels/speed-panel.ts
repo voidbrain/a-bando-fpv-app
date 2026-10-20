@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { GAUGE_SIZE, SIM_SCALE_MAX, drawGauge, replayScaleMax } from '../../core/drawing/gauge';
 import { flightSpeedMax } from '../../core/flight/flight';
 import { FlightService } from '../../services/flight.service';
@@ -8,7 +8,6 @@ import { Panel } from '../panel/panel';
 
 @Component({
   selector: 'app-speed-panel',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Panel, CanvasWidget],
   template: `<app-panel id="speed"><div class="keep"><app-canvas panel="speed" [width]="size.w" [height]="size.h" [draw]="draw" /></div></app-panel>`,
 })

@@ -1,7 +1,8 @@
-import { addFloor } from './building-ops';
+import { addFloor, columnGrid, columnRow, convertBuilding } from './building-ops';
+import { STRUCTURE_DEFAULTS } from '../three/structures';
 import { contains, type Rect } from './footprint';
 import { addOpening, listOpenings, outlineOf, patchOpening, removeOpening, reshapeBuilding, wallsOf } from './openings';
-import type { BuildingSpec, SiteSpec } from './site-spec';
+import { uid, type BuildingSpec, type SiteSpec, type StructureKind } from './site-spec';
 
 /**
  * The only things the assistant can do. A language model never writes geometry: it picks commands from this fixed
@@ -18,7 +19,10 @@ export const OPS = [
   'add_floor', 'set_wall_height', 'set_roof',
   'cut_notch', 'add_wing',
   'rename', 'rotate', 'move', 'resize',
+  'add_structure', 'remove_structure', 'set_openings', 'add_columns', 'convert',
 ] as const;
+
+export const STRUCTURE_KINDS: readonly StructureKind[] = ['chimney', 'silo', 'tank', 'water_tower', 'lattice_tower', 'bridge', 'stairs', 'ramp', 'tower_crane', 'container', 'car', 'truck', 'excavator'];
 export type AiOp = (typeof OPS)[number];
 
 export interface AiCommand {
@@ -52,6 +56,16 @@ export interface AiCommand {
   degrees?: number;
   east?: number;
   north?: number;
+  /** add_structure / remove_structure: what kind. */
+  structure?: StructureKind;
+  /** set_openings: open or closed (optionally only doors or only windows via `what`). */
+  state?: 'open' | 'closed';
+  what?: 'door' | 'window';
+  /** add_columns: a row or a grid, `spacing` metres apart. */
+  pattern?: 'row' | 'grid';
+  spacing?: number;
+  /** convert: the building becomes a greenhouse (arched steel frame) or a plain building. Interior is lost. */
+  to?: 'greenhouse' | 'building';
 }
 
 export interface RunResult {
@@ -63,7 +77,7 @@ export interface RunResult {
   interior: boolean;
 }
 
-const INTERIOR: readonly AiOp[] = ['add_door', 'add_window', 'remove_openings', 'split_rooms', 'add_partition', 'clear_partitions'];
+const INTERIOR: readonly AiOp[] = ['add_door', 'add_window', 'remove_openings', 'split_rooms', 'add_partition', 'clear_partitions', 'set_openings', 'add_columns'];
 const DIR: Record<Compass, [number, number]> = {
   north: [0, -1], northeast: [0.7071, -0.7071], east: [1, 0], southeast: [0.7071, 0.7071],
   south: [0, 1], southwest: [-0.7071, 0.7071], west: [-1, 0], northwest: [-0.7071, -0.7071],
@@ -93,6 +107,11 @@ export function normalizeCommands(raw: unknown): { cmds: AiCommand[]; errors: st
     if (o['roof'] === 'gable' || o['roof'] === 'flat' || o['roof'] === 'vault') c.roof = o['roof'];
     if (typeof o['doors'] === 'boolean') c.doors = o['doors'];
     if (typeof o['turn'] === 'boolean') c.turn = o['turn'];
+    if (typeof o['structure'] === 'string' && (STRUCTURE_KINDS as readonly string[]).includes(o['structure'])) c.structure = o['structure'] as StructureKind;
+    if (o['state'] === 'open' || o['state'] === 'closed') c.state = o['state'];
+    if (o['what'] === 'door' || o['what'] === 'window') c.what = o['what'];
+    if (o['pattern'] === 'row' || o['pattern'] === 'grid') c.pattern = o['pattern'];
+    if (o['to'] === 'greenhouse' || o['to'] === 'building') c.to = o['to'];
     const level = num(o['level']);
     if (level !== undefined) c.level = clamp(Math.round(level), 1, 20);
     const count = num(o['count']);
@@ -101,7 +120,7 @@ export function normalizeCommands(raw: unknown): { cmds: AiCommand[]; errors: st
       const v = num(o[k]);
       if (v !== undefined) c[k] = clamp(v, 0, 1);
     }
-    for (const [k, lo, hi] of [['width', 0.4, 20], ['height', 0.3, 6], ['sill', 0, 5], ['size', 0.5, 200], ['depth', 0.5, 200], ['length', 2, 400], ['value', 1, 30]] as const) {
+    for (const [k, lo, hi] of [['width', 0.4, 20], ['height', 0.3, 6], ['sill', 0, 5], ['size', 0.5, 200], ['depth', 0.5, 200], ['length', 2, 400], ['value', 1, 30], ['spacing', 0.8, 60]] as const) {
       const v = num(o[k]);
       if (v !== undefined) c[k] = clamp(v, lo, hi);
     }
@@ -182,6 +201,10 @@ function findBuilding(spec: SiteSpec, name: string | undefined, selectedId: stri
 export function runCommands(spec: SiteSpec, cmds: AiCommand[], selectedId: string): RunResult {
   const res: RunResult = { done: [], errors: [], changed: false, touched: [], interior: false };
   for (const c of cmds) {
+    if (c.op === 'add_structure' || c.op === 'remove_structure') {
+      structureOp(spec, c, selectedId, res);
+      continue;
+    }
     const found = findBuilding(spec, c.building, selectedId);
     if (typeof found === 'string') {
       res.errors.push(`${c.op}: ${found}`);
@@ -191,8 +214,8 @@ export function runCommands(spec: SiteSpec, cmds: AiCommand[], selectedId: strin
     const li = clamp((c.level ?? 1) - 1, 0, b.levels.length - 1);
     const lev = b.levels[li]!;
     const label = `“${b.name}”`;
-    if (b.frame) {
-      res.errors.push(`${c.op}: ${label} is a greenhouse frame and cannot be edited this way`);
+    if (b.frame && c.op !== 'convert' && c.op !== 'rename' && c.op !== 'move' && c.op !== 'rotate' && c.op !== 'resize') {
+      res.errors.push(`${c.op}: ${label} is a greenhouse frame and cannot be edited this way (convert it to a building first)`);
       continue;
     }
     const ok = (msg: string): void => {
@@ -344,6 +367,47 @@ export function runCommands(spec: SiteSpec, cmds: AiCommand[], selectedId: strin
         else res.errors.push(`${c.op}: that would split ${label} or leave a hole`);
         break;
       }
+      case 'set_openings': {
+        if (!c.state) {
+          res.errors.push('set_openings: say open or closed');
+          break;
+        }
+        let n = 0;
+        const levels = c.level ? [li] : b.levels.map((_, i) => i);
+        for (const lj of levels) {
+          const wall = c.side ? wallFacing(b, c.side) : null;
+          for (const o of listOpenings(b, lj)) {
+            if (c.what && o.kind !== c.what) continue;
+            if (wall && !(wall.axis === o.axis && Math.abs(wall.at - o.at) < 0.1)) continue;
+            patchOpening(b, lj, o.id, { closed: c.state === 'closed' });
+            n++;
+          }
+        }
+        if (n) ok(`${n} ${c.what ?? 'opening'}(s) of ${label} ${c.state}`);
+        else res.errors.push(`set_openings: no matching doors or windows in ${label}`);
+        break;
+      }
+      case 'add_columns': {
+        const size = c.size ?? 0.6;
+        const pattern = c.pattern ?? 'row';
+        const spacing = c.spacing ?? 4;
+        lev.columns ??= [];
+        const seed = lev.columns.length;
+        const margin = Math.max(1, size);
+        lev.columns.push({ x: pattern === 'grid' ? margin + 0.5 : margin + 1, z: pattern === 'grid' ? margin + 0.5 : b.width / 2, size });
+        const axis = (c.axis ?? (b.length >= b.width ? 'length' : 'width')) === 'length' ? 'x' : 'z';
+        if (axis === 'z' && pattern === 'row') lev.columns[seed] = { x: b.length / 2, z: margin + 1, size };
+        const added = pattern === 'grid' ? columnGrid(b, li, seed, spacing, spacing, margin) : columnRow(b, li, seed, c.count ?? 4, spacing, axis);
+        ok(`${added + 1} column(s) on floor ${li + 1} of ${label}`);
+        break;
+      }
+      case 'convert':
+        if (!c.to) res.errors.push('convert: say greenhouse or building');
+        else {
+          convertBuilding(b, c.to);
+          ok(`${label} is now a ${c.to} (its interior was reset)`);
+        }
+        break;
       case 'rename':
         if (c.name) {
           b.name = c.name;
@@ -385,4 +449,45 @@ function seg(out: [{ x: number; z: number }, { x: number; z: number }][], a: { x
   const t0 = (len / 2 - gap / 2) / len, t1 = (len / 2 + gap / 2) / len;
   const at = (t: number): { x: number; z: number } => ({ x: r1(a.x + (e.x - a.x) * t), z: r1(a.z + (e.z - a.z) * t) });
   out.push([a, at(t0)], [at(t1), e]);
+}
+
+/** Adding / removing towers, bridges, stairs, vehicles ...: positions are metres east / north of the building (or the site origin). */
+function structureOp(spec: SiteSpec, c: AiCommand, selectedId: string, res: RunResult): void {
+  const anchor = typeof findBuilding(spec, c.building, selectedId) === 'string' ? null : (findBuilding(spec, c.building, selectedId) as BuildingSpec);
+  spec.structures ??= [];
+  if (c.op === 'remove_structure') {
+    const q = c.name?.toLowerCase();
+    const hits = spec.structures.filter((s) => (q ? s.name.toLowerCase().includes(q) : true) && (c.structure ? s.kind === c.structure : true));
+    if (hits.length === 0) res.errors.push('remove_structure: nothing matches');
+    else if (hits.length > 1 && !q) res.errors.push('remove_structure: several match, say which one by name');
+    else {
+      const ids = new Set((q ? hits : [hits[0]!]).map((s) => s.id));
+      spec.structures = spec.structures.filter((s) => !ids.has(s.id));
+      res.done.push(`removed ${ids.size} structure(s)`);
+      res.changed = true;
+    }
+    return;
+  }
+  if (!c.structure) {
+    res.errors.push('add_structure: say what kind (chimney, silo, tank, water_tower, lattice_tower, bridge, stairs, ramp, tower_crane, container, car, truck, excavator)');
+    return;
+  }
+  const d = STRUCTURE_DEFAULTS[c.structure];
+  const base = anchor ? anchor.pos : { x: 0, z: 0 };
+  const li = anchor ? clamp((c.level ?? 1) - 1, 0, anchor.levels.length - 1) : 0;
+  spec.structures.push({
+    id: uid('st'),
+    kind: c.structure,
+    name: c.name ?? d.name,
+    x: base.x + (c.east ?? (anchor ? anchor.length / 2 + 8 : 10)),
+    z: base.z - (c.north ?? 0),
+    rotDeg: c.degrees ?? 0,
+    y: anchor && c.level ? anchor.levels[li]!.baseY : undefined,
+    height: c.height ?? d.height,
+    size: c.size ?? d.size,
+    ...(d.length !== undefined ? { length: c.length ?? d.length } : {}),
+  });
+  res.done.push(`added ${c.name ?? d.name} ${anchor ? `near “${anchor.name}”` : 'near the site origin'}`);
+  res.changed = true;
+  if (anchor && !res.touched.includes(anchor.id)) res.touched.push(anchor.id);
 }

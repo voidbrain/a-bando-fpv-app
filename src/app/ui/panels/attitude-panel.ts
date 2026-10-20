@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { INSTRUMENTS_SIZE, drawInstruments } from '../../core/drawing/instruments';
 import { DEG } from '../../core/math';
 import { eulerYXZ } from '../../core/math3d';
@@ -11,7 +11,6 @@ import { Panel } from '../panel/panel';
 
 @Component({
   selector: 'app-attitude-panel',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Panel, CanvasWidget],
   template: `<app-panel id="attitude"><div class="keep"><app-canvas panel="attitude" [width]="size.w" [height]="size.h" [draw]="draw" /></div></app-panel>`,
 })

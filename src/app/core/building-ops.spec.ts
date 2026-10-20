@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { addFloor, buildingsOverlap, mergeBuildings, overlapsOthers, removeFloor } from './building-ops';
-import { addOpening, listOpenings } from './openings';
+import { addFloor, buildingsOverlap, columnGrid, columnRow, convertBuilding, duplicateColumn, mergeBuildings, overlapsOthers, removeFloor, repeatOpening } from './building-ops';
+import { addOpening, listOpenings, patchOpening } from './openings';
 import { emptySpec, type BuildingSpec } from './site-spec';
 
 const mk = (id: string, x: number, z: number, L: number, W: number, rot = 0): BuildingSpec => ({
@@ -56,5 +56,47 @@ describe('building ops', () => {
     expect(mergeBuildings(s, 'a', 'b')).toMatch(/touch/);
     s.buildings = [mk('a', 0, 0, 20, 10), mk('b', 0, 10, 10, 10, 30)];
     expect(mergeBuildings(s, 'a', 'b')).toMatch(/directions/);
+  });
+});
+
+describe('repeating and converting', () => {
+  const room = (): BuildingSpec => mk('r', 0, 0, 20, 10);
+
+  it('duplicates a column, makes a row, and fills the floor with a grid that avoids voids', () => {
+    const b = room();
+    b.levels[0]!.columns = [{ x: 2, z: 2, size: 0.6 }];
+    expect(duplicateColumn(b, 0, 0, 3, 0)).toBe(1);
+    expect(duplicateColumn(b, 0, 0, 3, 0)).toBe(-1); // already there
+    expect(duplicateColumn(b, 0, 0, 100, 0)).toBe(-1); // outside
+    expect(columnRow(b, 0, 0, 4, 4, 'z')).toBe(1); // z = 6 fits; z = 10 is on the wall and 14 is outside
+    const g = room();
+    g.levels[0]!.columns = [{ x: 2, z: 2, size: 0.5 }];
+    g.levels[0]!.voids = [{ x0: 8, z0: 3, x1: 12, z1: 7 }];
+    const n = columnGrid(g, 0, 0, 4, 4, 2);
+    expect(n).toBeGreaterThan(3);
+    for (const c of g.levels[0]!.columns!) expect(c.x > 8 && c.x < 12 && c.z > 3 && c.z < 7).toBe(false);
+  });
+
+  it('repeats a window along its wall without overlapping or leaving the wall', () => {
+    const b = room();
+    const id = addOpening(b, 0, { x: -8, z: 5 }, 'window', 2)!;
+    patchOpening(b, 0, id, { closed: true });
+    expect(repeatOpening(b, 0, id, 20, 3)).toBeGreaterThan(3);
+    const all = listOpenings(b, 0);
+    expect(all.every((o) => o.closed)).toBe(true);
+    expect(all.every((o) => o.c - o.w / 2 >= o.from && o.c + o.w / 2 <= o.to)).toBe(true);
+  });
+
+  it('converts a building to a greenhouse and back, dropping the interior', () => {
+    const b = room();
+    b.width = 30;
+    b.levels[0]!.partitions.push([{ x: 1, z: 1 }, { x: 5, z: 1 }]);
+    convertBuilding(b, 'greenhouse');
+    expect(b.frame).toBe('greenhouse');
+    expect(b.length).toBe(30); // the tunnel follows the long side
+    expect(b.levels[0]!.partitions.length).toBe(0);
+    convertBuilding(b, 'building');
+    expect(b.frame).toBeUndefined();
+    expect(b.levels[0]!.roof).toBe('gable');
   });
 });

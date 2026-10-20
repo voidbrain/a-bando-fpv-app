@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { COLORS, MONO } from '../../core/drawing/canvas-util';
 import { RadioService } from '../../services/radio.service';
 import { RadioStore, type MappedControl } from '../../state/radio.store';
@@ -18,7 +18,6 @@ const MAX_AXES = 12;
 
 @Component({
   selector: 'app-radio-panel',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Panel, CanvasWidget],
   template: `
     <app-panel id="radio">

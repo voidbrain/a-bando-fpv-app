@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, effect, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, effect, inject, signal, viewChild } from '@angular/core';
 import { SYNC_PLOT_HEIGHT, drawSyncPlot } from '../../core/drawing/sync-plot';
 import { LayoutStore } from '../../state/layout.store';
 import { ViewStore } from '../../state/view.store';
@@ -9,7 +9,6 @@ import { Panel } from '../panel/panel';
 
 @Component({
   selector: 'app-video-panel',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Panel, CanvasWidget],
   template: `
     <app-panel id="video">

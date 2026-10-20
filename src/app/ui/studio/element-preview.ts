@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRender, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, afterNextRender, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { PreviewRenderer, type PreviewTarget } from '../../three/element-preview';
 
 /**
@@ -8,7 +8,6 @@ import { PreviewRenderer, type PreviewTarget } from '../../three/element-preview
  */
 @Component({
   selector: 'app-element-preview',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <canvas #cv></canvas>
     @if (failed()) {

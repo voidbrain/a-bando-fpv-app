@@ -20,6 +20,8 @@ describe('OpenStreetMap import of other structure types', () => {
       { id: 5, type: 'node', tags: { man_made: 'tower', 'tower:type': 'observation' }, ...pt(-70, 50) }, // not a lattice mast: skipped
       { id: 6, type: 'way', tags: { highway: 'residential', bridge: 'yes', layer: '1' }, geometry: [pt(-30, -60), pt(30, -60)] },
       { id: 7, type: 'way', tags: { highway: 'residential' }, geometry: [pt(-30, -80), pt(30, -80)] },
+      { id: 8, type: 'way', tags: { highway: 'steps' }, geometry: [pt(40, -40), pt(40, -30)] },
+      { id: 9, type: 'node', tags: { man_made: 'crane', height: '55' }, ...pt(60, 60) },
     ];
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 })));
     const d = await new GeoService().areaData(LAT, LON, 150, 120);
@@ -28,7 +30,11 @@ describe('OpenStreetMap import of other structure types', () => {
     expect(d.footprints.length).toBe(2);
 
     const kinds = d.structures.map((s) => s.kind).sort();
-    expect(kinds).toEqual(['bridge', 'chimney', 'lattice_tower']);
+    expect(kinds).toEqual(['bridge', 'chimney', 'lattice_tower', 'stairs', 'tower_crane']);
+    const st = d.structures.find((s) => s.kind === 'stairs')!;
+    expect(st.length).toBeCloseTo(10, 0);
+    expect(st.height).toBeCloseTo(5.7, 0);
+    expect(d.structures.find((s) => s.kind === 'tower_crane')!.height).toBe(55);
     const ch = d.structures.find((s) => s.kind === 'chimney')!;
     expect(ch.height).toBe(42);
     expect(ch.x).toBeCloseTo(-10, 0);

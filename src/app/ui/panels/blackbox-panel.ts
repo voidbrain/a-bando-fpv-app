@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { BLACKBOX_SIZE, createBlackboxState, drawBlackbox, inDroneDragArea } from '../../core/drawing/blackbox';
 import { FlightService } from '../../services/flight.service';
 import { PlaybackService } from '../../services/playback.service';
@@ -9,7 +9,6 @@ const DRAG_YAW_PER_PX = 0.012;
 
 @Component({
   selector: 'app-blackbox-panel',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Panel, CanvasWidget],
   template: `
     <app-panel id="blackbox">

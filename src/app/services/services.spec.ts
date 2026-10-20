@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { setSiteOrigin } from '../core/constants';
+import { setTakeoff } from '../core/takeoff';
 import { betaflightCsv, makeTelemetry } from '../core/testing/fixtures';
 import { CalibrationStore } from '../state/calibration.store';
 import { FlightStore } from '../state/flight.store';
@@ -16,6 +18,16 @@ const frames = (n: number, dt = 1 / 60): void => {
 };
 
 describe('services', () => {
+  // the site these cases were written against: its origin and its take-off pad (a blank site starts at 0,0)
+  beforeEach(() => {
+    setSiteOrigin({ lat: 45.528698, lon: 12.133305 });
+    setTakeoff({ x: -44, z: 26 });
+  });
+  afterEach(() => {
+    setSiteOrigin({ lat: 0, lon: 0 });
+    setTakeoff({ x: 0, z: 0 });
+  });
+
   beforeEach(() => {
     localStorage.clear();
     TestBed.resetTestingModule();
@@ -85,6 +97,7 @@ describe('services', () => {
       // same pivot logic the map panel's GPS alignment uses: rotate, then shift so the midpoint does not move
       const rot = (((40 + 540) % 360) + 360) % 360 - 180;
       cal.setRot(rot);
+      TestBed.tick(); // the flight's model coordinates follow the calibration through an effect
       expect(cal.rot()).toBeCloseTo(40, 9);
       const after = flights.active!.loc[mid]!;
       expect(after.x).not.toBeCloseTo(before.x, 6); // rotation alone moves the path…

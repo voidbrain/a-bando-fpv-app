@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, effect, inject, viewChild } from '@angular/core';
+import { Component, ElementRef, effect, inject, viewChild } from '@angular/core';
 import { AI_MODELS, AiService } from '../../services/ai.service';
 import { SiteService } from '../../services/site.service';
 import { FloatBox } from '../float-box';
@@ -13,7 +13,6 @@ const EXAMPLES: readonly string[] = [
 /** The chat window of the AI assistant: loads the in-browser model on request, then turns messages into edits. */
 @Component({
   selector: 'app-assistant-box',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FloatBox],
   template: `
     <app-float-box fid="assistant-v2" title="AI assistant" [x]="320" [y]="44" [w]="400" [h]="460" [minW]="320" [minH]="300">
@@ -88,7 +87,7 @@ const EXAMPLES: readonly string[] = [
             </div>
           }
           @if (ai.busy()) {
-            <div class="m dim">thinking…</div>
+            <div class="m dim thinking"><i class="spin"></i> thinking… <span class="small">(a small model on a laptop GPU can take 10–40 s)</span></div>
           }
         </div>
         <div class="in">
@@ -166,6 +165,25 @@ const EXAMPLES: readonly string[] = [
       border-radius: 8px;
       padding: 5px 8px;
       font-size: 12.5px;
+    }
+    .thinking {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .spin {
+      flex: none;
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--dim);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
     }
     .m.me {
       align-self: flex-end;

@@ -1,4 +1,4 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Service, inject, signal } from '@angular/core';
 import type { MLCEngine } from '@mlc-ai/web-llm';
 import { AI_SCHEMA, SYSTEM_PROMPT, buildContext, parseReply } from '../core/ai-prompt';
 import { runCommands, type AiCommand } from '../core/ai-commands';
@@ -46,7 +46,7 @@ const SERVER_KEY = 'abando-ai-server';
  * them as one undo step. The engine is loaded on demand in a separate chunk, so nothing is downloaded until the
  * person presses "Load model".
  */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class AiService {
   private readonly site = inject(SiteService);
 

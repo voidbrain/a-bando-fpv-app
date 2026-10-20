@@ -10,6 +10,8 @@ export type PreviewTarget =
   | { kind: 'tree'; t: TreeSpec }
   | { kind: 'fence'; w: WallSpec }
   | { kind: 'structure'; s: StructureSpec }
+  /** One floor of a building being edited: that floor opaque, every other floor and the roof ghosted. */
+  | { kind: 'floor'; b: BuildingSpec; li: number }
   | { kind: 'part'; b: BuildingSpec; li: number; part: PartHighlight };
 
 export type PartHighlight =
@@ -58,6 +60,23 @@ function ghost(root: THREE.Object3D, opacity = 0.13): void {
   });
 }
 
+/** The same building with only floor `li` in it (roof only if that is the top floor). */
+function levelOnly(b: BuildingSpec, li: number): BuildingSpec {
+  const c = JSON.parse(JSON.stringify(b)) as BuildingSpec;
+  const lv = c.levels[Math.min(li, c.levels.length - 1)]!;
+  if (li < b.levels.length - 1) lv.roof = 'none';
+  c.levels = [lv];
+  return c;
+}
+
+/** Rotation of the thing as it stands on the site: where north is, seen from the thing's own axes. */
+export function targetRotationDeg(t: PreviewTarget): number {
+  if (t.kind === 'building' || t.kind === 'part' || t.kind === 'floor') return t.b.rotDeg;
+  if (t.kind === 'structure') return t.s.rotDeg;
+  if (t.kind === 'fence') return (Math.atan2(t.w.b.z - t.w.a.z, t.w.b.x - t.w.a.x) * 180) / Math.PI;
+  return 0;
+}
+
 function partGroup(b: BuildingSpec, li: number, p: PartHighlight): THREE.Group {
   const L = b.length, W = b.width;
   const lev = b.levels[Math.min(li, b.levels.length - 1)]!;
@@ -96,6 +115,11 @@ function treeGroup(t: TreeSpec): THREE.Group {
 export function buildPreviewGroup(target: PreviewTarget): THREE.Group {
   const root = new THREE.Group();
   if (target.kind === 'building') root.add(buildingGroup(target.b));
+  else if (target.kind === 'floor') {
+    const all = buildingGroup(target.b);
+    ghost(all);
+    root.add(all, buildingGroup(levelOnly(target.b, target.li)));
+  }
   else if (target.kind === 'tree') root.add(treeGroup(target.t));
   else if (target.kind === 'structure') root.add(buildStructure({ ...target.s, x: 0, z: 0, rotDeg: 0 }).object);
   else if (target.kind === 'fence') {
@@ -117,6 +141,7 @@ export class PreviewRenderer {
   private readonly camera = new THREE.PerspectiveCamera(38, 1, 0.1, 2000);
   private content: THREE.Object3D | null = null;
   private grid: THREE.GridHelper | null = null;
+  private readonly compass = new THREE.Group();
   private yaw = -0.7;
   private pitch = 0.5;
   private dist = 30;
@@ -134,6 +159,8 @@ export class PreviewRenderer {
     const sun = new THREE.DirectionalLight(0xffffff, 1.6);
     sun.position.set(8, 14, 6);
     this.scene.add(sun);
+    this.compass.add(makeCompass());
+    this.scene.add(this.compass);
     const on = <K extends keyof HTMLElementEventMap>(t: K, f: (e: HTMLElementEventMap[K]) => void, o?: AddEventListenerOptions): void => {
       canvas.addEventListener(t, f as EventListener, o);
       this.off.push(() => canvas.removeEventListener(t, f as EventListener));
@@ -181,6 +208,11 @@ export class PreviewRenderer {
       this.minDist = r * 0.6;
       this.maxDist = r * 12;
     }
+    // the compass ring lies around the thing; its red arrow points to the real north
+    const half = box.getSize(new THREE.Vector3()).length() / 2;
+    this.compass.position.set(this.centre.x, 0.06, this.centre.z);
+    this.compass.scale.setScalar(Math.max(3, half * 0.95 + 1.5));
+    this.compass.rotation.y = (targetRotationDeg(target) * Math.PI) / 180;
     if (this.grid) {
       this.scene.remove(this.grid);
       this.grid.geometry.dispose();
@@ -220,6 +252,39 @@ export class PreviewRenderer {
     this.grid?.geometry.dispose();
     this.renderer.dispose();
   }
+}
+
+/** A flat ring (unit radius) with a red arrow and an "N" at north (= -z before the group is turned). */
+function makeCompass(): THREE.Group {
+  const g = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.985, 1, 64), new THREE.MeshBasicMaterial({ color: '#9fb5a6', side: THREE.DoubleSide, transparent: true, opacity: 0.8 }));
+  ring.rotation.x = -Math.PI / 2;
+  g.add(ring);
+  const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.22, 10), new THREE.MeshBasicMaterial({ color: '#ff5a4d' }));
+  arrow.rotation.x = -Math.PI / 2; // the cone points along -z
+  arrow.position.set(0, 0.02, -1.0);
+  g.add(arrow);
+  for (const [x, z] of [[1, 0], [0, 1], [-1, 0]] as const) {
+    const tick = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.01, 0.1), new THREE.MeshBasicMaterial({ color: '#9fb5a6' }));
+    tick.position.set(x * 0.97, 0.01, z * 0.97);
+    tick.rotation.y = Math.atan2(x, z);
+    g.add(tick);
+  }
+  const cv = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+  const ctx = cv?.getContext('2d');
+  if (cv && ctx) {
+    cv.width = cv.height = 64;
+    ctx.fillStyle = '#ff5a4d';
+    ctx.font = 'bold 46px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('N', 32, 34);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, transparent: true }));
+    sp.scale.setScalar(0.3);
+    sp.position.set(0, 0.1, -1.22);
+    g.add(sp);
+  }
+  return g;
 }
 
 function dispose(o: THREE.Object3D): void {

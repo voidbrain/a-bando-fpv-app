@@ -63,3 +63,41 @@ describe('ai commands', () => {
     expect(parseReply('nonsense').errors.length).toBe(1);
   });
 });
+
+describe('ai commands: structures, openings state, columns, conversion', () => {
+  it('adds a container and a crane beside the selected building, on a given floor', () => {
+    const s = site();
+    const r = runCommands(s, normalizeCommands([{ op: 'add_structure', structure: 'container', east: 6, north: 4 }, { op: 'add_structure', structure: 'tower_crane' }]).cmds, 'w');
+    expect(r.errors).toEqual([]);
+    expect(s.structures!.length).toBe(2);
+    expect(s.structures![0]).toMatchObject({ kind: 'container', x: 6, z: -4, length: 12.2 }); // north is -z
+    expect(s.structures![1]!.x).toBeCloseTo(30 / 2 + 8, 3); // default: beside the building
+    s.buildings[0]!.levels.push({ ...JSON.parse(JSON.stringify(s.buildings[0]!.levels[0]!)), baseY: 4 });
+    runCommands(s, normalizeCommands([{ op: 'add_structure', structure: 'stairs', level: 2 }]).cmds, 'w');
+    expect(s.structures![2]!.y).toBe(4);
+    expect(runCommands(s, normalizeCommands([{ op: 'remove_structure', name: 'container' }]).cmds, 'w').errors).toEqual([]);
+    expect(s.structures!.some((x) => x.kind === 'container')).toBe(false);
+  });
+
+  it('closes only the windows on a wall, then opens everything', () => {
+    const s = site();
+    runCommands(s, normalizeCommands([{ op: 'add_door', side: 'south' }, { op: 'add_window', side: 'north' }, { op: 'add_window', side: 'south', position: 0.2 }]).cmds, 'w');
+    runCommands(s, normalizeCommands([{ op: 'set_openings', state: 'closed', what: 'window', side: 'north' }]).cmds, 'w');
+    const o = listOpenings(s.buildings[0]!, 0);
+    expect(o.filter((x) => x.closed).length).toBe(1);
+    expect(o.find((x) => x.closed)!.kind).toBe('window');
+    runCommands(s, normalizeCommands([{ op: 'set_openings', state: 'open' }]).cmds, 'w');
+    expect(listOpenings(s.buildings[0]!, 0).some((x) => x.closed)).toBe(false);
+  });
+
+  it('puts columns in a row or a grid, and converts to a greenhouse', () => {
+    const s = site();
+    expect(runCommands(s, normalizeCommands([{ op: 'add_columns', pattern: 'row', count: 5, spacing: 5 }]).cmds, 'w').errors).toEqual([]);
+    expect(s.buildings[0]!.levels[0]!.columns!.length).toBe(5);
+    const g = site();
+    runCommands(g, normalizeCommands([{ op: 'add_columns', pattern: 'grid', spacing: 5 }]).cmds, 'w');
+    expect(g.buildings[0]!.levels[0]!.columns!.length).toBeGreaterThan(6);
+    runCommands(g, normalizeCommands([{ op: 'convert', to: 'greenhouse' }]).cmds, 'w');
+    expect(g.buildings[0]!.frame).toBe('greenhouse');
+  });
+});

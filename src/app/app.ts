@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, effect, inject, untracked } from '@angular/core';
+import { Component, effect, inject, untracked } from '@angular/core';
 import { FlightService } from './services/flight.service';
 import { FrameLoopService } from './services/frame-loop.service';
 import { RadioService } from './services/radio.service';
@@ -27,7 +27,6 @@ import { VersionBadge } from './ui/version-badge';
 /** Root: the full-page stage plus every floating panel. Panels hide themselves; nothing here holds state. */
 @Component({
   selector: 'app-root',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     Stage, ViewsPanel, FlightsPanel, SimulatorPanel, RadioPanel, TimelinePanel, SpeedPanel, AttitudePanel, CompassPanel, PathPanel,
     BlackboxPanel, VideoPanel, LivePanel, RenderPanel, HelpPanel, ViewportPanel, VersionBadge, StudioPanel,

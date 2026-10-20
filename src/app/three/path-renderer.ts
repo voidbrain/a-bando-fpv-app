@@ -9,6 +9,8 @@ const MAX_POINTS = 1500;
 /** The flight paths in the 3D scene: speed-coloured line + points, ground shadow, drop lines, start (green) / end (red). */
 export class PathRenderer {
   readonly group = new THREE.Group();
+  /** Per flight: what is needed to dim the part already flown as the playhead moves. */
+  private readonly tracks: { flight: Flight; step: number; base: Float32Array; attr: THREE.BufferAttribute; shown: number }[] = [];
 
   constructor(scene: THREE.Scene) {
     scene.add(this.group);
@@ -16,6 +18,7 @@ export class PathRenderer {
 
   rebuild(flights: readonly Flight[], speedMax: number): void {
     this.clear();
+    this.tracks.length = 0;
     for (const f of flights) {
       const n = f.loc.length;
       if (!n) continue;
@@ -31,7 +34,9 @@ export class PathRenderer {
       }
       const line = new THREE.BufferGeometry();
       line.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      line.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+      const colAttr = new THREE.Float32BufferAttribute(col, 3);
+      line.setAttribute('color', colAttr);
+      this.tracks.push({ flight: f, step, base: new Float32Array(col), attr: colAttr, shown: -1 });
       const shadow = new THREE.BufferGeometry();
       shadow.setAttribute('position', new THREE.Float32BufferAttribute(gnd, 3));
       const drops = new THREE.BufferGeometry();
@@ -47,6 +52,35 @@ export class PathRenderer {
         m.position.set(p.x, p.y, p.z);
         this.group.add(m);
       }
+    }
+  }
+
+  /**
+   * Dim the part of each path that has already been flown (desaturated and darker), so the speed colours stay on what
+   * is still ahead and the playhead is easy to find. Cheap: only the vertices between the old and new position change.
+   */
+  setProgress(): void {
+    for (const t of this.tracks) {
+      const n = t.base.length / 3;
+      const idx = Math.min(n - 1, Math.max(-1, Math.floor(t.flight.cursor / t.step)));
+      if (idx === t.shown) continue;
+      const from = Math.max(0, Math.min(idx, t.shown < 0 ? 0 : t.shown)), to = Math.max(idx, t.shown, 0);
+      const arr = t.attr.array as Float32Array;
+      for (let k = from; k <= Math.min(n - 1, to); k++) {
+        const r = t.base[k * 3]!, g = t.base[k * 3 + 1]!, b = t.base[k * 3 + 2]!;
+        if (k <= idx) {
+          const grey = 0.3 * r + 0.59 * g + 0.11 * b;
+          arr[k * 3] = (r + (grey - r) * 0.85) * 0.5;
+          arr[k * 3 + 1] = (g + (grey - g) * 0.85) * 0.5;
+          arr[k * 3 + 2] = (b + (grey - b) * 0.85) * 0.5;
+        } else {
+          arr[k * 3] = r;
+          arr[k * 3 + 1] = g;
+          arr[k * 3 + 2] = b;
+        }
+      }
+      t.attr.needsUpdate = true;
+      t.shown = idx;
     }
   }
 
