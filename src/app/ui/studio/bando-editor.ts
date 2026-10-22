@@ -6,6 +6,7 @@ import { buildingsOverlap, stairsFor, columnGrid, columnRow, convertBuilding, du
 import { addOpening, insideBuilding, listOpenings, moveOpening, outlineOf, wallsOf, previewOpening, patchOpening, removeOpening, reshapeBuilding, resetToRect, resizeOpening, type OpenSeg } from '../../core/openings';
 import { cloneSpec, uid, type BuildingSpec, type LevelSpec, type LocationInfo, type SiteSpec, type StructureKind, type StructureSpec } from '../../core/site-spec';
 import { autoAlign } from '../../core/align';
+import { treeZones } from '../../core/elements';
 import { anglesAt, arcOf, fmtLength, lengthOf, nearestSnap, orthoSnap, snapTargets, type Seg } from '../../core/measure';
 import { applyStore, setColumnRows, setFacade, type FacadePattern } from '../../core/modules';
 import { areaOf, nearBuilding, scatterTrees, type ScatterMode } from '../../core/scatter';
@@ -311,6 +312,12 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
           @if (drag()?.t === 'bridgeDraw') {
             <line [attr.x1]="bdw().a.x" [attr.y1]="bdw().a.z" [attr.x2]="bdw().b.x" [attr.y2]="bdw().b.z" [attr.stroke]="tc('structure')" [attr.stroke-width]="7" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" pointer-events="none" />
           }
+          @for (z of zonePolys(); track $index) {
+            <polygon [attr.points]="z" [attr.fill]="tc('scatter')" fill-opacity="0.08" [attr.stroke]="tc('scatter')" stroke-width="1.5" stroke-dasharray="5 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+          }
+          @if (zoneHi(); as zh) {
+            <polygon [attr.points]="zh" [attr.fill]="tc('scatter')" fill-opacity="0.22" [attr.stroke]="tc('scatter')" stroke-width="3" vector-effect="non-scaling-stroke" pointer-events="none" />
+          }
           @if (scatterPreview(); as sp) {
             <polygon [attr.points]="sp" [attr.fill]="tc('scatter')" fill-opacity="0.2" [attr.stroke]="tc('scatter')" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
           }
@@ -501,7 +508,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
         <app-assistant-box />
       }
       @if (mode() === 'model' && overlayOn() && elementsOpen()) {
-        <app-elements-box [spec]="ed.draft()" [selectedId]="ed.selectedId()" (go)="goTo($event)" />
+        <app-elements-box [spec]="ed.draft()" [selectedId]="ed.selectedId()" (go)="goTo($event)" (hover)="zoneHover.set($event)" (zones)="zonesOn.set($event)" />
       }
 
       @if (mode() === 'model' && overlayOn()) {
@@ -1302,13 +1309,44 @@ export class BandoEditor {
   protected readonly autoAlign = signal(true);
   protected readonly elementsOpen = signal(false);
   /** A click in the elements list: select it and bring it into view. */
+  /** Tree zones: every zone outlined while "show zones" is on; the one under the pointer in the list (or the last one clicked) is highlighted. */
+  protected readonly zonesOn = signal(false);
+  protected readonly zoneHover = signal<{ x: number; z: number }[] | null>(null);
+  private readonly zoneSel = signal<{ x: number; z: number }[] | null>(null);
+  private static poly = (h: readonly { x: number; z: number }[]): string => h.map((q) => `${q.x},${q.z}`).join(' ');
+  protected readonly zonePolys = computed(() => (this.zonesOn() && !this.indoor() ? treeZones(this.ed.draft().trees).map((z) => BandoEditor.poly(z.hull)) : []));
+  protected readonly zoneHi = computed(() => {
+    const h = this.zoneHover() ?? this.zoneSel();
+    return h && !this.indoor() ? BandoEditor.poly(h) : '';
+  });
+
   protected goTo(g: ElementGo): void {
+    this.zoneSel.set(null);
+    if (g.id && (g.kind === 'floor' || g.kind === 'columns' || g.kind === 'wall' || g.kind === 'void' || g.kind === 'opening')) {
+      // something on a floor: select its building, open that floor and select the thing
+      this.view3d.set(false);
+      this.ed.select(g.id);
+      this.level.set(g.level ?? 0);
+      this.colSet.set([]);
+      this.enterIndoor();
+      if (g.kind === 'columns' && g.indices?.length) {
+        this.colSet.set(g.indices);
+        this.pick.set({ t: 'column', i: g.indices[g.indices.length - 1]! });
+      } else if (g.kind === 'wall' && g.index !== undefined) this.pick.set({ t: 'wall', i: g.index });
+      else if (g.kind === 'void' && g.index !== undefined) this.pick.set({ t: 'void', i: g.index });
+      else if (g.kind === 'opening' && g.opening) this.pick.set({ t: 'opening', id: g.opening });
+      else this.pick.set({ t: 'building' });
+      return;
+    }
     if (g.kind === 'building' && g.id) {
       this.ed.select(g.id);
       this.pick.set({ t: 'building' });
     } else if (g.kind === 'structure' && g.index !== undefined) this.pick.set({ t: 'structure', i: g.index });
     else if (g.kind === 'fence' && g.index !== undefined) this.pick.set({ t: 'fence', i: g.index });
-    else this.pick.set(null);
+    else {
+      this.pick.set(null);
+      if (g.kind === 'trees' && g.zone) this.zoneSel.set(g.zone);
+    }
     this.flyTo(g.x, g.z, g.size);
   }
   /** Extra selected columns (indices on the current floor); the primary pick is always included. */
@@ -1658,6 +1696,9 @@ export class BandoEditor {
       const east = o.u * Math.cos(r) - o.v * Math.sin(r), south = o.u * Math.sin(r) + o.v * Math.cos(r);
       const mLon = 111320 * Math.cos((c.lat * Math.PI) / 180);
       this.studio.zone.set({ lat: c.lat - south / 111132, lon: c.lon + east / mLon, halfE: h.e, halfN: h.n, ...(rd ? { rotDeg: rd } : {}) });
+    });
+    effect(() => {
+      if (this.pick()) untracked(() => this.zoneSel.set(null)); // selecting something else drops the zone highlight
     });
     effect(() => {
       this.ed.selectedId(); // another building: back to the whole building
@@ -2986,6 +3027,7 @@ export class BandoEditor {
       this.tool.set('select');
       this.scene.pin.set(null);
       this.drag.set(null);
+      this.zoneSel.set(null);
       this.meas.update((m) => ({ ...m, a: null, start: null }));
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       e.preventDefault();

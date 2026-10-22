@@ -137,3 +137,7 @@ npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
 - Lesson: in an `effect`, read the signal BEFORE any `if (renderer)` guard (`const on = this.spin(); if (r) r.spin = on`); a signal read behind a false guard is never tracked and the effect never re-runs.
 - Layout: the studio panel defaults to 760 × 540; "Reset UI" clears all remembered sizes. Showing a panel (`LayoutStore.setVisible/toggle`) also raises it.
 - Patches: when diffing a working copy, exclude `node_modules` (a symlink there gets into the diff and breaks `git apply` on a real folder).
+
+## Elements panel
+- `core/elements.ts` holds the grouping (pure, tested): `treeZones` (single-linkage, 14 m: one brush stroke stays one zone), `columnGroups` (rows of one floor; stragglers "loose"), `stairsIn` (stairs / ramps inside a building and their floor), `convexHull`.
+- `ui/studio/elements-box.ts` has two tabs: by category (buildings, structures, walls, columns per row, trees per zone) and as a tree (building → floor → doors & windows, interior walls, voids, column rows, stairs). Columns are never listed one by one. Rows emit `ElementGo`; `goTo` in the editor selects the building, opens the floor and selects the thing. Hovering a tree zone outlines it on the map (`zoneHover`), clicking keeps it (`zoneSel`, cleared by any other selection / Esc), "show tree zones" outlines all of them.
