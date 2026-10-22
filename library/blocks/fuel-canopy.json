@@ -1,0 +1,145 @@
+{
+  "schema": 1,
+  "id": "abando/fuel-canopy",
+  "version": 1,
+  "name": "Fuel station canopy",
+  "kind": "structure",
+  "tags": ["station", "canopy", "roof"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A flat canopy on columns, over the pumps.",
+  "thumbnail": "icon:structure",
+  "params": [
+    {
+      "key": "l",
+      "label": "Length",
+      "type": "number",
+      "default": 16,
+      "min": 6,
+      "max": 40,
+      "step": 1
+    },
+    {
+      "key": "w",
+      "label": "Width",
+      "type": "number",
+      "default": 10,
+      "min": 4,
+      "max": 20,
+      "step": 1
+    },
+    {
+      "key": "h",
+      "label": "Clear height",
+      "type": "number",
+      "default": 5,
+      "min": 3,
+      "max": 8,
+      "step": 0.5
+    }
+  ],
+  "content": {
+    "shapes": [
+      {
+        "prim": "array",
+        "count": 2,
+        "step": {
+          "x": 0,
+          "y": 0,
+          "z": {
+            "$": "w",
+            "mul": 0.6
+          }
+        },
+        "of": {
+          "prim": "array",
+          "count": 3,
+          "step": {
+            "x": {
+              "$": "l",
+              "mul": 0.35
+            },
+            "y": 0,
+            "z": 0
+          },
+          "of": {
+            "prim": "box",
+            "at": {
+              "x": {
+                "$": "l",
+                "mul": -0.35
+              },
+              "y": {
+                "$": "h",
+                "mul": 0.5
+              },
+              "z": {
+                "$": "w",
+                "mul": -0.3
+              }
+            },
+            "size": {
+              "x": 0.5,
+              "y": {
+                "$": "h"
+              },
+              "z": 0.5
+            },
+            "color": "#d8d8d0"
+          }
+        }
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": 0,
+          "y": {
+            "$": "h",
+            "mul": 1,
+            "add": 0.4
+          },
+          "z": 0
+        },
+        "size": {
+          "x": {
+            "$": "l"
+          },
+          "y": 0.8,
+          "z": {
+            "$": "w"
+          }
+        },
+        "color": "#e9e9e2"
+      },
+      {
+        "prim": "array",
+        "count": 3,
+        "step": {
+          "x": {
+            "$": "l",
+            "mul": 0.25
+          },
+          "y": 0,
+          "z": 0
+        },
+        "of": {
+          "prim": "box",
+          "at": {
+            "x": {
+              "$": "l",
+              "mul": -0.25
+            },
+            "y": 0.9,
+            "z": 0
+          },
+          "size": {
+            "x": 0.8,
+            "y": 1.8,
+            "z": 0.5
+          },
+          "color": "#b23a3a"
+        }
+      }
+    ]
+  }
+}

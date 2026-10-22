@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "id": "abando/container-stack",
+  "version": 1,
+  "name": "Container stack",
+  "kind": "group",
+  "tags": ["container", "yard", "port"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "Three shipping containers: two side by side, one on top.",
+  "thumbnail": "icon:container",
+  "params": [],
+  "content": {
+    "structures": [
+      {
+        "id": "a",
+        "kind": "container",
+        "name": "Container",
+        "x": 0,
+        "z": -1.3,
+        "rotDeg": 0,
+        "height": 2.6,
+        "size": 2.44,
+        "length": 12.2,
+        "color": "#b5683f"
+      },
+      {
+        "id": "b",
+        "kind": "container",
+        "name": "Container",
+        "x": 0,
+        "z": 1.3,
+        "rotDeg": 0,
+        "height": 2.6,
+        "size": 2.44,
+        "length": 12.2,
+        "color": "#3f7ab5"
+      },
+      {
+        "id": "c",
+        "kind": "container",
+        "name": "Container",
+        "x": 0,
+        "z": -1.3,
+        "rotDeg": 0,
+        "y": 2.6,
+        "height": 2.6,
+        "size": 2.44,
+        "length": 12.2,
+        "color": "#4f8f4a"
+      }
+    ]
+  }
+}

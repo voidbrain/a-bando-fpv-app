@@ -25,7 +25,7 @@ export interface ElementGo {
 
 const GLYPH: Record<StructureKind, string> = {
   chimney: '🏭', silo: '🛢', tank: '⛽', water_tower: '🗼', lattice_tower: '📡', bridge: '🌉', stairs: '🪜', ramp: '📐',
-  tower_crane: '🏗', container: '📦', car: '🚗', truck: '🚚', excavator: '🚜',
+  tower_crane: '🏗', container: '📦', car: '🚗', truck: '🚚', excavator: '🚜', shapes: '◆',
 };
 
 interface BRow { id: string; name: string; levels: number; size: string; points: string; frame: boolean; x: number; z: number; big: number }

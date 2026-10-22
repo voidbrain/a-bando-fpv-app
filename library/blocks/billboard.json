@@ -1,0 +1,92 @@
+{
+  "schema": 1,
+  "id": "abando/billboard",
+  "version": 1,
+  "name": "Billboard",
+  "kind": "structure",
+  "tags": ["sign", "advertising"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A big sign panel on two poles.",
+  "thumbnail": "icon:structure",
+  "params": [
+    {
+      "key": "w",
+      "label": "Width",
+      "type": "number",
+      "default": 8,
+      "min": 2,
+      "max": 20,
+      "step": 0.5
+    },
+    {
+      "key": "h",
+      "label": "Height of the panel bottom",
+      "type": "number",
+      "default": 4,
+      "min": 1,
+      "max": 15,
+      "step": 0.5
+    }
+  ],
+  "content": {
+    "shapes": [
+      {
+        "prim": "cylinder",
+        "at": {
+          "x": {
+            "$": "w",
+            "mul": -0.3
+          },
+          "y": 0,
+          "z": 0.3
+        },
+        "radius": 0.2,
+        "height": {
+          "$": "h",
+          "mul": 1,
+          "add": 3
+        },
+        "color": "#5a5f62"
+      },
+      {
+        "prim": "cylinder",
+        "at": {
+          "x": {
+            "$": "w",
+            "mul": 0.3
+          },
+          "y": 0,
+          "z": 0.3
+        },
+        "radius": 0.2,
+        "height": {
+          "$": "h",
+          "mul": 1,
+          "add": 3
+        },
+        "color": "#5a5f62"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": 0,
+          "y": {
+            "$": "h",
+            "mul": 1,
+            "add": 1.5
+          },
+          "z": 0
+        },
+        "size": {
+          "x": {
+            "$": "w"
+          },
+          "y": 3,
+          "z": 0.25
+        },
+        "color": "#d9d2b6"
+      }
+    ]
+  }
+}

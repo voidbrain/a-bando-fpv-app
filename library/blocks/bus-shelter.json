@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "id": "abando/bus-shelter",
+  "version": 1,
+  "name": "Bus shelter",
+  "kind": "structure",
+  "tags": ["street", "shelter"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "Back wall, two sides and a flat roof.",
+  "thumbnail": "icon:structure",
+  "params": [],
+  "content": {
+    "shapes": [
+      {
+        "prim": "box",
+        "at": {
+          "x": 0,
+          "y": 1.25,
+          "z": 0.8
+        },
+        "size": {
+          "x": 4,
+          "y": 2.5,
+          "z": 0.1
+        },
+        "color": "#9fb4bf"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": -1.95,
+          "y": 1.25,
+          "z": 0
+        },
+        "size": {
+          "x": 0.1,
+          "y": 2.5,
+          "z": 1.6
+        },
+        "color": "#9fb4bf"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": 1.95,
+          "y": 1.25,
+          "z": 0
+        },
+        "size": {
+          "x": 0.1,
+          "y": 2.5,
+          "z": 1.6
+        },
+        "color": "#9fb4bf"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": 0,
+          "y": 2.55,
+          "z": 0
+        },
+        "size": {
+          "x": 4.3,
+          "y": 0.12,
+          "z": 1.9
+        },
+        "color": "#4b5357"
+      }
+    ]
+  }
+}

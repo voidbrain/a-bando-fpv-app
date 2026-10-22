@@ -38,6 +38,14 @@ jobs:
         run: |
           printf "export const APP_VERSION = '1.%s';\nexport const APP_COMMIT = '%s';\n" "${{ github.run_number }}" "${GITHUB_SHA::7}" > src/app/version.ts
 
+      - name: Build the block catalogue
+        # library/blocks/*.json -> public/library/catalog.json (fails on a bad id or file name)
+        run: node tools/build-catalog.mjs
+
+      - name: Test
+        # includes core/catalog.spec.ts: every published block must pass the app's own checks
+        run: npx ng test --watch=false
+
       - name: Build
         # Production build (baseHref /a-bando-fpv-app/ set in angular.json);
         # artifacts land in dist/a-bando-fpv-app/browser

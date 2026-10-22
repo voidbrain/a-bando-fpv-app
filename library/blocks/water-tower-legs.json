@@ -1,0 +1,154 @@
+{
+  "schema": 1,
+  "id": "abando/water-tower-legs",
+  "version": 1,
+  "name": "Water tower on legs",
+  "kind": "structure",
+  "tags": ["tower", "water", "steel"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A steel tank on four braced legs.",
+  "thumbnail": "icon:waterTower",
+  "params": [
+    {
+      "key": "h",
+      "label": "Leg height",
+      "type": "number",
+      "default": 14,
+      "min": 4,
+      "max": 40,
+      "step": 1
+    },
+    {
+      "key": "r",
+      "label": "Tank radius",
+      "type": "number",
+      "default": 3,
+      "min": 1.5,
+      "max": 8,
+      "step": 0.5
+    }
+  ],
+  "content": {
+    "shapes": [
+      {
+        "prim": "array",
+        "count": 2,
+        "step": {
+          "x": 5,
+          "y": 0,
+          "z": 0
+        },
+        "of": {
+          "prim": "array",
+          "count": 2,
+          "step": {
+            "x": 0,
+            "y": 0,
+            "z": 5
+          },
+          "of": {
+            "prim": "box",
+            "at": {
+              "x": -2.5,
+              "y": {
+                "$": "h",
+                "mul": 0.5
+              },
+              "z": -2.5
+            },
+            "size": {
+              "x": 0.35,
+              "y": {
+                "$": "h"
+              },
+              "z": 0.35
+            },
+            "color": "#5f6a6e"
+          }
+        }
+      },
+      {
+        "prim": "array",
+        "count": 3,
+        "step": {
+          "x": 0,
+          "y": 4,
+          "z": 0
+        },
+        "of": {
+          "prim": "box",
+          "at": {
+            "x": 0,
+            "y": 3,
+            "z": -2.5
+          },
+          "size": {
+            "x": 5,
+            "y": 0.15,
+            "z": 0.15
+          },
+          "color": "#5f6a6e"
+        }
+      },
+      {
+        "prim": "array",
+        "count": 3,
+        "step": {
+          "x": 0,
+          "y": 4,
+          "z": 0
+        },
+        "of": {
+          "prim": "box",
+          "at": {
+            "x": 0,
+            "y": 3,
+            "z": 2.5
+          },
+          "size": {
+            "x": 5,
+            "y": 0.15,
+            "z": 0.15
+          },
+          "color": "#5f6a6e"
+        }
+      },
+      {
+        "prim": "cylinder",
+        "at": {
+          "x": 0,
+          "y": {
+            "$": "h"
+          },
+          "z": 0
+        },
+        "radius": {
+          "$": "r"
+        },
+        "height": 5,
+        "segments": 20,
+        "color": "#8a9aa3"
+      },
+      {
+        "prim": "cylinder",
+        "at": {
+          "x": 0,
+          "y": {
+            "$": "h",
+            "mul": 1,
+            "add": 5
+          },
+          "z": 0
+        },
+        "radius": {
+          "$": "r",
+          "mul": 0.6
+        },
+        "height": 0.8,
+        "segments": 20,
+        "color": "#6c7a82"
+      }
+    ]
+  }
+}
