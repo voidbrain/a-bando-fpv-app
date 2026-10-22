@@ -163,3 +163,9 @@ npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
 - `core/layers.ts`: roads (`RoadSpec`, centre lines), surfaces, water; `sanitizeLayers` checks them and migrates old road pads. `core/underground.ts`: volumes cut the terrain between floor and ceiling (`cutMask`), `floorUnder` gives the floor inside one; the collider's `groundAt(x, z, y)` uses it, so physics passes the drone's y.
 - A new element that stands on the ground lifts its mesh AND its collider boxes by `ground.at(...)` (see `liftSolids`, `liftCylinder`).
 - Editor: Terrain group (7 brushes + Tunnel), Layers group (Road, Surface, Water). One drag = one undo step; layers and tunnels create a flat terrain when the bando has none.
+
+## Blocks and the library (docs/terrain-and-library.md, Parts 2–3)
+- `core/blocks.ts`: `BlockSpec` (params, content with `{ "$": key, mul, add }` references), `sanitizeBlock` (every block from a file, the catalogue or the AI goes through it), `placeBlock` (writes ordinary elements tagged `block: BlockRef`), `applyPattern`, `updateInstance` / `detachInstance` / `removeInstance`, `blockFrom` (selection → block). `core/shapes.ts`: primitives for the `shapes` structure kind, capped, with colliders.
+- The catalogue lives in `library/blocks/*.json` (see `library/README.md`); `tools/build-catalog.mjs` writes `public/library/catalog.json`, and `core/catalog.spec.ts` imports it and checks every block. Add a block = a file + a version bump when changing one.
+- `LibraryStore` (IndexedDB, localStorage fallback in tests) is loaded by an app initializer before anything reads it. `SiteLibraryService` and `BlockLibraryService` read it synchronously from memory. The pilot's own blocks are `local/…` and are never touched by a sync.
+- The Blocks panel (`ui/studio/blocks-box.ts`) arms a placement (`armed` in the editor: the next click on the map places it, Esc stops); patterns apply to the selected building's current floor.

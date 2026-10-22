@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { SolidBox, TreeCylinder } from '../core/sim/collider';
 import type { StructureSpec } from '../core/site-spec';
+import { expandShapes, shapeSolids } from '../core/shapes';
 
 export interface BuiltStructure {
   object: THREE.Group;
@@ -27,6 +28,7 @@ export const STRUCTURE_DEFAULTS: Record<StructureSpec['kind'], { name: string; h
   car: { name: 'Car', height: 1.5, size: 1.8, length: 4.5 },
   truck: { name: 'Truck', height: 3.2, size: 2.5, length: 8.5 },
   excavator: { name: 'Excavator', height: 3, size: 2.8, length: 6 },
+  shapes: { name: 'Object', height: 3, size: 1 },
 };
 
 /** Kinds drawn as a length × width rectangle (the rest are round or square about their centre). */
@@ -67,7 +69,28 @@ export function buildStructure(s: StructureSpec): BuiltStructure {
   };
   const h = Math.max(2, s.height), r = Math.max(0.4, s.size);
 
-  if (s.kind === 'chimney') {
+  if (s.kind === 'shapes') {
+    // made of primitives (a library block): meshes in local metres, collision from core/shapes
+    const prims = expandShapes(s.shapes ?? []);
+    const mats = new Map<string, THREE.MeshStandardMaterial>();
+    const m = (c: string): THREE.MeshStandardMaterial => mats.get(c) ?? (mats.set(c, mat(c)), mats.get(c)!);
+    for (const p of prims) {
+      if (p.prim === 'box') {
+        const o = new THREE.Mesh(new THREE.BoxGeometry(p.size.x, p.size.y, p.size.z), m(p.color));
+        o.rotation.y = (-(p.rotDeg ?? 0) * Math.PI) / 180;
+        add(o, p.at.x, p.at.y, p.at.z);
+      } else if (p.prim === 'cylinder') {
+        add(new THREE.Mesh(new THREE.CylinderGeometry(p.radius, p.radius, p.height, p.segments ?? 16), m(p.color)), p.at.x, p.at.y + p.height / 2, p.at.z);
+      } else {
+        const geo = new THREE.ExtrudeGeometry(new THREE.Shape(p.outline.map((q) => new THREE.Vector2(q.x, -q.z))), { depth: p.height, bevelEnabled: false });
+        geo.rotateX(-Math.PI / 2);
+        add(new THREE.Mesh(geo, m(p.color)), p.at.x, p.at.y, p.at.z);
+      }
+    }
+    const col = shapeSolids(prims, s.x, s.z, s.rotDeg, base);
+    solids.push(...col.boxes);
+    cylinders.push(...col.cylinders);
+  } else if (s.kind === 'chimney') {
     const brick = mat(s.color ?? '#8a5a44');
     add(new THREE.Mesh(new THREE.CylinderGeometry(r * 0.62, r, h, 20), brick), 0, h / 2, 0);
     add(new THREE.Mesh(new THREE.CylinderGeometry(r * 0.7, r * 0.66, Math.min(1.6, h * 0.05), 20), mat('#3f3a37')), 0, h - Math.min(0.8, h * 0.025), 0); // dark rim

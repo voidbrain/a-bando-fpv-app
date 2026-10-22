@@ -15,6 +15,10 @@ import { newTunnel, tunnelOutline } from '../../core/underground';
 import { contourPaths, defaultTerrain, type Falloff, type TerrainOp, type TerrainStroke } from '../../core/terrain';
 import { siteGround } from '../../core/site-ground';
 import { PickMenu, type PickOption } from './pick-menu';
+import { BlocksBox, type BlockArm } from './blocks-box';
+import { applyPattern, detachInstance, placeBlock, removeInstance, updateInstance } from '../../core/blocks';
+import { BlockLibraryService } from '../../services/block-library.service';
+import { expandShapes, shapesFootprint } from '../../core/shapes';
 import { anglesAt, arcOf, fmtLength, lengthOf, nearestSnap, orthoSnap, snapTargets, type Seg } from '../../core/measure';
 import { applyStore, setColumnRows, setFacade, type FacadePattern } from '../../core/modules';
 import { areaOf, nearBuilding, scatterTrees, type ScatterMode } from '../../core/scatter';
@@ -89,7 +93,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
 /** The picture of each structure kind and fence material in the pickers (keys of TOOL_ICONS). */
 const STRUCT_ICON: Record<StructureKind, string> = {
   chimney: 'chimney', silo: 'silo', tank: 'tank', water_tower: 'waterTower', lattice_tower: 'lattice', tower_crane: 'crane',
-  bridge: 'bridge', stairs: 'stairs', ramp: 'ramp', container: 'container', car: 'car', truck: 'truck', excavator: 'excavator',
+  bridge: 'bridge', stairs: 'stairs', ramp: 'ramp', container: 'container', car: 'car', truck: 'truck', excavator: 'excavator', shapes: 'blocks',
 };
 const ROAD_ICON: Record<RoadKind, string> = { road: 'road', track: 'track', path: 'pathway', rail: 'rail' };
 const SURFACE_ICON: Record<SurfaceKind, string> = { grass: 'grassland', asphalt: 'asphalt', concrete: 'concrete', gravel: 'gravel', dirt: 'dirt', sand: 'sand', rubble: 'rubble' };
@@ -106,7 +110,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
  */
 @Component({
   selector: 'app-bando-editor',
-  imports: [FormsModule, FloatBox, AssistantBox, ElementsBox, ElementPreview, SiteView, ToolIcon, PickMenu],
+  imports: [FormsModule, FloatBox, AssistantBox, ElementsBox, ElementPreview, SiteView, ToolIcon, PickMenu, BlocksBox],
   host: { class: 'be' },
   template: `
     <div class="bar">
@@ -140,6 +144,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
       @if (mode() === 'model') {
         <button class="btn" [disabled]="!ed.canUndo()" (click)="undo()" title="Undo (Ctrl+Z)">↶</button>
         <button class="btn" [disabled]="!ed.canRedo()" (click)="redo()" title="Redo">↷</button>
+        <button class="btn" [class.on]="blocksOpen()" (click)="blocksOpen.set(!blocksOpen())" title="Blocks: ready-made objects, buildings and patterns from your library and the online catalogue">▦ Blocks</button>
         <button class="btn" [class.on]="elementsOpen()" (click)="elementsOpen.set(!elementsOpen())" title="Elements: list of all buildings, structures, walls and trees (grouped by area), with thumbnails and links">☰</button>
         <button class="btn" [class.on]="ai.open()" (click)="ai.open.set(!ai.open())" title="Chat with the AI assistant to edit buildings and interiors">💬 AI @if (ai.busy()) { <i class="spin"></i> }</button>
         <button class="btn primary" (click)="save()">Save</button>
@@ -235,6 +240,11 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                   <rect [attr.x]="-st.size" [attr.y]="-st.size" [attr.width]="st.size * 2" [attr.height]="st.size * 2" fill="#c9ced2" fill-opacity="0.6" [attr.stroke]="structI() === $index ? '#ffd166' : '#4c5359'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
                   <line [attr.x1]="-st.size" [attr.y1]="-st.size" [attr.x2]="st.size" [attr.y2]="st.size" stroke="#4c5359" vector-effect="non-scaling-stroke" pointer-events="none" />
                   <line [attr.x1]="st.size" [attr.y1]="-st.size" [attr.x2]="-st.size" [attr.y2]="st.size" stroke="#4c5359" vector-effect="non-scaling-stroke" pointer-events="none" />
+                }
+                @case ('shapes') {
+                  @if (shapesBox(st); as fb) {
+                    <rect [attr.x]="fb.x0" [attr.y]="fb.z0" [attr.width]="fb.x1 - fb.x0" [attr.height]="fb.z1 - fb.z0" fill="#c9c5b8" fill-opacity="0.75" [attr.stroke]="structI() === $index ? '#ffd166' : '#3a3a36'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" stroke-dasharray="4 2" vector-effect="non-scaling-stroke" />
+                  }
                 }
                 @case ('tower_crane') {
                   <line [attr.x1]="-(st.length ?? 45) * 0.25" y1="0" [attr.x2]="st.length ?? 45" y2="0" stroke="#e0b020" stroke-width="5" vector-effect="non-scaling-stroke" />
@@ -422,6 +432,12 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
             }
             @if (hover(); as hv) {
               <circle [attr.cx]="hv.x" [attr.cy]="hv.z" [attr.r]="terrainOp() === 'ramp' ? terrRadius() / 2 : terrRadius()" fill="none" [attr.stroke]="tc('terrain')" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+            }
+          }
+          @if (armed(); as am) {
+            @if (hover(); as hv) {
+              <circle [attr.cx]="hv.x" [attr.cy]="hv.z" [attr.r]="10 / ppm()" fill="none" stroke="#b7ed83" stroke-width="2" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" pointer-events="none" />
+              <text [attr.x]="hv.x + 12 / ppm()" [attr.y]="hv.z - 8 / ppm()" [attr.font-size]="11 / ppm()" fill="#eef4ed" stroke="#101410" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ am.block.name }}</text>
             }
           }
           @if (selOutline(); as so) {
@@ -614,6 +630,9 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
       @if (mode() === 'model' && overlayOn() && ai.open()) {
         <app-assistant-box />
       }
+      @if (mode() === 'model' && overlayOn() && blocksOpen()) {
+        <app-blocks-box [building]="b()" [structure]="structSel()" (arm)="armBlock($event)" (apply)="applyBlockPattern($event)" />
+      }
       @if (mode() === 'model' && overlayOn() && elementsOpen()) {
         <app-elements-box [spec]="ed.draft()" [selectedId]="ed.selectedId()" (go)="goTo($event)" (hover)="zoneHover.set($event)" (zones)="zonesOn.set($event)" />
       }
@@ -655,8 +674,12 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
               @if (structSel(); as st) {
                 <div class="f"><label class="grow">name <input type="text" class="grow" [value]="st.name" (change)="setStruct({ name: text($event) })" /></label></div>
                 <div class="f"><span class="dim">{{ structLabel(st.kind) }}</span></div>
-                <div class="f"><label>{{ heightLabel(st.kind) }} <input type="number" min="0.3" step="0.5" [value]="st.height" (change)="setStruct({ height: num($event) })" /></label>
-                <label>{{ sizeLabel(st.kind) }} <input type="number" min="0.3" step="0.1" [value]="st.size" (change)="setStruct({ size: num($event) })" /></label></div>
+                @if (st.kind === 'shapes') {
+                  <div class="f"><span class="dim">{{ (st.shapes ?? []).length }} shapes · {{ st.height.toFixed(1) }} m tall · its form comes from its block</span></div>
+                } @else {
+                  <div class="f"><label>{{ heightLabel(st.kind) }} <input type="number" min="0.3" step="0.5" [value]="st.height" (change)="setStruct({ height: num($event) })" /></label>
+                  <label>{{ sizeLabel(st.kind) }} <input type="number" min="0.3" step="0.1" [value]="st.size" (change)="setStruct({ size: num($event) })" /></label></div>
+                }
                 @if (hasLength(st.kind)) {
                   <div class="f"><label>{{ st.kind === 'tower_crane' ? 'jib length' : 'length' }} <input type="number" min="1" step="0.5" [value]="(st.length ?? 6).toFixed(1)" (change)="setStruct({ length: num($event) })" /></label>
                   @if (st.kind === 'bridge') {
@@ -667,6 +690,12 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                 @if (st.kind !== 'chimney' && st.kind !== 'silo' && st.kind !== 'tank' && st.kind !== 'water_tower') {
                   <label>rotation° <input type="number" step="5" [value]="st.rotDeg.toFixed(0)" (change)="setStruct({ rotDeg: num($event) })" /></label>
                 }</div>
+                @if (selBlock(); as sb) {
+                  <div class="f"><span class="dim">From block “{{ sb.name }}” v{{ sb.ref.v }}</span>
+                  @if (sb.latest) {<button class="btn" (click)="updateSelBlock()">Update to v{{ sb.latest }}</button>}
+                  <button class="btn" (click)="detachSelBlock()" title="Keep it, forget the block">Detach</button>
+                  <button class="btn danger" (click)="removeSelBlock()" title="Remove everything this placement made">Remove placement</button></div>
+                }
                 <div class="f"><button class="btn" (click)="duplicateStruct()">⧉ Duplicate</button> <button class="btn danger" (click)="deleteSel()">Delete</button></div>
               }
             }
@@ -817,6 +846,14 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                       <button class="btn" (click)="storeShell()" [disabled]="!!bd.footprint" title="The main store in one go: long walls 2 panels + 1 door, one end all doors, the other all panels, 4 rows of columns. Only for this building.">▦ Main store preset</button>
                     </div>
                   </details>
+                }
+                @if (selBlock(); as sb) {
+                  <div class="sec acts">
+                    <span class="dim small">From block “{{ sb.name }}” v{{ sb.ref.v }}</span>
+                    @if (sb.latest) {<button class="btn" (click)="updateSelBlock()">Update to v{{ sb.latest }}</button>}
+                    <button class="btn" (click)="detachSelBlock()" title="Keep it, forget the block">Detach</button>
+                    <button class="btn danger" (click)="removeSelBlock()" title="Remove everything this placement made">Remove placement</button>
+                  </div>
                 }
                 <div class="sec acts">
                   <button class="btn" (click)="convertTo(bd.frame ? 'building' : 'greenhouse')" title="Rebuilds it as the other kind: the interior, openings and outline are lost">{{ bd.frame ? '→ Building' : '→ Greenhouse' }}</button>
@@ -1693,6 +1730,86 @@ export class BandoEditor {
     this.colSet.set(set);
     this.toast.show(`${set.length} columns selected (${along === 'x' ? 'row' : along === 'z' ? 'line' : 'all alike'}).`);
   }
+  // ---- blocks: placing from the library ----
+  private readonly shapeBoxes = new WeakMap<object, { x0: number; z0: number; x1: number; z1: number }>();
+  /** The plan footprint of an object made of shapes (remembered per shapes list). */
+  protected shapesBox(st: StructureSpec): { x0: number; z0: number; x1: number; z1: number } {
+    const key = st.shapes ?? st;
+    let b = this.shapeBoxes.get(key);
+    if (!b) this.shapeBoxes.set(key, (b = shapesFootprint(expandShapes(st.shapes ?? []))));
+    return b;
+  }
+  protected readonly blocksOpen = signal(false);
+  /** The block waiting for a click on the map. */
+  protected readonly armed = signal<BlockArm | null>(null);
+  private readonly blockLib = inject(BlockLibraryService);
+  protected armBlock(a: BlockArm): void {
+    this.setTool('select');
+    this.armed.set(a);
+    this.view3d.set(false);
+    this.toast.show(`Click the map to place “${a.block.name}”. Esc stops.`);
+  }
+  private placeArmed(a: BlockArm, p: Pt): void {
+    let r = { placed: 0, inst: '' };
+    this.ed.commitSite((s) => {
+      r = placeBlock(s, a.block, a.params, { x: snap(p.x, 0.5), z: snap(p.z, 0.5) }, a.rot);
+    });
+    if (!r.placed) {
+      this.ed.undo();
+      this.toast.show('Nothing could be placed from that block.');
+      return;
+    }
+    const st = this.ed.draft().structures ?? [];
+    const bi = this.ed.draft().buildings.findIndex((x) => x.block?.inst === r.inst);
+    if (bi >= 0) {
+      this.ed.select(this.ed.draft().buildings[bi]!.id);
+      this.pick.set({ t: 'building' });
+    } else {
+      const si = st.findIndex((x) => x.block?.inst === r.inst);
+      if (si >= 0) this.pick.set({ t: 'structure', i: si });
+    }
+    this.applyNow();
+  }
+  protected applyBlockPattern(a: BlockArm): void {
+    const id = this.ed.selectedId();
+    if (!id) return void this.toast.show('Select a building first.');
+    let done: string[] = [];
+    this.ed.commitSite((s) => {
+      const x = this.index(s, id);
+      if (x) done = applyPattern(x, Math.min(this.level(), x.levels.length - 1), a.block, a.params);
+    });
+    this.applyNow();
+    this.toast.show(done.length ? `“${a.block.name}” on floor ${this.levelName(this.level())}: ${done.join(', ')}.` : 'That pattern changed nothing here.');
+  }
+  /** The block a selected building or structure was placed from, and whether a newer version exists. */
+  protected readonly selBlock = computed(() => {
+    const p = this.pick();
+    const ref = p?.t === 'structure' ? this.structSel()?.block : p?.t === 'building' || !p ? this.b()?.block : undefined;
+    if (!ref) return null;
+    const lib = this.blockLib.get(ref.id);
+    return { ref, name: lib?.name ?? ref.id, latest: lib && lib.version > ref.v ? lib.version : null };
+  });
+  protected updateSelBlock(): void {
+    const sb = this.selBlock(), lib = sb ? this.blockLib.get(sb.ref.id) : null;
+    if (!sb || !lib) return;
+    this.ed.commitSite((s) => void updateInstance(s, sb.ref.inst, lib));
+    this.applyNow();
+    this.toast.show(`Updated to v${lib.version}.`);
+  }
+  protected detachSelBlock(): void {
+    const sb = this.selBlock();
+    if (!sb) return;
+    this.ed.commitSite((s) => detachInstance(s, sb.ref.inst));
+    this.applyNow();
+  }
+  protected removeSelBlock(): void {
+    const sb = this.selBlock();
+    if (!sb) return;
+    this.ed.commitSite((s) => removeInstance(s, sb.ref.inst));
+    this.pick.set(null);
+    this.applyNow();
+  }
+
   // ---- ground layers: roads, surfaces, water ----
   protected readonly roadKind = signal<RoadKind>('road');
   protected readonly roadWidth = signal(6);
@@ -2030,7 +2147,7 @@ export class BandoEditor {
   protected readonly b = this.ed.building;
   protected readonly hasModel = computed(() => !this.studio.isNew() && this.ed.draft().buildings.length + this.ed.draft().trees.length > 0);
   protected readonly overlayOn = computed(() => this.mode() === 'model' && this.hasModel() && this.ed.draft().bearingDeg === 0);
-  protected readonly captures = computed(() => this.tool() !== 'select' || this.pinMode() !== null || this.indoor() || this.shiftHeld());
+  protected readonly captures = computed(() => this.tool() !== 'select' || this.pinMode() !== null || this.indoor() || this.shiftHeld() || !!this.armed());
   protected readonly hasPath = computed(() => !!this.flights.active);
   protected readonly atMax = computed(() => this.half().e >= MAX_HALF_EXTENT || this.half().n >= MAX_HALF_EXTENT);
 
@@ -2279,6 +2396,8 @@ export class BandoEditor {
     if (this.mode() === 'area') return 'Pan and zoom the map to place the area, drag the frame\'s edges and corners to size it, then Generate.';
     const t = this.tool();
     if (this.pinMode()) return 'Click the map where the flight ' + (this.pinMode() === 's' ? 'started' : 'ended') + '. Esc cancels.';
+    const arm = this.armed();
+    if (arm) return `Click the map to place “${arm.block.name}” (again for another one). Esc stops.`;
     if (t === 'structure') return this.structKind() === 'bridge' ? 'Drag from one end of the bridge to the other. Select it to change height, width, style.' : 'Click to place it. Select it to change height and size; drag to move.';
     if (t === 'building') return this.buildKind() === 'greenhouse' ? 'Drag a rectangle: the long side is the tunnel, the short side the arch span.' : 'Drag a rectangle to add a building (it cannot overlap another).';
     if (t === 'merge') return this.b() ? `Click a touching building to merge it into “${this.b()!.name}”.` : 'Click the building to keep, then the one to merge into it.';
@@ -2638,6 +2757,11 @@ export class BandoEditor {
     // only reached while the overlay captures (a drawing tool or a pin is armed)
     const p = this.toWorld(e);
     this.capture(e);
+    const armed = this.armed();
+    if (armed && !this.pinMode()) {
+      this.placeArmed(armed, p);
+      return;
+    }
     if (!this.pinMode() && this.tool() === 'select' && this.indoor()) {
       // indoors the plan owns the pointer: drag on the floor = box-select, outside the building = pan the map
       const sel = this.b();
@@ -3055,6 +3179,7 @@ export class BandoEditor {
   protected asStruct = (v: string): StructureKind => (this.structKinds.some((k) => k.id === v) ? (v as StructureKind) : 'chimney');
   protected styleOf = (e: Event): 'beam' | 'arch' => ((e.target as HTMLSelectElement).value === 'arch' ? 'arch' : 'beam');
   protected structLabel(k: StructureKind): string {
+    if (k === 'shapes') return 'Object made of shapes';
     return this.structKinds.find((x) => x.id === k)?.label.replace(' (drag)', '') ?? k;
   }
   protected sizeLabel(k: StructureKind): string {
@@ -3238,7 +3363,7 @@ export class BandoEditor {
   protected move(e: PointerEvent): void {
     const d = this.drag();
     if (!d) {
-      if (this.placing() || this.tool() === 'terrain') this.hover.set(this.toWorld(e)); // the ghost (and its guides) follow the pointer
+      if (this.placing() || this.tool() === 'terrain' || this.armed()) this.hover.set(this.toWorld(e)); // the ghost (and its guides) follow the pointer
       // measuring: after the first point, a live line follows the pointer
       if (this.tool() === 'measure') this.measHover.set(this.measPoint(this.toWorld(e)));
       return;
@@ -3790,6 +3915,8 @@ export class BandoEditor {
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault();
       this.deleteSel();
+    } else if (e.key === 'Escape' && this.armed()) {
+      this.armed.set(null);
     } else if (e.key === 'Escape') {
       this.tool.set('select');
       this.scene.pin.set(null);

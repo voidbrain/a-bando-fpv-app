@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "id": "abando/column-rows",
+  "version": 1,
+  "name": "Column rows",
+  "kind": "pattern",
+  "tags": ["columns", "hall"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "Rows of columns along the hall; 4 rows are spaced 1 - 2 - 1.",
+  "thumbnail": "icon:column",
+  "params": [
+    {
+      "key": "rows",
+      "label": "Rows",
+      "type": "int",
+      "default": 4,
+      "min": 1,
+      "max": 8
+    },
+    {
+      "key": "step",
+      "label": "Every",
+      "type": "number",
+      "default": 10,
+      "min": 2,
+      "max": 40,
+      "step": 0.5
+    },
+    {
+      "key": "inset",
+      "label": "From the long walls",
+      "type": "number",
+      "default": 4,
+      "min": 1,
+      "max": 30,
+      "step": 0.5
+    }
+  ],
+  "content": {
+    "pattern": {
+      "columns": {
+        "rows": {
+          "$": "rows"
+        },
+        "step": {
+          "$": "step"
+        },
+        "inset": {
+          "$": "inset"
+        }
+      }
+    }
+  }
+}

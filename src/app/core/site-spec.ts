@@ -9,6 +9,8 @@
 
 import { sanitizeTerrain, type TerrainSpec } from './terrain';
 import { sanitizeLayers } from './layers';
+import { sanitizeShapes, type ShapeSpec } from './shapes';
+import type { BlockRef } from './blocks';
 
 export interface Vec2 {
   x: number;
@@ -60,7 +62,7 @@ export interface ColumnSpec {
   round?: boolean;
 }
 
-export type StructureKind = 'chimney' | 'silo' | 'tank' | 'water_tower' | 'lattice_tower' | 'bridge' | 'stairs' | 'ramp' | 'tower_crane' | 'container' | 'car' | 'truck' | 'excavator';
+export type StructureKind = 'chimney' | 'silo' | 'tank' | 'water_tower' | 'lattice_tower' | 'bridge' | 'stairs' | 'ramp' | 'tower_crane' | 'container' | 'car' | 'truck' | 'excavator' | 'shapes';
 
 /**
  * A free-standing structure that is not a building: towers (chimney, silo, storage tank, water tower, lattice mast
@@ -85,6 +87,10 @@ export interface StructureSpec {
   /** Bridge only: flat beam on piers, or an arch below the deck. */
   style?: 'beam' | 'arch';
   color?: string;
+  /** Kind 'shapes': the primitives it is made of (local metres, see core/shapes.ts). */
+  shapes?: ShapeSpec[];
+  /** Placed from a library block. */
+  block?: BlockRef;
 }
 
 /** A free-standing wall or fence on the site (not part of a building). */
@@ -96,6 +102,8 @@ export interface WallSpec {
   color?: string;
   /** What it is made of (see core/fences.ts); absent = a masonry wall. */
   material?: 'masonry' | 'concrete' | 'brick' | 'wood' | 'metal' | 'chainlink';
+  /** Placed from a library block. */
+  block?: BlockRef;
 }
 
 export interface LevelSpec {
@@ -150,6 +158,8 @@ export interface BuildingSpec {
   floorColor?: string;
   /** Greenhouse-style thin steel frame instead of masonry walls (walls ignored). */
   frame?: 'greenhouse';
+  /** Placed from a library block. */
+  block?: BlockRef;
 }
 
 export interface TreeSpec {
@@ -158,6 +168,8 @@ export interface TreeSpec {
   h: number;
   r: number;
   kind: 'd' | 'c';
+  /** Placed from a library block. */
+  block?: BlockRef;
 }
 
 export interface PadSpec {
@@ -404,7 +416,8 @@ export function sanitizeSpec(raw: unknown): SiteSpec | null {
     buildings: s.buildings.filter((b) => b && typeof b.length === 'number') as BuildingSpec[],
     pads: Array.isArray(s.pads) ? (s.pads as PadSpec[]) : [],
     walls: Array.isArray(s.walls) ? (s.walls as WallSpec[]) : [],
-    structures: Array.isArray(s.structures) ? (s.structures as StructureSpec[]) : [],
+    // a 'shapes' structure carries primitives from files or AI output: they are checked and capped like the rest
+    structures: Array.isArray(s.structures) ? (s.structures as StructureSpec[]).filter((x) => x && typeof x.kind === 'string').map((x) => (x.kind === 'shapes' ? { ...x, shapes: sanitizeShapes(x.shapes) } : x)) : [],
     trees: Array.isArray(s.trees) ? (s.trees as TreeSpec[]) : [],
     seed: typeof s.seed === 'number' ? s.seed : 7,
     extent: typeof s.extent === 'number' ? s.extent : 500,

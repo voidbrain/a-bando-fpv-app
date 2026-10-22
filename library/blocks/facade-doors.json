@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "id": "abando/facade-doors",
+  "version": 1,
+  "name": "Door fa\u00e7ade",
+  "kind": "pattern",
+  "tags": ["facade", "doors", "garage"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "Every bay a full-height door: garages, sheds, a fire station.",
+  "thumbnail": "icon:door",
+  "params": [
+    {
+      "key": "bay",
+      "label": "Bay",
+      "type": "number",
+      "default": 4,
+      "min": 2,
+      "max": 20,
+      "step": 0.5
+    }
+  ],
+  "content": {
+    "pattern": {
+      "facade": {
+        "pattern": "doors",
+        "bay": {
+          "$": "bay"
+        },
+        "side": "all"
+      }
+    }
+  }
+}

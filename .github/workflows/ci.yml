@@ -1,0 +1,34 @@
+name: CI
+
+# Every pull request (a new block in library/blocks, or code): build the catalogue, run the tests, build the app.
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build the block catalogue
+        run: node tools/build-catalog.mjs
+
+      - name: Test
+        run: npx ng test --watch=false
+
+      - name: Type check
+        run: npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
+
+      - name: Build
+        run: npm run build

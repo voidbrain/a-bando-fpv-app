@@ -4,6 +4,8 @@ import { AI_SCHEMA, SYSTEM_PROMPT, buildContext, parseReply } from '../core/ai-p
 import { runCommands, type AiCommand } from '../core/ai-commands';
 import { serverChat, type ChatMessage, type ServerConfig } from '../core/ai-server';
 import { cloneSpec } from '../core/site-spec';
+import { BLOCK_PROMPT, BLOCK_SCHEMA, parseBlockReply } from '../core/ai-blocks';
+import type { BlockSpec } from '../core/blocks';
 import { SiteService } from './site.service';
 
 export interface AiModel {
@@ -257,16 +259,35 @@ export class AiService {
     }
   }
 
+  /**
+   * Describe an object and get one of the pilot's own blocks back (primitive shapes). The model's answer is only a
+   * proposal: it is checked like any block file; the caller shows it before it is kept.
+   */
+  async generateBlock(description: string): Promise<{ block: BlockSpec | null; error?: string }> {
+    const t = description.trim();
+    if (!t) return { block: null, error: 'Describe the object first.' };
+    if (this.status() !== 'ready') return { block: null, error: 'Connect or load a model in the assistant first.' };
+    if (this.busy()) return { block: null, error: 'The assistant is busy.' };
+    this.busy.set(true);
+    try {
+      return parseBlockReply(await this.complete([{ role: 'system', content: BLOCK_PROMPT }, { role: 'user', content: t }], BLOCK_SCHEMA, 2000));
+    } catch (e) {
+      return { block: null, error: e instanceof Error ? e.message : String(e) };
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
   /** One model call on whichever provider is selected; returns the raw text. */
-  private async complete(messages: ChatMessage[]): Promise<string> {
-    if (this.provider() === 'server') return serverChat(this.server(), messages);
+  private async complete(messages: ChatMessage[], schema: object = AI_SCHEMA, maxTokens = 700): Promise<string> {
+    if (this.provider() === 'server') return serverChat(this.server(), messages, maxTokens, undefined, { name: schema === AI_SCHEMA ? 'site_edit' : 'block', schema });
     if (!this.engine) throw new Error('The model is not loaded.');
     const qwen3 = /^Qwen3-/.test(this.modelId());
     const out = await this.engine.chat.completions.create({
       messages,
       temperature: 0.1,
-      max_tokens: 700,
-      response_format: { type: 'json_object', schema: JSON.stringify(AI_SCHEMA) },
+      max_tokens: maxTokens,
+      response_format: { type: 'json_object', schema: JSON.stringify(schema) },
       ...(qwen3 ? { extra_body: { enable_thinking: false } } : {}),
     });
     return out.choices[0]?.message?.content ?? '';

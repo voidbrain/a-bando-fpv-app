@@ -1,10 +1,12 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, computed, inject } from '@angular/core';
 import type { SiteSpec } from '../core/site-spec';
 import { cloneSpec, sanitizeSpec, uid } from '../core/site-spec';
+import { LibraryStore } from './library-store.service';
 import { StorageService } from './storage.service';
 
-const INDEX_KEY = 'abando-ng-sites';
-const specKey = (id: string): string => `abando-ng-site-${id}`;
+/** Where older versions kept bandos in localStorage (moved into the store once, then removed). */
+const LEGACY_INDEX = 'abando-ng-sites';
+const legacyKey = (id: string): string => `abando-ng-site-${id}`;
 
 /** Index row: what the library list shows without parsing every spec. */
 export interface SiteEntry {
@@ -15,54 +17,78 @@ export interface SiteEntry {
   buildings: number;
 }
 
+/** One stored bando: the spec and when it was last saved (the list shows the newest first). */
+interface SiteRecord {
+  savedAt: number;
+  spec: SiteSpec;
+}
+
 /**
- * The site library: every generated / edited model is a plain {@link SiteSpec} stored in localStorage — open data
- * (OSM footprints + own edits), so saving it is allowed with attribution. One index key lists the entries; each spec
- * lives under its own key so a corrupt entry cannot break the whole library.
+ * The site library: every generated / edited model is a plain {@link SiteSpec} — open data (OSM footprints + own edits),
+ * so saving it is allowed with attribution. It lives in the {@link LibraryStore} (IndexedDB), one record per bando, so a
+ * corrupt entry cannot break the whole library. Bandos saved by older versions in localStorage are moved over once.
  */
 @Injectable({ providedIn: 'root' })
 export class SiteLibraryService {
+  private readonly store = inject(LibraryStore);
   private readonly storage = inject(StorageService);
-  private readonly revision = signal(0);
   /** Reactive library index: re-evaluates whenever a site is saved, renamed, duplicated or removed. */
-  readonly entries = computed<SiteEntry[]>(() => {
-    this.revision();
-    return this.list();
-  });
+  readonly entries = computed<SiteEntry[]>(() => this.list());
+
+  constructor() {
+    if (typeof indexedDB === 'undefined') this.migrateLegacy();
+  }
 
   list(): SiteEntry[] {
-    const raw = this.storage.readRaw(INDEX_KEY);
-    if (!raw) return [];
-    try {
-      const arr = JSON.parse(raw) as unknown;
-      return Array.isArray(arr) ? (arr as SiteEntry[]).filter((e) => e && typeof e.id === 'string') : [];
-    } catch {
-      return [];
-    }
+    this.store.revision(); // any computed reading the list follows the library
+    return this.store
+      .all<SiteRecord>('sites')
+      .filter((r) => r && r.spec && typeof r.spec.id === 'string')
+      .sort((a, b) => b.savedAt - a.savedAt)
+      .map(({ spec }) => ({ id: spec.id, name: spec.name, createdAt: spec.createdAt, origin: spec.origin, buildings: spec.buildings?.length ?? 0 }));
   }
 
   load(id: string): SiteSpec | null {
-    const raw = this.storage.readRaw(specKey(id));
-    if (!raw) return null;
-    try {
-      return sanitizeSpec(JSON.parse(raw) as unknown);
-    } catch {
-      return null;
-    }
+    const r = this.store.get<SiteRecord>('sites', id);
+    return r ? sanitizeSpec(r.spec) : null;
   }
 
   save(spec: SiteSpec): void {
-    this.storage.write(specKey(spec.id), spec);
-    const entries = this.list().filter((e) => e.id !== spec.id);
-    entries.unshift({ id: spec.id, name: spec.name, createdAt: spec.createdAt, origin: spec.origin, buildings: spec.buildings.length });
-    this.storage.write(INDEX_KEY, entries.slice(0, 50));
-    this.revision.update((n) => n + 1);
+    this.store.put('sites', spec.id, { savedAt: Date.now(), spec: cloneSpec(spec) } satisfies SiteRecord);
   }
 
   remove(id: string): void {
-    this.storage.remove(specKey(id));
-    this.storage.write(INDEX_KEY, this.list().filter((e) => e.id !== id));
-    this.revision.update((n) => n + 1);
+    this.store.delete('sites', id);
+  }
+
+  /** Move bandos saved by older versions (one localStorage key each, plus an index) into the store, once. */
+  migrateLegacy(): number {
+    const raw = this.storage.readRaw(LEGACY_INDEX);
+    if (!raw) return 0;
+    let ids: string[] = [];
+    try {
+      const arr = JSON.parse(raw) as unknown;
+      ids = Array.isArray(arr) ? (arr as { id?: unknown }[]).map((e) => e?.id).filter((x): x is string => typeof x === 'string') : [];
+    } catch {
+      /* corrupt index: nothing to move */
+    }
+    let n = 0;
+    ids.forEach((id, i) => {
+      const t = this.storage.readRaw(legacyKey(id));
+      if (!t || this.store.get('sites', id)) return;
+      try {
+        const spec = sanitizeSpec(JSON.parse(t) as unknown);
+        if (spec) {
+          this.store.put('sites', id, { savedAt: Date.now() - i, spec } satisfies SiteRecord);
+          n++;
+        }
+      } catch {
+        /* skip a corrupt bando */
+      }
+    });
+    for (const id of ids) this.storage.remove(legacyKey(id));
+    this.storage.remove(LEGACY_INDEX);
+    return n;
   }
 
   /** Store a copy of a site under a new id; returns it (null when the source is missing). */
