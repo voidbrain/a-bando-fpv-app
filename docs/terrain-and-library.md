@@ -1,7 +1,22 @@
 # Terrain and the blocks library — plan
 
-Status: agreed plan, nothing built. The questions at the end are decided (2026-10-22); each section names the ones it
-depends on as **Q1, Q2…**.
+Status: Part 1 (terrain) is built, see "Part 1 — what was built" below; Parts 2 and 3 are not started. The questions
+at the end are decided (2026-10-22); each section names the ones it depends on as **Q1, Q2…**.
+
+## Part 1 — what was built
+
+| Plan step | Where | Notes |
+| --- | --- | --- |
+| 1 grid + `heightAt` + brushes | `core/terrain.ts`, Terrain group in `bando-editor.ts` | raise, lower, smooth, flatten, hill, crater, ramp; contours on the plan |
+| 2 everything on the terrain | `core/site-ground.ts`, `three/site-model.ts`, `core/sim/*` | buildings on levelled pads, trees, structures, fences, pad, simulator, picks, flight paths |
+| 3 real elevation | `core/elevation.ts`, `services/elevation.service.ts` | AWS terrarium tiles at z15, cached in IndexedDB, loaded on generation, "Real ground" button |
+| 4 roads as lines | `core/layers.ts` (`RoadSpec`), Road tool | road / track / path / rail; old road pads migrate to two-point roads |
+| 5 surfaces | `core/layers.ts` (`SurfaceSpec`), Surface tool | polygons (Q8); OSM landuse / natural / parking |
+| 6 water | `core/layers.ts` (`WaterSpec`), Water tool | dug basin, flat surface, touching it crashes the drone (Q13) |
+| 7 underground | `core/underground.ts`, Tunnel tool | tunnel or room, box / pipe / vault, cut where the ground passes through |
+
+Not done from Part 1: building basements through a negative `baseY` (1.6, last paragraph), 3D measures (1.4), a
+section view along a tunnel (1.6), national DEMs (Q6). The terrain tools work in the 2D editor only.
 
 ## Goals
 
