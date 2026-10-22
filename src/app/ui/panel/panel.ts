@@ -207,6 +207,12 @@ export class Panel {
     if (!this.def().resizable) return;
     const r = this.host.nativeElement.getBoundingClientRect();
     this.resizing = e.clientX > r.right - 24 && e.clientY > r.bottom - 24;
+    if (this.resizing) {
+      // a panel still sitting on its right / bottom anchor would grow towards the left / top: pin it by its top-left corner first
+      const el = this.host.nativeElement;
+      const s = this.state();
+      if (s.x === null || s.y === null) this.layout.moveTo(this.id(), s.x ?? el.offsetLeft, s.y ?? el.offsetTop);
+    }
   }
 
   protected sizeCommit(): void {
