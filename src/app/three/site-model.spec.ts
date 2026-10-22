@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { emptySpec, type SiteSpec } from '../core/site-spec';
 import { buildSiteFromSpec } from './site-model';
+import { Vec3 } from '../core/math3d';
 
 /** A small but complete site: ground 528 m wide (extent 240), two buildings, a few pads, a tower and a bridge. */
 const spec = (): SiteSpec => {
@@ -155,5 +156,48 @@ describe('walls with several openings', () => {
     expect(box.max.x).toBeLessThan(15.6);
     expect(box.min.z).toBeGreaterThan(-6.6);
     expect(box.max.z).toBeLessThan(6.6);
+  });
+});
+
+describe('site model on a terrain', () => {
+  const hilly = (): SiteSpec => {
+    const s = spec();
+    s.terrain = { cell: 1, half: { e: 120, n: 120 }, strokes: [{ op: 'hill', pts: [{ x: 60, z: 20 }], radius: 40, strength: 8 }, { op: 'hill', pts: [{ x: -30, z: -30 }], radius: 20, strength: 5 }] };
+    s.walls = [{ a: { x: 40, z: -10 }, b: { x: 80, z: -10 }, height: 2, thick: 0.3 }];
+    s.trees = [{ x: 70, z: 40, h: 8, r: 2, kind: 'd' }];
+    return s;
+  };
+
+  it('builds one terrain mesh and keeps the flat ground for sites without terrain', () => {
+    const flatSite = buildSiteFromSpec(spec());
+    expect(flatSite.ground.grid).toBeNull();
+    const m = buildSiteFromSpec(hilly());
+    expect(m.ground.grid).not.toBeNull();
+    let terrain = 0;
+    m.group.traverse((o) => {
+      if (o instanceof THREE.Mesh && o.geometry.getAttribute('color') && o.geometry.index && o.geometry.index.count > 100_000) terrain++;
+    });
+    expect(terrain).toBe(1);
+  });
+
+  it('lifts buildings, structures, walls and trees onto the ground, colliders included', () => {
+    const m = buildSiteFromSpec(hilly());
+    const by = m.ground.building.get('b')!;
+    expect(by).toBeGreaterThan(2);
+    let building: THREE.Object3D | null = null;
+    m.group.traverse((o) => {
+      if ((o.userData['pick'] as { id?: string } | undefined)?.id === 'b' && o.parent === m.group) building = o;
+    });
+    expect((building as THREE.Object3D | null)?.position.y).toBeCloseTo(by);
+    // the building's walls are solid above its pad, not at y = 0
+    expect(m.collider.hit(new Vec3(60, by + 2, 20 - 5))).toBe(true);
+    expect(m.collider.hit(new Vec3(60, 1, 20 - 5))).toBe(false);
+    // chimney on its own hill: solid well above the old ground level
+    const cy = m.ground.at(-30, -30);
+    expect(m.collider.hit(new Vec3(-30, cy + 25, -30))).toBe(true);
+    // tree: solid above its own ground, not below it
+    const ty = m.ground.at(70, 40);
+    expect(m.collider.hit(new Vec3(70, ty + 3, 40))).toBe(true);
+    expect(m.collider.groundAt(70, 40)).toBeCloseTo(ty);
   });
 });

@@ -50,6 +50,8 @@ const DRAG = 0.45;
 export interface TakeoffSpot {
   x: number;
   z: number;
+  /** Ground height of the pad (default 0). */
+  y?: number;
 }
 
 export function createDroneState(modelScale = 1, takeoff: TakeoffSpot = { x: 0, z: 0 }): DroneState {
@@ -69,7 +71,7 @@ export function createDroneState(modelScale = 1, takeoff: TakeoffSpot = { x: 0, 
 /** Back to the take-off pad of the current site, disarmed. */
 export function resetDroneState(d: DroneState, modelScale: number, takeoff: TakeoffSpot = { x: 0, z: 0 }): void {
   d.armed = false;
-  d.p.set(takeoff.x * modelScale, DRONE_REST_HEIGHT, takeoff.z * modelScale);
+  d.p.set(takeoff.x * modelScale, (takeoff.y ?? 0) * modelScale + DRONE_REST_HEIGHT, takeoff.z * modelScale);
   d.v.set(0, 0, 0);
   d.yaw = -Math.PI / 2;
   d.q.setFromEuler(0, d.yaw, 0, 'YXZ');
@@ -104,8 +106,9 @@ export function stepDrone(d: DroneState, dt: number, input: PilotInput, cfg: Con
       .normalize();
   }
 
+  const ground = world?.groundAt?.(d.p.x, d.p.z) ?? 0;
   // On the ground the drone levels itself and keeps its heading.
-  if (!d.armed && d.p.y < 0.1) {
+  if (!d.armed && d.p.y < ground + 0.1) {
     d.yaw = eulerYXZ(d.q).y;
     d.q.slerp(target.setFromEuler(0, d.yaw, 0, 'YXZ'), 0.2);
   }
@@ -133,8 +136,9 @@ export function stepDrone(d: DroneState, dt: number, input: PilotInput, cfg: Con
       d.p[axis] = next[axis];
     }
   }
-  if (d.p.y < DRONE_REST_HEIGHT) {
-    d.p.y = DRONE_REST_HEIGHT;
+  const floor = (world?.groundAt?.(d.p.x, d.p.z) ?? 0) + DRONE_REST_HEIGHT;
+  if (d.p.y < floor) {
+    d.p.y = floor;
     if (d.v.y < -GROUND_CRASH_SPEED) crashed = true;
     if (d.v.y < 0) d.v.y = 0;
     d.v.x *= 0.9;

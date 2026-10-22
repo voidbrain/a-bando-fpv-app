@@ -94,10 +94,10 @@ export class SimulatorService {
   }
 
   /** Move the parked drone to a new take-off pad (scaled world coords), keeping it disarmed. */
-  reposition(x: number, z: number): void {
+  reposition(x: number, z: number, y = 0): void {
     const scale = this.calibration.modelScale();
     this.setArmed(false);
-    this.state.p.set(x * scale, DRONE_REST_HEIGHT, z * scale);
+    this.state.p.set(x * scale, y * scale + DRONE_REST_HEIGHT, z * scale);
     this.state.v.set(0, 0, 0);
   }
 

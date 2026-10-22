@@ -7,6 +7,8 @@
  * origin = centre of the main building. All values in metres unless noted.
  */
 
+import { sanitizeTerrain, type TerrainSpec } from './terrain';
+
 export interface Vec2 {
   x: number;
   z: number;
@@ -204,6 +206,8 @@ export interface SiteSpec {
   extent: number;
   /** Take-off pad position in site metres (scaled with the model). */
   droneStart: Vec2;
+  /** Ground shape (real elevation + the pilot's strokes). Absent = flat ground at y = 0. */
+  terrain?: TerrainSpec;
   /** Two landmarks used to fit logged GPS paths onto the model (model corners ↔ real corners). */
   calibCorners: { p1: { x: number; z: number }; p2: { x: number; z: number } };
   /** The same two landmarks as real coordinates, so calibration survives loading a stored site. */
@@ -342,6 +346,7 @@ export function sanitizeSpec(raw: unknown): SiteSpec | null {
     seed: typeof s.seed === 'number' ? s.seed : 7,
     extent: typeof s.extent === 'number' ? s.extent : 500,
     droneStart: s.droneStart && typeof s.droneStart.x === 'number' ? s.droneStart : { x: 0, z: 0 },
+    terrain: sanitizeTerrain(s.terrain),
     calibCorners: s.calibCorners ?? { p1: { x: -100, z: -100 }, p2: { x: 100, z: 100 } },
     geoCorners:
       s.geoCorners && typeof s.geoCorners.p1?.lat === 'number' && typeof s.geoCorners.p2?.lat === 'number'

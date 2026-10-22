@@ -1,13 +1,16 @@
 import type { Vec3 } from '../math3d';
+import { heightAt, type HeightGrid } from '../terrain';
 
 /** Axis-aligned box [x0, x1, y0, y1, z0, z1, isRoof] in unscaled model coordinates. */
 export type SolidBox = readonly [number, number, number, number, number, number, boolean];
-/** Vertical tree trunk/crown: [x, z, radius, topHeight]. */
-export type TreeCylinder = readonly [number, number, number, number];
+/** Vertical tree trunk/crown: [x, z, radius, topHeight, baseHeight (default 0)]. */
+export type TreeCylinder = readonly [number, number, number, number, number?];
 
 /** Anything the drone can bump into. Implemented by {@link SiteCollider}; tests can supply a fake. */
 export interface CollisionWorld {
   hit(p: Vec3): boolean;
+  /** Ground height under (x, z), world (scaled) metres. Absent = flat at 0. */
+  groundAt?(x: number, z: number): number;
 }
 
 /**
@@ -24,7 +27,14 @@ export class SiteCollider implements CollisionWorld {
   constructor(
     readonly solids: readonly SolidBox[] = [],
     readonly trees: readonly TreeCylinder[] = [],
+    /** Terrain heights (unscaled); null = flat ground at 0. */
+    readonly ground: HeightGrid | null = null,
   ) {}
+
+  groundAt(x: number, z: number): number {
+    const k = this.scale;
+    return heightAt(this.ground, x / k, z / k) * k;
+  }
 
   hit(p: Vec3): boolean {
     const k = this.scale;
@@ -35,7 +45,7 @@ export class SiteCollider implements CollisionWorld {
       if (x > b[0] - m && x < b[1] + m && y > b[2] - m && y < b[3] + m && z > b[4] - m && z < b[5] + m) return true;
     }
     for (const t of this.trees) {
-      if (y < t[3] && Math.hypot(x - t[0], z - t[1]) < t[2] + m) return true;
+      if (y < t[3] && y > (t[4] ?? -Infinity) && Math.hypot(x - t[0], z - t[1]) < t[2] + m) return true;
     }
     return false;
   }

@@ -157,7 +157,7 @@ export class SceneService {
     }
     this.sim.world = site.collider;
     const t = takeoffSpot();
-    this.sim.reposition(t.x, t.z);
+    this.sim.reposition(t.x, t.z, t.y ?? 0);
     untracked(() => this.host?.paths.rebuild(this.flights.all, this.flights.speedMax));
   }
 

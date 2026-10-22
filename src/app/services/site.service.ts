@@ -1,12 +1,13 @@
 import { Injectable, computed, effect, inject, signal, untracked, type WritableSignal } from '@angular/core';
-import * as THREE from 'three';
 import type { Calibration, GeoPoint } from '../core/models';
 import { setSiteOrigin } from '../core/constants';
 import { solveCalibration, toGeo } from '../core/geo';
 import { bounds, edgesOf, recentre, rectilinear, type Pt } from '../core/footprint';
 import type { BuildingSpec, LocationInfo, PadSpec, SiteSpec, StructureSpec, TreeSpec, Vec2, WallOpening } from '../core/site-spec';
 import { emptySpec, uid } from '../core/site-spec';
-import { setTakeoff } from '../core/takeoff';
+import { setActiveGround, setTakeoff } from '../core/takeoff';
+import type { HeightGrid } from '../core/terrain';
+import { siteGround } from '../core/site-ground';
 import type { Footprint } from './geo.service';
 import { SiteEditor } from '../core/site-editor';
 import { CalibrationStore } from '../state/calibration.store';
@@ -210,11 +211,8 @@ export class SiteService {
     const host = this.scene.host;
     if (!host) return;
     const rect = host.canvas.getBoundingClientRect();
-    const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
-    const ray = new THREE.Raycaster();
-    ray.setFromCamera(ndc, host.mainCamera);
-    const hit = new THREE.Vector3();
-    if (!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit)) return;
+    const hit = host.groundPoint(host.mainCamera, ((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+    if (!hit) return;
     const k = this.calibration.modelScale() || 1;
     const [lat, lon] = toGeo(hit.x / k, hit.z / k, this.calibration.calibration());
     await this.generateFromPoint(lat, lon);
@@ -416,13 +414,21 @@ export class SiteService {
     return spec;
   }
 
+  /** The terrain grid the flight paths were last laid on (a new grid re-projects them). */
+  private groundGrid: HeightGrid | null = null;
+
   private applySpec(spec: SiteSpec, resetView: boolean): void {
     this.active.set(spec);
     // adopt the spec as the new draft, unless the caller is applying the draft itself (live preview)
     if (!sameSpec(this.editor.draft(), spec)) this.editor.load(spec);
     writeStoredId(spec.id);
     setSiteOrigin(spec.origin);
-    setTakeoff(spec.droneStart);
+    const ground = siteGround(spec);
+    setTakeoff({ ...spec.droneStart, y: ground.start });
+    if (ground.grid !== this.groundGrid) {
+      this.groundGrid = ground.grid;
+      setActiveGround(ground.grid ? ground.at : null);
+    }
     this.calibration.apply(spec.calibration ?? calibrationForSpec(spec)); // the pilot's own alignment wins over the solved one
     if (resetView) this.scene.resetCamera();
     if (this.scene.host) {

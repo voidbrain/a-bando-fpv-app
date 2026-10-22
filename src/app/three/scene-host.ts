@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { DroneRig, type RigContext } from './drone-rig';
 import { PathRenderer } from './path-renderer';
 import { buildSiteFromSpec, type SiteModel } from './site-model';
+import { rayGround } from '../core/terrain';
 import type { SiteSpec } from '../core/site-spec';
 import { emptySpec } from '../core/site-spec';
 import type { CameraView } from '../core/models';
@@ -120,6 +121,13 @@ export class SceneHost {
   /** Where a click at (nx, ny) in normalised device coordinates (-1..1) lands on the ground plane, or null. */
   groundPoint(camera: THREE.Camera, nx: number, ny: number): { x: number; z: number } | null {
     this.raycaster.setFromCamera(new THREE.Vector2(nx, ny), camera);
+    const grid = this.site.ground.grid;
+    if (grid) {
+      // the terrain is built unscaled: march the ray in model metres, answer in world metres
+      const k = this.site.collider.scale || 1, o = this.raycaster.ray.origin, d = this.raycaster.ray.direction;
+      const p = rayGround(grid, { x: o.x / k, y: o.y / k, z: o.z / k }, d);
+      return p ? { x: p.x * k, z: p.z * k } : null;
+    }
     const hit = this.raycaster.ray.intersectPlane(this.ground, new THREE.Vector3());
     return hit ? { x: hit.x, z: hit.z } : null;
   }

@@ -3,6 +3,8 @@ import { buildStructure } from './structures';
 import * as THREE from 'three';
 import { type BuildingSpec, type LevelSpec, type SiteSpec, type TreeSpec, createRandom } from '../core/site-spec';
 import { SiteCollider, type SolidBox, type TreeCylinder } from '../core/sim/collider';
+import { siteGround, type SiteGround } from '../core/site-ground';
+import type { HeightGrid } from '../core/terrain';
 
 export type TreeKind = 'd' | 'c';
 
@@ -13,6 +15,8 @@ export interface SiteModel {
   /** Roofs (hidden together by the "Hide roof" toggle). */
   roof: THREE.Group;
   collider: SiteCollider;
+  /** The ground everything stands on (flat when the spec has no terrain). */
+  ground: SiteGround;
   trees: TreeField;
   /** Meshes the x-ray may fade when they hide the drone. */
   occluders: THREE.Mesh[];
@@ -30,19 +34,23 @@ export class TreeField {
     readonly trunks: THREE.InstancedMesh,
     readonly crownsDec: THREE.InstancedMesh,
     readonly crownsCon: THREE.InstancedMesh,
+    /** Ground height under each tree (same order as `dec` / `con`). */
+    readonly decY: readonly number[] = [],
+    readonly conY: readonly number[] = [],
   ) {}
 
   matrix(kind: TreeKind, i: number, trunk: boolean): THREE.Matrix4 {
     const t = (kind === 'd' ? this.dec : this.con)[i] as TreeSpec;
+    const y = (kind === 'd' ? this.decY : this.conY)[i] ?? 0;
     const o = this.tmp;
     if (trunk) {
-      o.position.set(t.x, t.h * 0.2, t.z);
+      o.position.set(t.x, y + t.h * 0.2, t.z);
       o.scale.set(1, t.h * 0.4, 1);
     } else if (kind === 'd') {
-      o.position.set(t.x, t.h * 0.4 + t.r * 0.7, t.z);
+      o.position.set(t.x, y + t.h * 0.4 + t.r * 0.7, t.z);
       o.scale.set(t.r, t.r * 1.15, t.r);
     } else {
-      o.position.set(t.x, t.h * 0.65, t.z);
+      o.position.set(t.x, y + t.h * 0.65, t.z);
       o.scale.set(t.r * 0.9, t.h * 0.8, t.r * 0.9);
     }
     o.rotation.set(0, 0, 0);
@@ -325,6 +333,94 @@ function rotBoxLocal(x: number, z: number, w: number, d: number, deg: number, y0
   return [x - hw, x + hw, y0, y1, z - hd, z + hd, roof];
 }
 
+/** Raise collider boxes / cylinders added from index `from` on by `dy` (an element standing on the terrain). */
+function liftSolids(solids: SolidBox[], from: number, dy: number): void {
+  if (!dy) return;
+  for (let i = from; i < solids.length; i++) {
+    const b = solids[i]!;
+    solids[i] = [b[0], b[1], b[2] + dy, b[3] + dy, b[4], b[5], b[6]];
+  }
+}
+const liftCylinder = (c: TreeCylinder, dy: number): TreeCylinder => (dy ? [c[0], c[1], c[2], c[3] + dy, (c[4] ?? 0) + dy] : c);
+
+const PATCH_COLORS = ['#6f9350', '#86a35a', '#8a8656', '#7d7a52', '#98a262', '#9a8a5c'];
+
+/**
+ * The terrain as one mesh (a vertex per grid point, or every other one on a big grid), coloured like the old meadow:
+ * the ground colour with the same seeded patches baked into the vertex colours, so they follow the slopes.
+ */
+function terrainMesh(g: HeightGrid, color: string, rnd: () => number): THREE.Mesh {
+  const step = g.nx * g.nz > 250_000 ? 2 : 1;
+  const nx = Math.floor((g.nx - 1) / step) + 1, nz = Math.floor((g.nz - 1) / step) + 1;
+  const pos = new Float32Array(nx * nz * 3);
+  const col = new Float32Array(nx * nz * 3);
+  const base = new THREE.Color(color);
+  for (let j = 0; j < nz; j++) {
+    for (let i = 0; i < nx; i++) {
+      const k = j * nx + i, gi = (j * step) * g.nx + i * step;
+      pos[k * 3] = g.x0 + i * step * g.cell;
+      pos[k * 3 + 1] = g.h[gi]!;
+      pos[k * 3 + 2] = g.z0 + j * step * g.cell;
+      col[k * 3] = base.r;
+      col[k * 3 + 1] = base.g;
+      col[k * 3 + 2] = base.b;
+    }
+  }
+  const w = (nx - 1) * step * g.cell, d = (nz - 1) * step * g.cell;
+  const pc = PATCH_COLORS.map((c) => new THREE.Color(c));
+  for (let p = 0; p < 300; p++) {
+    const r = 3 + rnd() * 13;
+    rnd(); // the old decal's rotation: keeps the patch layout of the flat ground
+    const cx = g.x0 + rnd() * w, cz = g.z0 + rnd() * d;
+    const c = pc[p % 6]!;
+    const i0 = Math.max(0, Math.floor((cx - r - g.x0) / (step * g.cell))), i1 = Math.min(nx - 1, Math.ceil((cx + r - g.x0) / (step * g.cell)));
+    const j0 = Math.max(0, Math.floor((cz - r - g.z0) / (step * g.cell))), j1 = Math.min(nz - 1, Math.ceil((cz + r - g.z0) / (step * g.cell)));
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        if (Math.hypot(g.x0 + i * step * g.cell - cx, g.z0 + j * step * g.cell - cz) > r) continue;
+        const k = (j * nx + i) * 3;
+        col[k] = c.r;
+        col[k + 1] = c.g;
+        col[k + 2] = c.b;
+      }
+    }
+  }
+  const idx = new Uint32Array((nx - 1) * (nz - 1) * 6);
+  let n = 0;
+  for (let j = 0; j < nz - 1; j++) {
+    for (let i = 0; i < nx - 1; i++) {
+      const a = j * nx + i, b = a + 1, c = a + nx, e = c + 1;
+      idx[n++] = a; idx[n++] = c; idx[n++] = b;
+      idx[n++] = b; idx[n++] = c; idx[n++] = e;
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }));
+  m.receiveShadow = true;
+  return m;
+}
+
+/** A flat rectangle laid on the terrain (a road pad), subdivided every ~2 m so it follows the slopes. */
+function drapedPad(ground: SiteGround, x: number, z: number, w: number, d: number, rotDeg: number, mat: THREE.Material): THREE.Mesh {
+  const geo = new THREE.PlaneGeometry(w, d, Math.max(1, Math.ceil(w / 2)), Math.max(1, Math.ceil(d / 2)));
+  geo.rotateX(-Math.PI / 2);
+  const a = (-rotDeg * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+  const p = geo.attributes['position'] as THREE.BufferAttribute;
+  for (let i = 0; i < p.count; i++) {
+    const lx = p.getX(i), lz = p.getZ(i);
+    const wx = x + lx * c + lz * s, wz = z - lx * s + lz * c;
+    p.setXYZ(i, wx, ground.at(wx, wz) + 0.08, wz);
+  }
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, mat);
+  m.receiveShadow = true;
+  return m;
+}
+
 /** Build the whole site from a {@link SiteSpec}. Deterministic: the same spec always produces the same scene. */
 export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {}): SiteModel {
   const group = new THREE.Group();
@@ -334,6 +430,7 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
   const treeSolids: TreeCylinder[] = [];
   const occluders: THREE.Mesh[] = [];
   const rnd = createRandom(spec.seed);
+  const ground = opts.bare ? siteGround({ ...spec, terrain: undefined }) : siteGround(spec);
 
   const mats: Record<string, THREE.MeshStandardMaterial> = {};
   const ctx: Ctx = {
@@ -371,7 +468,33 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     },
   };
 
-  if (!opts.bare) {
+  if (!opts.bare && ground.grid) {
+    // ---- terrain: the height grid, flat ground around it, roads laid on it
+    const g = ground.grid;
+    group.add(terrainMesh(g, spec.groundColor, rnd));
+    const outer = spec.extent * 1.1, gx = -g.x0, gz = -g.z0;
+    const grass = material(spec.groundColor);
+    if (outer > Math.min(gx, gz)) {
+      const ring: [number, number, number, number][] = [
+        [0, -(outer + gz) / 2, outer * 2, outer - gz],
+        [0, (outer + gz) / 2, outer * 2, outer - gz],
+        [-(outer + gx) / 2, 0, outer - gx, gz * 2],
+        [(outer + gx) / 2, 0, outer - gx, gz * 2],
+      ];
+      for (const [x, z, w, d] of ring) {
+        if (w <= 0 || d <= 0) continue;
+        const o = new THREE.Mesh(new THREE.BoxGeometry(w, 1, d), grass);
+        o.position.set(x, -0.5, z);
+        o.receiveShadow = true;
+        group.add(o);
+      }
+    }
+    for (const pd of spec.pads) group.add(drapedPad(ground, pd.x, pd.z, pd.w, pd.d, pd.rotDeg ?? 0, material(pd.color ?? '#a9aaa0')));
+    const start = new THREE.Mesh(new THREE.BoxGeometry(4, 0.04, 4), material('#e8c65a'));
+    start.position.set(spec.droneStart.x, ground.start + 0.2, spec.droneStart.z);
+    start.receiveShadow = true;
+    group.add(start);
+  } else if (!opts.bare) {
     // ---- ground + meadow patches (patches ignore depth; everything drawn after them covers them)
     const grass = material(spec.groundColor);
     const ground = new THREE.Mesh(new THREE.BoxGeometry(spec.extent * 2.2, 1, spec.extent * 2.2), grass);
@@ -409,7 +532,9 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
   for (const b of spec.buildings) {
     const inner = new THREE.Group();
     inner.userData['pick'] = { kind: 'building', id: b.id }; // what a click on it in the 3D editor selects
-    inner.position.set(b.pos.x, 0, b.pos.z);
+    const by = ground.building.get(b.id) ?? 0;
+    const firstSolid = solids.length;
+    inner.position.set(b.pos.x, by, b.pos.z);
     inner.rotation.y = (-b.rotDeg * Math.PI) / 180;
     group.add(inner);
     const localRoof = new THREE.Group();
@@ -429,14 +554,18 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     }
     // roofs live under the building but belong to the global roof group for hide/show
     roof.attach(localRoof);
+    liftSolids(solids, firstSolid, by);
   }
 
   // ---- free-standing walls / fences
   for (const w of spec.walls ?? []) {
     const dx = w.b.x - w.a.x, dz = w.b.z - w.a.z, len = Math.hypot(dx, dz);
     if (len < 0.3) continue;
-    const m = new THREE.Mesh(new THREE.BoxGeometry(len, w.height, w.thick), material(w.color ?? '#b9b2a2'));
-    m.position.set((w.a.x + w.b.x) / 2, w.height / 2, (w.a.z + w.b.z) / 2);
+    // on a slope the wall starts at the lowest ground along it and keeps its height above the highest
+    const ys = [0, 0.25, 0.5, 0.75, 1].map((t) => ground.at(w.a.x + dx * t, w.a.z + dz * t));
+    const y0 = Math.min(...ys), wh = w.height + Math.max(...ys) - y0;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(len, wh, w.thick), material(w.color ?? '#b9b2a2'));
+    m.position.set((w.a.x + w.b.x) / 2, y0 + wh / 2, (w.a.z + w.b.z) / 2);
     m.rotation.y = -Math.atan2(dz, dx);
     m.castShadow = true;
     m.receiveShadow = true;
@@ -449,17 +578,21 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     for (let i = 0; i < n; i++) {
       const t = (i + 0.5) / n;
       const cx = w.a.x + dx * t, cz = w.a.z + dz * t;
-      solids.push([cx - hw, cx + hw, 0, w.height, cz - hd, cz + hd, false]);
+      solids.push([cx - hw, cx + hw, y0, y0 + wh, cz - hd, cz + hd, false]);
     }
   }
 
   // ---- towers and bridges
   for (const st of spec.structures ?? []) {
     const built = buildStructure(st);
+    const sy = ground.at(st.x, st.z);
     built.object.userData['pick'] = { kind: 'structure', id: st.id };
+    built.object.position.y += sy;
     group.add(built.object);
+    const firstSolid = solids.length;
     solids.push(...built.solids);
-    treeSolids.push(...built.cylinders);
+    liftSolids(solids, firstSolid, sy);
+    treeSolids.push(...built.cylinders.map((c) => liftCylinder(c, sy)));
   }
 
   // ---- trees (instanced, fixed layout from the spec)
@@ -470,15 +603,17 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
   const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.2, 0.32, 1, 5), material('#70533a'), dec.length + con.length);
   const crownsDec = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), material('#ffffff'), dec.length);
   const crownsCon = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 6), material('#ffffff'), con.length);
-  const field = new TreeField(dec, con, trunks, crownsDec, crownsCon);
+  const decY = dec.map((t) => ground.at(t.x, t.z)), conY = con.map((t) => ground.at(t.x, t.z));
+  const field = new TreeField(dec, con, trunks, crownsDec, crownsCon, decY, conY);
   let j = 0;
   const place = (t: TreeSpec, i: number, kind: TreeKind): void => {
+    const ty = (kind === 'd' ? decY : conY)[i] ?? 0;
     dm.rotation.set(0, 0, 0);
-    dm.position.set(t.x, t.h * 0.2, t.z);
+    dm.position.set(t.x, ty + t.h * 0.2, t.z);
     dm.scale.set(1, t.h * 0.4, 1);
     dm.updateMatrix();
     trunks.setMatrixAt(j++, dm.matrix);
-    treeSolids.push([t.x, t.z, t.r * 0.75, t.h]);
+    treeSolids.push(ty ? [t.x, t.z, t.r * 0.75, ty + t.h, ty] : [t.x, t.z, t.r * 0.75, t.h]);
     if (kind === 'd') {
       crownsDec.setMatrixAt(i, field.matrix('d', i, false));
       crownsDec.setColorAt(i, palette[i % 5] as THREE.Color);
@@ -495,11 +630,12 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     group.add(m);
   }
 
-  const collider = new SiteCollider(solids, treeSolids);
+  const collider = new SiteCollider(solids, treeSolids, ground.grid);
   return {
     group,
     roof,
     collider,
+    ground,
     trees: field,
     occluders,
     setScale(k: number): void {
