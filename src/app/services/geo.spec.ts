@@ -45,4 +45,26 @@ describe('OpenStreetMap import of other structure types', () => {
     // the road on the bridge is a bridge, not a ground pad; the plain road still is
     expect(d.roads.length).toBe(1);
   });
+
+  it('brings roads as centre lines, ground surfaces and water basins', async () => {
+    const elements = [
+      { id: 1, type: 'way', tags: { highway: 'track', surface: 'gravel' }, geometry: [pt(-50, 0), pt(0, 10), pt(50, 0)] },
+      { id: 2, type: 'way', tags: { railway: 'disused' }, geometry: [pt(-60, -40), pt(60, -40)] },
+      { id: 3, type: 'way', tags: { landuse: 'brownfield' }, geometry: rect(-40, 20, 30, 20) },
+      { id: 4, type: 'way', tags: { natural: 'water' }, geometry: rect(20, 20, 20, 15) },
+      { id: 5, type: 'way', tags: { amenity: 'parking' }, geometry: rect(-40, -30, 20, 10) },
+      { id: 6, type: 'way', tags: { landuse: 'retail' }, geometry: rect(0, -20, 10, 10) }, // not ground: ignored
+    ];
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 })));
+    const d = await new GeoService().areaData(LAT, LON, 150, 120);
+    const track = d.roads.find((r) => r.kind === 'track')!;
+    expect(track.pts).toHaveLength(3);
+    expect(track.surface).toBe('gravel');
+    expect(track.pts[1]!.z).toBeCloseTo(-10, 0); // north is -z
+    expect(d.roads.some((r) => r.kind === 'rail')).toBe(true);
+    expect(d.surfaces.map((x) => x.kind).sort()).toEqual(['asphalt', 'rubble']);
+    expect(d.waters).toHaveLength(1);
+    expect(d.waters[0]!.pts).toHaveLength(4); // the closing point is dropped
+  });
 });
+

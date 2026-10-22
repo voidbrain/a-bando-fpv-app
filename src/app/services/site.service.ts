@@ -1,12 +1,15 @@
 import { Injectable, computed, effect, inject, signal, untracked, type WritableSignal } from '@angular/core';
-import * as THREE from 'three';
 import type { Calibration, GeoPoint } from '../core/models';
 import { setSiteOrigin } from '../core/constants';
 import { solveCalibration, toGeo } from '../core/geo';
 import { bounds, edgesOf, recentre, rectilinear, type Pt } from '../core/footprint';
-import type { BuildingSpec, LocationInfo, PadSpec, SiteSpec, StructureSpec, TreeSpec, Vec2, WallOpening } from '../core/site-spec';
+import type { BuildingSpec, LocationInfo, SiteSpec, StructureSpec, TreeSpec, Vec2, WallOpening, ZoneSpec } from '../core/site-spec';
+import { keepInsideAreas } from '../core/areas';
 import { emptySpec, uid } from '../core/site-spec';
-import { setTakeoff } from '../core/takeoff';
+import { setActiveGround, setTakeoff } from '../core/takeoff';
+import { hasTerrainBase, type HeightGrid } from '../core/terrain';
+import { ElevationService } from './elevation.service';
+import { siteGround } from '../core/site-ground';
 import type { Footprint } from './geo.service';
 import { SiteEditor } from '../core/site-editor';
 import { CalibrationStore } from '../state/calibration.store';
@@ -31,6 +34,9 @@ export interface GenerateOptions {
   area?: { halfE: number; halfN: number; rotDeg?: number };
   /** Regenerate an existing bando in place: keep its id / name / creation date. */
   keep?: { id?: string; name: string; createdAt?: number };
+  /** Several map areas in one bando (`area` must cover them all): without `fillGaps` only what is inside one of them is kept. */
+  areas?: ZoneSpec[];
+  fillGaps?: boolean;
 }
 
 /**
@@ -47,6 +53,7 @@ export class SiteService {
   private readonly scene = inject(SceneService);
   private readonly calibration = inject(CalibrationStore);
   private readonly toast = inject(ToastService);
+  private readonly elevation = inject(ElevationService);
 
   /** The editor draft (the "Sites" panel binds to this; apply() pushes it into the scene). */
   readonly editor = new SiteEditor();
@@ -141,21 +148,38 @@ export class SiteService {
       }
       void k;
       if (data.partial) this.toast.show('Trees and roads could not be loaded (servers busy): buildings only. Regenerate later to add them.');
-      const spec = this.specFromZone(info, data.footprints, data.trees, data.roads, data.structures, area, seed);
+      const spec = this.specFromZone(info, data.footprints, data.trees, data.structures, area, seed);
+      spec.roads = data.roads;
+      spec.surfaces = data.surfaces;
+      spec.waters = data.waters;
       spec.zone = { lat: info.lat, lon: info.lon, halfE: area.halfE, halfN: area.halfN, ...(area.rotDeg ? { rotDeg: area.rotDeg } : {}) };
+      if (opts.areas && opts.areas.length > 1) {
+        spec.areas = opts.areas.map((a) => ({ ...a }));
+        spec.fillGaps = !!opts.fillGaps;
+        if (!opts.fillGaps) keepInsideAreas(spec, opts.areas);
+      }
       // regenerating an existing bando keeps its identity
       if (opts.keep) {
         if (opts.keep.id) spec.id = opts.keep.id;
         spec.name = opts.keep.name;
         spec.createdAt = opts.keep.createdAt ?? spec.createdAt;
       }
+      // the real ground under the bando (flat when the elevation tiles cannot be had: it can be loaded later)
+      let groundNote = '';
+      try {
+        const r = await this.elevation.fetchBase(spec);
+        spec.terrain = { cell: r.dims.cell, half: r.dims.half, base: r.base, strokes: [] };
+      } catch {
+        groundNote = ' The real ground could not be loaded (offline?): it is flat for now; Terrain → Real ground loads it later.';
+      }
       this.applySpec(spec, true);
       this.library.save(spec);
       this.toast.show(
         spec.buildings.length
           ? `Generated “${spec.name}”: ${spec.buildings.length} buildings, ${spec.trees.length} trees.`
-          : `No buildings mapped in this area: “${spec.name}” has ${spec.trees.length} trees and ${spec.pads.length} roads. Add buildings in the Model editor.`,
+          : `No buildings mapped in this area: “${spec.name}” has ${spec.trees.length} trees and ${spec.roads?.length ?? 0} roads. Add buildings in the Model editor.`,
       );
+      if (groundNote) this.toast.show(groundNote.trim(), 5000);
       return spec;
     } finally {
       this.generating.set(false);
@@ -210,11 +234,8 @@ export class SiteService {
     const host = this.scene.host;
     if (!host) return;
     const rect = host.canvas.getBoundingClientRect();
-    const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
-    const ray = new THREE.Raycaster();
-    ray.setFromCamera(ndc, host.mainCamera);
-    const hit = new THREE.Vector3();
-    if (!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit)) return;
+    const hit = host.groundPoint(host.mainCamera, ((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+    if (!hit) return;
     const k = this.calibration.modelScale() || 1;
     const [lat, lon] = toGeo(hit.x / k, hit.z / k, this.calibration.calibration());
     await this.generateFromPoint(lat, lon);
@@ -316,7 +337,7 @@ export class SiteService {
    * +z = south), origin at the zone centre. Each footprint keeps its true outline when it is rectilinear (L, T, U, H
    * shapes ...) or becomes a rectangle along its longest edge otherwise; roads are rotated pads.
    */
-  private specFromZone(info: LocationInfo, fps: Footprint[], osmTrees: TreeSpec[], roads: PadSpec[], structures: StructureSpec[], area: { halfE: number; halfN: number; rotDeg?: number }, seed: number): SiteSpec {
+  private specFromZone(info: LocationInfo, fps: Footprint[], osmTrees: TreeSpec[], structures: StructureSpec[], area: { halfE: number; halfN: number; rotDeg?: number }, seed: number): SiteSpec {
     const mLat = 111132;
     const mLon = 111320 * Math.cos((info.lat * Math.PI) / 180);
     const buildings: BuildingSpec[] = [];
@@ -408,7 +429,7 @@ export class SiteService {
     spec.buildings = buildings;
     spec.trees = osmTrees.filter((t) => !inside(t.x, t.z, 0));
     spec.structures = structures;
-    spec.pads = [...roads, { x: sx, z: sz, w: 6, d: 6, color: '#a9aaa0' }];
+    spec.pads = [{ x: sx, z: sz, w: 6, d: 6, color: '#a9aaa0' }];
     spec.seed = seed;
     spec.extent = Math.max(area.halfE, area.halfN) * 1.5 + 40;
     spec.droneStart = { x: sx, z: sz };
@@ -416,19 +437,50 @@ export class SiteService {
     return spec;
   }
 
+  /** The terrain grid the flight paths were last laid on (a new grid re-projects them). */
+  private groundGrid: HeightGrid | null = null;
+
   private applySpec(spec: SiteSpec, resetView: boolean): void {
     this.active.set(spec);
     // adopt the spec as the new draft, unless the caller is applying the draft itself (live preview)
     if (!sameSpec(this.editor.draft(), spec)) this.editor.load(spec);
     writeStoredId(spec.id);
     setSiteOrigin(spec.origin);
-    setTakeoff(spec.droneStart);
+    const ground = siteGround(spec);
+    setTakeoff({ ...spec.droneStart, y: ground.start });
+    if (ground.grid !== this.groundGrid) {
+      this.groundGrid = ground.grid;
+      setActiveGround(ground.grid ? ground.at : null);
+    }
     this.calibration.apply(spec.calibration ?? calibrationForSpec(spec)); // the pilot's own alignment wins over the solved one
     if (resetView) this.scene.resetCamera();
     if (this.scene.host) {
       const site = this.scene.host.setSite(spec);
       // the x-ray and the simulator collider point at the old model object graph: re-arm them
       this.scene.rebindSite(site);
+    }
+    // a saved bando with real ground: its heights come from the cache (or are downloaded again), then the scene is rebuilt
+    const base = spec.terrain?.base;
+    if (base && !hasTerrainBase(base.key)) {
+      void this.elevation.ensure(spec).then((ok) => {
+        if (ok && this.active().id === spec.id) this.applySpec(this.active(), false);
+      });
+    }
+  }
+
+  /** Load (or re-load) the real ground under the bando being edited; the pilot's terrain strokes are kept. One undo step. */
+  async loadRealGround(): Promise<boolean> {
+    try {
+      const r = await this.elevation.fetchBase(this.editor.snapshot());
+      this.editor.commitSite((s) => {
+        s.terrain = { cell: r.dims.cell, half: r.dims.half, base: r.base, strokes: s.terrain?.strokes ?? [] };
+      });
+      this.applyDraft();
+      this.toast.show(`Real ground loaded (${r.base.datum} m above sea level at the centre).`);
+      return true;
+    } catch (e) {
+      this.toast.show(`Could not load the real ground: ${e instanceof Error ? e.message : 'network error'}.`);
+      return false;
     }
   }
 

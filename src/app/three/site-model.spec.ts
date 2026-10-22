@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { emptySpec, type SiteSpec } from '../core/site-spec';
 import { buildSiteFromSpec } from './site-model';
+import { Vec3 } from '../core/math3d';
 
 /** A small but complete site: ground 528 m wide (extent 240), two buildings, a few pads, a tower and a bridge. */
 const spec = (): SiteSpec => {
@@ -155,5 +156,98 @@ describe('walls with several openings', () => {
     expect(box.max.x).toBeLessThan(15.6);
     expect(box.min.z).toBeGreaterThan(-6.6);
     expect(box.max.z).toBeLessThan(6.6);
+  });
+});
+
+describe('site model on a terrain', () => {
+  const hilly = (): SiteSpec => {
+    const s = spec();
+    s.terrain = { cell: 1, half: { e: 120, n: 120 }, strokes: [{ op: 'hill', pts: [{ x: 60, z: 20 }], radius: 40, strength: 8 }, { op: 'hill', pts: [{ x: -30, z: -30 }], radius: 20, strength: 5 }] };
+    s.walls = [{ a: { x: 40, z: -10 }, b: { x: 80, z: -10 }, height: 2, thick: 0.3 }];
+    s.trees = [{ x: 70, z: 40, h: 8, r: 2, kind: 'd' }];
+    return s;
+  };
+
+  it('builds one terrain mesh and keeps the flat ground for sites without terrain', () => {
+    const flatSite = buildSiteFromSpec(spec());
+    expect(flatSite.ground.grid).toBeNull();
+    const m = buildSiteFromSpec(hilly());
+    expect(m.ground.grid).not.toBeNull();
+    let terrain = 0;
+    m.group.traverse((o) => {
+      if (o instanceof THREE.Mesh && o.geometry.getAttribute('color') && o.geometry.index && o.geometry.index.count > 100_000) terrain++;
+    });
+    expect(terrain).toBe(1);
+  });
+
+  it('lifts buildings, structures, walls and trees onto the ground, colliders included', () => {
+    const m = buildSiteFromSpec(hilly());
+    const by = m.ground.building.get('b')!;
+    expect(by).toBeGreaterThan(2);
+    let building: THREE.Object3D | null = null;
+    m.group.traverse((o) => {
+      if ((o.userData['pick'] as { id?: string } | undefined)?.id === 'b' && o.parent === m.group) building = o;
+    });
+    expect((building as THREE.Object3D | null)?.position.y).toBeCloseTo(by);
+    // the building's walls are solid above its pad, not at y = 0
+    expect(m.collider.hit(new Vec3(60, by + 2, 20 - 5))).toBe(true);
+    expect(m.collider.hit(new Vec3(60, 1, 20 - 5))).toBe(false);
+    // chimney on its own hill: solid well above the old ground level
+    const cy = m.ground.at(-30, -30);
+    expect(m.collider.hit(new Vec3(-30, cy + 25, -30))).toBe(true);
+    // tree: solid above its own ground, not below it
+    const ty = m.ground.at(70, 40);
+    expect(m.collider.hit(new Vec3(70, ty + 3, 40))).toBe(true);
+    expect(m.collider.groundAt(70, 40)).toBeCloseTo(ty);
+  });
+});
+
+describe('site model ground layers', () => {
+  it('draws roads, surfaces and water, flat or on a terrain', () => {
+    for (const withTerrain of [false, true]) {
+      const s = spec();
+      s.roads = [{ pts: [{ x: -80, z: 50 }, { x: 0, z: 60 }, { x: 80, z: 50 }], width: 6, kind: 'road' }];
+      s.surfaces = [{ pts: [{ x: 70, z: -70 }, { x: 100, z: -70 }, { x: 100, z: -40 }, { x: 70, z: -40 }], kind: 'sand' }];
+      s.waters = [{ pts: [{ x: -100, z: -100 }, { x: -70, z: -100 }, { x: -70, z: -70 }, { x: -100, z: -70 }], depth: 2 }];
+      if (withTerrain) s.terrain = { cell: 1, half: { e: 120, n: 120 }, strokes: [] };
+      const m = buildSiteFromSpec(s);
+      let water = 0;
+      m.group.traverse((o) => {
+        if ((o.userData['pick'] as { kind?: string } | undefined)?.kind === 'water') water++;
+      });
+      expect(water).toBe(1);
+      expect(m.collider.waterAt(-85, -85)).not.toBeNull();
+      if (withTerrain) expect(m.ground.at(-85, -85)).toBeLessThan(m.collider.waterAt(-85, -85)!);
+    }
+  });
+});
+
+describe('site model underground', () => {
+  it('cuts the terrain at a tunnel mouth, builds its walls, and the drone floor inside is the tunnel floor', () => {
+    const s = spec();
+    s.buildings = [];
+    s.structures = [];
+    s.terrain = { cell: 1, half: { e: 120, n: 120 }, strokes: [{ op: 'hill', pts: [{ x: 0, z: -60 }], radius: 35, strength: 10 }] };
+    const outline = [{ x: -45, z: -62 }, { x: 45, z: -62 }, { x: 45, z: -58 }, { x: -45, z: -58 }];
+    const flatTris = (): number => {
+      let n = 0;
+      buildSiteFromSpec(s).group.traverse((o) => {
+        if (o instanceof THREE.Mesh && o.geometry.getAttribute('color') && o.geometry.index) n = o.geometry.index.count;
+      });
+      return n;
+    };
+    const before = flatTris();
+    s.underground = [{ id: 'u', name: 'Tunnel', outline, floor: -0.5, ceiling: 3, shape: 'box', wall: 0.4 }];
+    const m = buildSiteFromSpec(s);
+    expect(flatTris()).toBeLessThan(before); // the portals are holes in the ground
+    let found = false;
+    m.group.traverse((o) => {
+      if ((o.userData['pick'] as { kind?: string } | undefined)?.kind === 'underground') found = true;
+    });
+    expect(found).toBe(true);
+    expect(m.collider.groundAt(0, -60)).toBeGreaterThan(8); // on top of the hill
+    expect(m.collider.groundAt(0, -60, 1)).toBeCloseTo(-0.5); // inside the tunnel
+    expect(m.collider.hit(new Vec3(0.3, 1.5, -58))).toBe(true); // its wall
+    expect(m.collider.hit(new Vec3(0.3, 1.5, -60))).toBe(false); // its inside
   });
 });

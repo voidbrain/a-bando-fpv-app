@@ -2,6 +2,7 @@ import { Vec3, eulerYXZ } from '../math3d';
 import { SiteCollider, type SolidBox } from './collider';
 import { applyExpo, createDroneState, resetDroneState, stepDrone, toggleMode, type ControlSettings, type PilotInput } from './drone-physics';
 import { SimRecorder } from './recorder';
+import { buildHeights } from '../terrain';
 import { DEFAULT_CALIBRATION } from '../constants';
 
 const CFG: ControlSettings = { rate: 400, expo: 0.3 };
@@ -199,5 +200,53 @@ describe('simulator recorder', () => {
     r.tick(1, d, 0, DEFAULT_CALIBRATION);
     r.start();
     expect(r.length).toBe(0);
+  });
+});
+
+describe('drone on a terrain', () => {
+  it('rests on the pad height and cannot sink into a hill', () => {
+    const grid = buildHeights({ cell: 1, half: { e: 60, n: 60 }, strokes: [{ op: 'hill', pts: [{ x: 0, z: 0 }], radius: 30, strength: 10 }] }).grid;
+    const world = new SiteCollider([], [], grid);
+    const d = createDroneState(1, { x: 0, z: 0, y: world.groundAt(0, 0) });
+    expect(d.p.y).toBeGreaterThan(9);
+    run(d, 1, neutral(), world);
+    expect(d.p.y).toBeGreaterThan(world.groundAt(d.p.x, d.p.z));
+    // fly level into the hill side: the ground lifts the drone instead of letting it through
+    const e = createDroneState(1, { x: -25, z: 0 });
+    e.armed = true;
+    e.p.y = 1;
+    e.v.set(15, 0, 0);
+    for (let i = 0; i < 120; i++) {
+      stepDrone(e, 1 / 120, neutral(), CFG, world);
+      expect(e.p.y).toBeGreaterThanOrEqual(world.groundAt(e.p.x, e.p.z));
+    }
+  });
+});
+
+describe('drone and water', () => {
+  it('touching the water surface is a crash; flying over it is not', () => {
+    const pond = [{ x: -10, z: -10 }, { x: 10, z: -10 }, { x: 10, z: 10 }, { x: -10, z: 10 }];
+    const world = new SiteCollider([], [], null, [{ pts: pond, level: 0.5 }]);
+    expect(world.waterAt(0, 0)).toBeCloseTo(0.5);
+    expect(world.waterAt(20, 0)).toBeNull();
+    const d = createDroneState(1, { x: 0, z: 0 });
+    d.armed = true;
+    d.p.y = 2;
+    expect(run(d, 0.2, { ...neutral(), throttle: 0.3 }, world)).toBe(false);
+    d.armed = false; // motors off: it drops into the pond, too slowly to crash on the ground
+    expect(run(d, 1.5, neutral(), world)).toBe(true);
+    expect(d.p.y).toBeCloseTo(0.55, 2);
+  });
+});
+
+describe('drone in a tunnel', () => {
+  it('rests on the tunnel floor under a hill instead of being pushed up onto the hill', () => {
+    const grid = buildHeights({ cell: 1, half: { e: 60, n: 60 }, strokes: [{ op: 'hill', pts: [{ x: 0, z: 0 }], radius: 35, strength: 10 }] }).grid;
+    const tunnel = { id: 't', name: 'T', outline: [{ x: -45, z: -2 }, { x: 45, z: -2 }, { x: 45, z: 2 }, { x: -45, z: 2 }], floor: -0.5, ceiling: 3, shape: 'box' as const, wall: 0.4 };
+    const world = new SiteCollider([], [], grid, [], [tunnel]);
+    const d = createDroneState(1, { x: 0, z: 0, y: -0.5 });
+    run(d, 1, neutral(), world);
+    expect(d.p.y).toBeLessThan(1);
+    expect(d.p.y).toBeGreaterThan(-0.5);
   });
 });

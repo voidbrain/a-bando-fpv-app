@@ -4,13 +4,12 @@ import { FlightService } from '../../services/flight.service';
 import { SceneService } from '../../services/scene.service';
 import { SimulatorService } from '../../services/simulator.service';
 import { SiteService } from '../../services/site.service';
-import { ToastService } from '../../services/toast.service';
 import { VideoService } from '../../services/video.service';
 import { CalibrationStore } from '../../state/calibration.store';
 import { ViewStore } from '../../state/view.store';
 
 /**
- * The full-page background: the WebGL canvas (3D model) or the flight video, the FPV overlay and the toast. Also the
+ * The full-page background: the WebGL canvas (3D model) or the flight video, the FPV overlay. Also the
  * page-wide drop target for flight logs.
  */
 @Component({
@@ -26,7 +25,6 @@ import { ViewStore } from '../../state/view.store';
       <div class="osd">{{ osd() }}</div>
       <div class="ret"></div>
     }
-    <div class="toast" [class.show]="!!toast.message()">{{ toast.message() }}</div>
   `,
   styles: `
     :host {
@@ -45,7 +43,6 @@ export class Stage {
   protected readonly view = inject(ViewStore);
   protected readonly scene = inject(SceneService);
   protected readonly video = inject(VideoService);
-  protected readonly toast = inject(ToastService);
   private readonly sim = inject(SimulatorService);
   private readonly flights = inject(FlightService);
   private readonly cal = inject(CalibrationStore);

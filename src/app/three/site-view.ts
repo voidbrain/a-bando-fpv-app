@@ -4,6 +4,7 @@ import { emptySpec, type SiteSpec } from '../core/site-spec';
 import { ghost, levelOnly } from './element-preview';
 import { PathRenderer } from './path-renderer';
 import { buildSiteFromSpec, type SiteModel } from './site-model';
+import { rayGround } from '../core/terrain';
 
 /** What a click on the 3D model selects. */
 export type SitePick = { kind: 'building'; id: string } | { kind: 'column'; id: string; li: number; i: number } | { kind: 'wall'; id: string; li: number; i: number } | { kind: 'structure'; id: string } | { kind: 'fence'; i: number } | { kind: 'tree'; i: number };
@@ -137,10 +138,12 @@ export class SiteViewRenderer {
     this.model.group.add(buildSiteFromSpec(mini, { bare: true }).group);
   }
 
-  /** The point on the ground (y = 0) under the pointer, in site coordinates. */
+  /** The point on the ground (the terrain, or y = 0) under the pointer, in site coordinates. */
   private groundPoint(e: { clientX: number; clientY: number }): { x: number; z: number } | null {
     const r = this.canvas.getBoundingClientRect();
     this.ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), this.camera);
+    const grid = this.model?.ground.grid;
+    if (grid) return rayGround(grid, this.ray.ray.origin, this.ray.ray.direction);
     const p = new THREE.Vector3();
     return this.ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), p) ? { x: p.x, z: p.z } : null;
   }

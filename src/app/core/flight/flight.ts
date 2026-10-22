@@ -22,8 +22,10 @@ export function createFlight(name: string, pts: GeoSample[], tel: Telemetry | nu
 /**
  * Fill in the derived arrays: local coordinates (altitude relative to the lowest fix, with a floor so the path never
  * dips under the ground), smoothed speed (+-3 samples) and duration. Call again after the calibration changes.
+ * With a terrain (`groundAt`, model metres) the path starts on the ground under its first fix and never dips below
+ * the ground under it.
  */
-export function prepareFlight(f: Flight, cal: Calibration): void {
+export function prepareFlight(f: Flight, cal: Calibration, groundAt?: (x: number, z: number) => number): void {
   const first = f.pts[0];
   if (!first) {
     f.loc = [];
@@ -32,10 +34,19 @@ export function prepareFlight(f: Flight, cal: Calibration): void {
     return;
   }
   const minAlt = f.pts.reduce((m, p) => Math.min(m, p.alt), Infinity);
-  f.loc = f.pts.map((p) => {
-    const [x, z] = toLocal(p.lat, p.lon, cal);
-    return new Vec3(x, Math.max(0.2, p.alt - minAlt + 0.3), z);
-  });
+  if (groundAt) {
+    const [x0, z0] = toLocal(first.lat, first.lon, cal);
+    const y0 = groundAt(x0, z0) - first.alt + 0.3;
+    f.loc = f.pts.map((p) => {
+      const [x, z] = toLocal(p.lat, p.lon, cal);
+      return new Vec3(x, Math.max(groundAt(x, z) + 0.2, y0 + p.alt), z);
+    });
+  } else {
+    f.loc = f.pts.map((p) => {
+      const [x, z] = toLocal(p.lat, p.lon, cal);
+      return new Vec3(x, Math.max(0.2, p.alt - minAlt + 0.3), z);
+    });
+  }
   const last = f.loc.length - 1;
   f.spd = f.loc.map((_, i) => {
     const j = Math.min(last, i + 3);

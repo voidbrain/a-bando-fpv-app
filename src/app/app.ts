@@ -23,13 +23,14 @@ import { ViewsPanel } from './ui/panels/views-panel';
 import { Stage } from './ui/stage/stage';
 import { StudioPanel } from './ui/studio/studio-panel';
 import { VersionBadge } from './ui/version-badge';
+import { ToastHost } from './ui/toast-host';
 
 /** Root: the full-page stage plus every floating panel. Panels hide themselves; nothing here holds state. */
 @Component({
   selector: 'app-root',
   imports: [
     Stage, ViewsPanel, FlightsPanel, SimulatorPanel, RadioPanel, TimelinePanel, SpeedPanel, AttitudePanel, CompassPanel, PathPanel,
-    BlackboxPanel, VideoPanel, LivePanel, RenderPanel, HelpPanel, ViewportPanel, VersionBadge, StudioPanel,
+    BlackboxPanel, VideoPanel, LivePanel, RenderPanel, HelpPanel, ViewportPanel, VersionBadge, StudioPanel, ToastHost,
   ],
   template: `
     <app-stage />
@@ -53,6 +54,7 @@ import { VersionBadge } from './ui/version-badge';
     <app-viewport-panel type="chase" />
     <app-viewport-panel type="fpv" />
     <app-viewport-panel type="top" />
+    <app-toast-host />
   `,
 })
 export class App {

@@ -7,6 +7,9 @@
  * origin = centre of the main building. All values in metres unless noted.
  */
 
+import { sanitizeTerrain, type TerrainSpec } from './terrain';
+import { sanitizeLayers } from './layers';
+
 export interface Vec2 {
   x: number;
   z: number;
@@ -91,6 +94,8 @@ export interface WallSpec {
   height: number;
   thick: number;
   color?: string;
+  /** What it is made of (see core/fences.ts); absent = a masonry wall. */
+  material?: 'masonry' | 'concrete' | 'brick' | 'wood' | 'metal' | 'chainlink';
 }
 
 export interface LevelSpec {
@@ -165,6 +170,48 @@ export interface PadSpec {
   color?: string;
 }
 
+export type RoadKind = 'road' | 'track' | 'path' | 'rail';
+export type SurfaceKind = 'grass' | 'asphalt' | 'concrete' | 'gravel' | 'dirt' | 'sand' | 'rubble';
+
+/** A road, track, path or railway: a centre line laid on the ground, `width` metres wide (it levels the ground across). */
+export interface RoadSpec {
+  pts: Vec2[];
+  width: number;
+  kind: RoadKind;
+  surface?: SurfaceKind;
+}
+
+/** What the ground is made of inside an outline (drives its colour; visual only). */
+export interface SurfaceSpec {
+  pts: Vec2[];
+  kind: SurfaceKind;
+}
+
+/** A pond, canal or basin: the ground inside is dug `depth` metres below the water, the water sits just below the lowest bank. */
+export interface WaterSpec {
+  pts: Vec2[];
+  depth: number;
+  /** Water level relative to the lowest bank, metres (default -0.3). */
+  level?: number;
+}
+
+/**
+ * Something under the ground: a tunnel, culvert, underpass, bunker or basement. A prism: an outline on the plan, an inside
+ * floor and ceiling height, and a wall / slab thickness. The terrain is cut wherever it passes through the inside, so
+ * the openings (portals) appear by themselves where the ground is between the floor and the ceiling.
+ */
+export interface UndergroundSpec {
+  id: string;
+  name: string;
+  outline: Vec2[];
+  floor: number;
+  ceiling: number;
+  shape: 'box' | 'pipe' | 'vault';
+  wall: number;
+  /** Water in the bottom (culverts), metres; 0 / absent = dry. */
+  water?: number;
+}
+
 /** A rectangular map area: centre and half extents (metres) east-west / north-south. */
 export interface ZoneSpec {
   lat: number;
@@ -192,6 +239,9 @@ export interface SiteSpec {
   bearingDeg: number;
   /** The map zone the model was generated from (centre + half extents in metres, east/north), so it can be re-edited. */
   zone?: ZoneSpec;
+  /** When several map areas were combined: each of them (`zone` then covers them all); `fillGaps` kept what lies between. */
+  areas?: ZoneSpec[];
+  fillGaps?: boolean;
   /** Overall multiplier applied to every dimension when generating (kept so regeneration is reproducible). */
   genScale: number;
   groundColor: string;
@@ -204,6 +254,16 @@ export interface SiteSpec {
   extent: number;
   /** Take-off pad position in site metres (scaled with the model). */
   droneStart: Vec2;
+  /** Roads, tracks, paths and railways laid on the ground (older bandos have their roads as rotated `pads`). */
+  roads?: RoadSpec[];
+  /** Ground materials (grass, asphalt, gravel ...) inside outlines. */
+  surfaces?: SurfaceSpec[];
+  /** Ponds, canals, basins. */
+  waters?: WaterSpec[];
+  /** Tunnels, culverts, bunkers, basements. */
+  underground?: UndergroundSpec[];
+  /** Ground shape (real elevation + the pilot's strokes). Absent = flat ground at y = 0. */
+  terrain?: TerrainSpec;
   /** Two landmarks used to fit logged GPS paths onto the model (model corners ↔ real corners). */
   calibCorners: { p1: { x: number; z: number }; p2: { x: number; z: number } };
   /** The same two landmarks as real coordinates, so calibration survives loading a stored site. */
@@ -331,6 +391,13 @@ export function sanitizeSpec(raw: unknown): SiteSpec | null {
       s.zone && [s.zone.lat, s.zone.lon, s.zone.halfE, s.zone.halfN].every((v) => typeof v === 'number' && isFinite(v))
         ? { lat: s.zone.lat, lon: s.zone.lon, halfE: s.zone.halfE, halfN: s.zone.halfN, ...(typeof s.zone.rotDeg === 'number' && isFinite(s.zone.rotDeg) && s.zone.rotDeg ? { rotDeg: s.zone.rotDeg } : {}) }
         : undefined,
+    areas: Array.isArray(s.areas)
+      ? s.areas
+          .filter((a) => a && [a.lat, a.lon, a.halfE, a.halfN].every((v) => typeof v === 'number' && isFinite(v)))
+          .slice(0, 12)
+          .map((a) => ({ lat: a.lat, lon: a.lon, halfE: a.halfE, halfN: a.halfN, ...(typeof a.rotDeg === 'number' && isFinite(a.rotDeg) && a.rotDeg ? { rotDeg: a.rotDeg } : {}) }))
+      : undefined,
+    fillGaps: typeof s.fillGaps === 'boolean' ? s.fillGaps : undefined,
     bearingDeg: typeof s.bearingDeg === 'number' ? s.bearingDeg : 0,
     genScale: typeof s.genScale === 'number' ? s.genScale : 1,
     groundColor: typeof s.groundColor === 'string' ? s.groundColor : '#789b52',
@@ -342,6 +409,8 @@ export function sanitizeSpec(raw: unknown): SiteSpec | null {
     seed: typeof s.seed === 'number' ? s.seed : 7,
     extent: typeof s.extent === 'number' ? s.extent : 500,
     droneStart: s.droneStart && typeof s.droneStart.x === 'number' ? s.droneStart : { x: 0, z: 0 },
+    terrain: sanitizeTerrain(s.terrain),
+    ...sanitizeLayers(s),
     calibCorners: s.calibCorners ?? { p1: { x: -100, z: -100 }, p2: { x: 100, z: 100 } },
     geoCorners:
       s.geoCorners && typeof s.geoCorners.p1?.lat === 'number' && typeof s.geoCorners.p2?.lat === 'number'

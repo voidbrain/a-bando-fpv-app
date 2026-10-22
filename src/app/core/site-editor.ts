@@ -288,8 +288,8 @@ export class SiteEditor {
     });
   }
 
-  addTree(x: number, z: number): void {
-    this.commit((s) => s.trees.push({ x, z, h: 8, r: 2, kind: 'd' }));
+  addTree(x: number, z: number, kind: 'd' | 'c' = 'd'): void {
+    this.commit((s) => s.trees.push(kind === 'c' ? { x, z, h: 10, r: 1.6, kind } : { x, z, h: 8, r: 2, kind }));
   }
 
   removeTree(index: number): void {

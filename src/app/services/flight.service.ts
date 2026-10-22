@@ -1,6 +1,7 @@
 import { Injectable, effect, inject, signal, untracked } from '@angular/core';
 import { findFlips, findLiftoff } from '../core/flight/analysis';
 import { createFlight, flightStats, maxSpeed, prepareFlight } from '../core/flight/flight';
+import { activeGround } from '../core/takeoff';
 import { parseLog } from '../core/flight/log-parser';
 import { Vec3 } from '../core/math3d';
 import type { Calibration, Flight, GeoSample, Telemetry } from '../core/models';
@@ -36,6 +37,7 @@ export class FlightService {
     // Re-project every flight when the calibration changes.
     effect(() => {
       const cal = this.calibration.calibration();
+      activeGround(); // the terrain under the paths changed
       untracked(() => this.recalculate(cal));
     });
   }
@@ -63,7 +65,7 @@ export class FlightService {
   /** Add a flight (becomes the active one). Returns it so callers (live link) can keep appending. */
   add(name: string, pts: GeoSample[], tel: Telemetry | null = null, opts: { frame?: boolean; live?: boolean } = {}): Flight {
     const f = createFlight(name, pts, tel, opts.live ?? false);
-    prepareFlight(f, this.calibration.calibration());
+    prepareFlight(f, this.calibration.calibration(), activeGround() ?? undefined);
     this.byId.set(f.id, f);
     this.store.add({ id: f.id, name: f.name, live: f.live, stats: this.describe(f) });
     this.updateSpeedMax();
@@ -84,7 +86,7 @@ export class FlightService {
 
   /** Flight data was changed in place (live fixes appended): reproject it and refresh the views. */
   refresh(f: Flight): void {
-    prepareFlight(f, this.calibration.calibration());
+    prepareFlight(f, this.calibration.calibration(), activeGround() ?? undefined);
     this.updateSpeedMax();
     this.store.updateStats(f.id, this.describe(f));
     this.store.touch();
@@ -92,7 +94,7 @@ export class FlightService {
 
   /** Cheap per-fix update for live flights: re-project the data without rebuilding the 3D path or the summaries. */
   refreshLight(f: Flight): void {
-    prepareFlight(f, this.calibration.calibration());
+    prepareFlight(f, this.calibration.calibration(), activeGround() ?? undefined);
   }
 
   /** Lift-off time of a flight (cached). */
@@ -109,7 +111,7 @@ export class FlightService {
 
   private recalculate(cal: Calibration): void {
     for (const f of this.byId.values()) {
-      prepareFlight(f, cal);
+      prepareFlight(f, cal, activeGround() ?? undefined);
       this.store.updateStats(f.id, this.describe(f));
     }
     this.updateSpeedMax();

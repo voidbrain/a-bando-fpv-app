@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import type { BuildingSpec, PadSpec, StructureSpec, TreeSpec } from '../core/site-spec';
+import type { BuildingSpec, RoadKind, RoadSpec, StructureSpec, SurfaceKind, SurfaceSpec, TreeSpec, WaterSpec } from '../core/site-spec';
 import { STRUCTURE_DEFAULTS } from '../three/structures';
 import { uid } from '../core/site-spec';
 
@@ -169,7 +169,7 @@ export class GeoService {
    * (the model is still built, `partial` says trees / roads are missing). The query box is snapped to a ~55 m grid so
    * that nearby frames share one cached answer; the result is then cut back to the real frame.
    */
-  async areaData(lat: number, lon: number, halfE: number, halfN: number, rotDeg = 0): Promise<{ footprints: Footprint[]; trees: TreeSpec[]; roads: PadSpec[]; structures: StructureSpec[]; partial: boolean }> {
+  async areaData(lat: number, lon: number, halfE: number, halfN: number, rotDeg = 0): Promise<{ footprints: Footprint[]; trees: TreeSpec[]; roads: RoadSpec[]; surfaces: SurfaceSpec[]; waters: WaterSpec[]; structures: StructureSpec[]; partial: boolean }> {
     const mLon = metresPerDegLon(lat);
     const G = 0.0005;
     // a turned frame: ask for its bounding box, then keep only what is inside the turned rectangle (inZone)
@@ -179,7 +179,9 @@ export class GeoService {
     const west = Math.floor((lon - bE / mLon) / G) * G, east = Math.ceil((lon + bE / mLon) / G) * G;
     const bbox = `${south.toFixed(4)},${west.toFixed(4)},${north.toFixed(4)},${east.toFixed(4)}`; // south,west,north,east
     const buildingsQ = `way["building"]["building"!~"^(roof|hangar)$"](${bbox});`;
-    const fullQ = `[out:json][timeout:25];(${buildingsQ}node["natural"="tree"](${bbox});way["natural"="tree_row"](${bbox});way["highway"~"^(primary|secondary|tertiary|residential|unclassified|service)$"](${bbox});` +
+    const fullQ = `[out:json][timeout:25];(${buildingsQ}node["natural"="tree"](${bbox});way["natural"="tree_row"](${bbox});way["highway"~"^(primary|secondary|tertiary|residential|unclassified|service|track|path|footway|cycleway)$"](${bbox});` +
+      `way["railway"~"^(rail|tram|light_rail|abandoned|disused)$"](${bbox});way["landuse"~"^(grass|meadow|brownfield|construction|industrial|railway|basin|reservoir)$"](${bbox});` +
+      `way["natural"~"^(water|sand|scrub|bare_rock)$"](${bbox});way["waterway"="riverbank"](${bbox});way["amenity"="parking"](${bbox});` +
       `node["man_made"~"^(tower|mast|chimney|silo|storage_tank|water_tower|crane)$"](${bbox});way["man_made"~"^(chimney|silo|storage_tank|water_tower)$"](${bbox});node["power"="tower"](${bbox});way["highway"="steps"](${bbox});` +
       `way["bridge"]["bridge"!="no"](${bbox}););out geom 1500;`;
     let partial = false;
@@ -201,7 +203,10 @@ export class GeoService {
     };
     const footprints: Footprint[] = [];
     const trees: TreeSpec[] = [];
-    const roads: PadSpec[] = [];
+    const roads: RoadSpec[] = [];
+    const surfaces: SurfaceSpec[] = [];
+    const waters: WaterSpec[] = [];
+    const toSite = (p: { lat: number; lon: number }): { x: number; z: number } => ({ x: (p.lon - lon) * mLon, z: -(p.lat - lat) * M_LAT });
     const structures: StructureSpec[] = [];
     for (const el of data.elements) {
       const tags = el.tags ?? {};
@@ -298,16 +303,24 @@ export class GeoService {
             trees.push({ x: (lo - lon) * mLon, z: -(la - lat) * M_LAT, h: 8, r: 1.8, kind: 'd' });
           }
         }
-      } else if (el.type === 'way' && tags['highway'] && el.geometry && el.geometry.length >= 2) {
-        // every segment of the road becomes one rotated pad (so bends and diagonals follow the map)
-        const g = el.geometry;
-        const width = tags['highway'] === 'service' ? 4 : tags['highway'] === 'residential' || tags['highway'] === 'unclassified' ? 6 : 8;
-        for (let i = 0; i + 1 < g.length && roads.length < 120; i++) {
-          const a = g[i]!, b = g[i + 1]!;
-          const dx = (b.lon - a.lon) * mLon, dz = -(b.lat - a.lat) * M_LAT;
-          const len = Math.hypot(dx, dz);
-          if (len < 1) continue;
-          roads.push({ x: (((a.lon + b.lon) / 2) - lon) * mLon, z: -(((a.lat + b.lat) / 2) - lat) * M_LAT, w: len + 0.6, d: width, rotDeg: (Math.atan2(dz, dx) * 180) / Math.PI, color: '#4a4d4b' });
+      } else if (el.type === 'way' && (tags['highway'] || tags['railway']) && el.geometry && el.geometry.length >= 2) {
+        // a road, track, path or railway: its centre line as it is on the map
+        if (roads.length >= 150 || !el.geometry.some((p) => inZone(p.lat, p.lon))) continue;
+        const hw = tags['highway'] ?? '';
+        const kind: RoadKind = tags['railway'] ? 'rail' : hw === 'track' ? 'track' : /^(path|footway|cycleway)$/.test(hw) ? 'path' : 'road';
+        const width = parseFloat(tags['width'] ?? '') || (kind === 'rail' ? 3.2 : kind === 'track' ? 3.5 : kind === 'path' ? 1.6 : hw === 'service' ? 4 : hw === 'residential' || hw === 'unclassified' ? 6 : 8);
+        const surface = surfaceOf(tags['surface']);
+        roads.push({ pts: el.geometry.map(toSite), width: Math.min(30, Math.max(1, width)), kind, ...(surface ? { surface } : {}) });
+      } else if (el.type === 'way' && el.geometry && el.geometry.length >= 4 && (tags['landuse'] || tags['natural'] || tags['waterway'] === 'riverbank' || tags['amenity'] === 'parking')) {
+        // an area: water becomes a basin, the rest a ground surface
+        const ring = el.geometry.map(toSite);
+        if (!el.geometry.some((p) => inZone(p.lat, p.lon))) continue;
+        const water = tags['natural'] === 'water' || tags['waterway'] === 'riverbank' || tags['landuse'] === 'basin' || tags['landuse'] === 'reservoir';
+        if (water) {
+          if (waters.length < 30) waters.push({ pts: ring.slice(0, -1), depth: 1.5 });
+        } else {
+          const kind = areaSurface(tags);
+          if (kind && surfaces.length < 80) surfaces.push({ pts: ring.slice(0, -1), kind });
         }
       } else if (el.type === 'way' && tags['building']) {
         if ('building:part' in tags || 'boundary' in tags || 'place' in tags || 'admin_level' in tags) continue;
@@ -319,7 +332,7 @@ export class GeoService {
       }
     }
     footprints.sort((p, q) => this.polyArea(q.ring) - this.polyArea(p.ring));
-    return { footprints, trees, roads, structures, partial };
+    return { footprints, trees, roads, surfaces, waters, structures, partial };
   }
 
   // ---- helpers ----
@@ -409,3 +422,31 @@ export class GeoService {
 
 /** Convenience re-export so panels can type buildings without importing the core twice. */
 export type { BuildingSpec };
+
+/** OSM `surface=*` to a ground surface (null when unknown). */
+function surfaceOf(v: string | undefined): SurfaceKind | null {
+  if (!v) return null;
+  if (/^(asphalt|paved|chipseal)$/.test(v)) return 'asphalt';
+  if (/^(concrete|concrete:plates|paving_stones|sett)$/.test(v)) return 'concrete';
+  if (/^(gravel|fine_gravel|compacted|unpaved|pebblestone)$/.test(v)) return 'gravel';
+  if (/^(dirt|ground|earth|mud)$/.test(v)) return 'dirt';
+  if (v === 'sand') return 'sand';
+  if (v === 'grass') return 'grass';
+  return null;
+}
+
+/** The ground surface of an OSM area (landuse / natural / amenity), or null for areas that are not ground. */
+function areaSurface(t: Record<string, string>): SurfaceKind | null {
+  const own = surfaceOf(t['surface']);
+  if (own) return own;
+  const l = t['landuse'], n = t['natural'];
+  if (l === 'grass' || l === 'meadow') return 'grass';
+  if (l === 'brownfield') return 'rubble';
+  if (l === 'construction') return 'dirt';
+  if (l === 'industrial' || l === 'railway') return 'concrete';
+  if (t['amenity'] === 'parking') return 'asphalt';
+  if (n === 'sand') return 'sand';
+  if (n === 'scrub') return 'dirt';
+  if (n === 'bare_rock') return 'gravel';
+  return null;
+}
