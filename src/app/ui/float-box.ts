@@ -131,6 +131,8 @@ export class FloatBox {
   readonly minH = input(60);
   /** Lay the content out in rows that wrap, so short controls sit side by side. */
   readonly cols = input(false);
+  /** Measure the default `x` from the right edge of the parent instead of the left. */
+  readonly right = input(false);
 
   protected readonly open = signal(true);
   private ro: ResizeObserver | null = null;
@@ -182,7 +184,8 @@ export class FloatBox {
   }
 
   private defaults(): Geo {
-    return { x: this.x(), y: this.y(), w: this.w(), h: this.h() };
+    const pw = this.host.nativeElement.parentElement?.clientWidth ?? 0;
+    return { x: this.right() && pw ? pw - this.w() - this.x() : this.x(), y: this.y(), w: this.w(), h: this.h() };
   }
 
   /** Double-click the title: back to the default place and size. */

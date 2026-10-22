@@ -47,7 +47,7 @@ function buildingGroup(b: BuildingSpec): THREE.Group {
 }
 
 /** Make every material of a group see-through (cloned, so the shared ones are untouched). */
-function ghost(root: THREE.Object3D, opacity = 0.13): void {
+export function ghost(root: THREE.Object3D, opacity = 0.13): void {
   root.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
@@ -61,7 +61,7 @@ function ghost(root: THREE.Object3D, opacity = 0.13): void {
 }
 
 /** The same building with only floor `li` in it (roof only if that is the top floor). */
-function levelOnly(b: BuildingSpec, li: number): BuildingSpec {
+export function levelOnly(b: BuildingSpec, li: number): BuildingSpec {
   const c = JSON.parse(JSON.stringify(b)) as BuildingSpec;
   const lv = c.levels[Math.min(li, c.levels.length - 1)]!;
   if (li < b.levels.length - 1) lv.roof = 'none';

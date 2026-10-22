@@ -91,7 +91,7 @@ export class ElementPreview {
   readonly picked = output<{ kind: 'column' | 'wall'; i: number }>();
   protected readonly failed = signal(false);
   /** Height of the 3D canvas in px (remembered); drag the bar under it. Never taller than most of the panel it sits in. */
-  protected readonly h = signal(Math.min(600, Math.max(90, Number(ElementPreview.storedNum('abando-preview-h', 160)))));
+  protected readonly h = signal(Math.min(600, Math.max(90, Number(ElementPreview.storedNum('abando-preview-h', 130)))));
   private gripFrom: { y: number; h: number } | null = null;
   private readonly host = inject(ElementRef<HTMLElement>);
 
@@ -185,7 +185,9 @@ export class ElementPreview {
       this.schedule();
     });
     effect(() => {
-      if (this.renderer) this.renderer.spin = this.spin();
+      // read the signal first: behind `if (renderer)` it was never tracked, so the toggle did nothing
+      const on = this.spin();
+      if (this.renderer) this.renderer.spin = on;
     });
     effect(() => {
       this.shown();

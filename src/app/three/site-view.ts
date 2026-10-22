@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Flight } from '../core/models';
-import type { SiteSpec } from '../core/site-spec';
+import { emptySpec, type SiteSpec } from '../core/site-spec';
+import { ghost, levelOnly } from './element-preview';
 import { PathRenderer } from './path-renderer';
 import { buildSiteFromSpec, type SiteModel } from './site-model';
 
@@ -104,7 +105,7 @@ export class SiteViewRenderer {
   }
 
   /** Rebuild from the spec. The camera re-frames only when `frameKey` changes (a different bando). */
-  show(spec: SiteSpec, roofHidden: boolean, frameKey: string): void {
+  show(spec: SiteSpec, roofHidden: boolean, frameKey: string, focus: { id: string; li: number } | null = null): void {
     if (this.model) {
       this.scene.remove(this.model.group);
       dispose(this.model.group);
@@ -112,6 +113,7 @@ export class SiteViewRenderer {
     this.spec = spec;
     this.model = buildSiteFromSpec(spec);
     this.model.setRoofHidden?.(roofHidden);
+    if (focus) this.focusFloor(spec, focus);
     this.scene.add(this.model.group);
     this.refreshSelection();
     if (frameKey !== this.framed) {
@@ -119,6 +121,20 @@ export class SiteViewRenderer {
       this.target.set(0, 0, 0);
       this.dist = Math.max(60, Math.min(900, spec.extent * 0.9));
     }
+  }
+
+  /** One floor of a building in focus: the building turns see-through and that floor is drawn solid in place. */
+  private focusFloor(spec: SiteSpec, f: { id: string; li: number }): void {
+    const b = spec.buildings.find((x) => x.id === f.id);
+    if (!b || b.levels.length < 2 || !this.model) return;
+    this.model.group.traverse((o) => {
+      const p = o.userData['pick'] as SitePick | undefined;
+      if (p && p.kind === 'building' && p.id === f.id) ghost(o);
+    });
+    const mini = emptySpec(spec.origin, 'focus');
+    mini.buildings = [levelOnly(b, f.li)];
+    mini.extent = spec.extent;
+    this.model.group.add(buildSiteFromSpec(mini, { bare: true }).group);
   }
 
   /** The point on the ground (y = 0) under the pointer, in site coordinates. */

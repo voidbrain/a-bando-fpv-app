@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { anglesAt, nearestSnap, orthoSnap, snapTargets, fmtLength } from './measure';
+import { anglesAt, arcOf, nearestSnap, orthoSnap, snapTargets, fmtLength } from './measure';
 import { emptySpec } from './site-spec';
 
 describe('measure helpers', () => {
@@ -17,6 +17,14 @@ describe('measure helpers', () => {
     const r = anglesAt([{ a: o, b: { x: 10, z: 0 } }, { a: { x: 0, z: 0 }, b: { x: 0, z: 5 } }, { a: { x: 50, z: 50 }, b: { x: 60, z: 50 } }]);
     expect(r.length).toBe(1);
     expect(r[0]!.deg).toBeCloseTo(90);
+  });
+  it('draws the angle arc between the two arms, label on the bisector', () => {
+    const r = anglesAt([{ a: { x: 0, z: 0 }, b: { x: 10, z: 0 } }, { a: { x: 0, z: 0 }, b: { x: 0, z: 5 } }])[0]!;
+    const arc = arcOf(r.at, r.d1, r.d2, 4);
+    expect(arc.path).toMatch(/^M 4 0 A 4 4 0 0 1 /);
+    expect(arc.label.x).toBeGreaterThan(0);
+    expect(arc.label.z).toBeGreaterThan(0);
+    expect(Math.hypot(arc.label.x, arc.label.z)).toBeLessThan(4);
   });
   it('straightens nearly axis-aligned lines', () => {
     const q = orthoSnap({ x: 0, z: 0 }, { x: 10, z: 0.3 });

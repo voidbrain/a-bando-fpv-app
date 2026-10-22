@@ -18,36 +18,48 @@ import { Panel } from '../panel/panel';
       }
       <div class="row">
         <label class="btn">Load video<input type="file" accept="video/*" hidden (change)="load($event)" /></label>
-        <label>offset s <input type="number" step="0.1" [value]="video.offset().toFixed(2)" (change)="video.setOffset(num($event))" /></label>
-        <button class="btn" (click)="video.syncHere()">Sync here</button>
-        <label>cam tilt° <input type="number" step="1" [value]="view.fpvTiltDeg()" (change)="view.setFpvTilt(num($event))" /></label>
-        <label>size <input type="range" min="220" max="900" [value]="width()" (input)="setWidth(num($event))" /></label>
-      </div>
-      <div class="row">
         <button class="btn primary" [disabled]="video.busy()" (click)="video.autoSync(scanFrom(), scanLength())">Auto-sync</button>
-        <label>from s <input type="number" step="10" [value]="scanFrom()" (change)="scanFrom.set(num($event))" /></label>
-        <label>scan s <input type="number" step="10" [value]="scanLength()" (change)="scanLength.set(num($event))" /></label>
-        <button class="btn" (click)="nudge(-0.1)">−0.1</button>
-        <button class="btn" (click)="nudge(0.1)">+0.1</button>
-      </div>
-      <div class="row">
-        <button class="btn" (click)="video.anchorLiftoff()">Video here = lift-off</button>
-        <button class="btn" (click)="video.anchorFlip()">Video here = first flip/roll</button>
-        <button class="btn" (click)="video.anchorYawFlick()">Video here = first yaw flick</button>
       </div>
       <div class="dim small">{{ video.status() }}</div>
-      @if (video.features(); as f) {
-        <app-canvas panel="video" [height]="plotHeight" [every]="3" [draw]="drawPlot" [capture]="false" />
-      }
-      <div class="dim small">
-        Auto-sync matches the log with the video over the first minute of flight, using how fast the picture pans and, for flips and rolls, when it is upside down.
-        A flip or roll in the first 10 s is the ideal marker (shown as F on the timeline). If it fails: scrub the video to the frame where the picture is upside
-        down in the middle of the first flip or roll and press “Video here = first flip/roll”; or use “Video here = lift-off” / “Sync here”. Nudge ±0.1 while
-        watching the plot (blue and orange should line up). Video plays locally; nothing is uploaded.
-      </div>
+      <details class="adv">
+        <summary>Advanced</summary>
+        <div class="row">
+          <label>offset s <input type="number" step="0.1" [value]="video.offset().toFixed(2)" (change)="video.setOffset(num($event))" /></label>
+          <button class="btn" (click)="video.syncHere()">Sync here</button>
+          <button class="btn" (click)="nudge(-0.1)">−0.1</button>
+          <button class="btn" (click)="nudge(0.1)">+0.1</button>
+        </div>
+        <div class="row">
+          <label>cam tilt° <input type="number" step="1" [value]="view.fpvTiltDeg()" (change)="view.setFpvTilt(num($event))" /></label>
+          <label>size <input type="range" min="220" max="900" [value]="width()" (input)="setWidth(num($event))" /></label>
+        </div>
+        <div class="row">
+          <label>from s <input type="number" step="10" [value]="scanFrom()" (change)="scanFrom.set(num($event))" /></label>
+          <label>scan s <input type="number" step="10" [value]="scanLength()" (change)="scanLength.set(num($event))" /></label>
+        </div>
+        <div class="row">
+          <button class="btn" (click)="video.anchorLiftoff()">Video here = lift-off</button>
+          <button class="btn" (click)="video.anchorFlip()">Video here = first flip/roll</button>
+          <button class="btn" (click)="video.anchorYawFlick()">Video here = first yaw flick</button>
+        </div>
+        @if (video.features(); as f) {
+          <app-canvas panel="video" [height]="plotHeight" [every]="3" [draw]="drawPlot" [capture]="false" />
+        }
+        <div class="dim small">
+          Auto-sync matches the log with the video over the first minute of flight, using how fast the picture pans and, for flips and rolls, when it is upside down.
+          A flip or roll in the first 10 s is the ideal marker (shown as F on the timeline). If it fails: scrub the video to the frame where the picture is upside
+          down in the middle of the first flip or roll and press “Video here = first flip/roll”; or use “Video here = lift-off” / “Sync here”. Nudge ±0.1 while
+          watching the plot (blue and orange should line up). Video plays locally; nothing is uploaded.
+        </div>
+      </details>
     </app-panel>
   `,
   styles: `
+    .adv summary {
+      cursor: pointer;
+      color: var(--dim);
+      margin: 4px 0;
+    }
     .slot {
       display: block;
       line-height: 0;

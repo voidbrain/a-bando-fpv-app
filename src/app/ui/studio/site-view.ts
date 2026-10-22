@@ -52,6 +52,8 @@ export class SiteView {
   /** 'select': a click selects what is under it. 'draw': left-drag on the ground reports points for the active tool. */
   readonly mode = input<'select' | 'draw'>('select');
   readonly selection = input<SitePick | null>(null);
+  /** One floor of one building to show solid, the rest of that building ghosted. */
+  readonly focus = input<{ id: string; li: number } | null>(null);
   readonly flights = input<Flight[]>([]);
   readonly speedMax = input(10);
   readonly picked = output<SitePick | null>();
@@ -90,6 +92,7 @@ export class SiteView {
     effect(() => {
       this.spec();
       this.roofHidden();
+      this.focus();
       untracked(() => this.schedule(220)); // an edit drag changes the spec many times a second
     });
     inject(DestroyRef).onDestroy(() => {
@@ -104,7 +107,7 @@ export class SiteView {
     clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       try {
-        this.r?.show(this.spec(), this.roofHidden(), this.frameKey());
+        this.r?.show(this.spec(), this.roofHidden(), this.frameKey(), this.focus());
         this.r?.setSelection(this.selection());
         this.r?.setPaths(this.flights(), this.speedMax());
       } catch {

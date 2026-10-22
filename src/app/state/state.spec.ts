@@ -15,6 +15,16 @@ describe('stores', () => {
   });
 
   describe('LayoutStore', () => {
+    it('brings a panel to the front when it is shown', () => {
+      const s = TestBed.inject(LayoutStore);
+      s.raise('views');
+      s.setVisible('video', true);
+      expect(s.panels()['video'].z).toBeGreaterThan(s.panels()['views'].z);
+      s.raise('views');
+      s.toggle('video');
+      s.toggle('video');
+      expect(s.panels()['video'].z).toBeGreaterThan(s.panels()['views'].z);
+    });
     it('starts with the default panels visible', () => {
       const s = TestBed.inject(LayoutStore);
       expect(s.panels().views.visible).toBe(true);

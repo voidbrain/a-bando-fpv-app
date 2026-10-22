@@ -29,7 +29,7 @@ export const PANELS: readonly PanelDef[] = [
   { id: 'attitude', title: 'Attitude & heading', group: 'instruments', visible: true, anchor: { right: 12, top: 168 }, width: 270 },
   { id: 'compass', title: 'Map north', group: 'instruments', visible: false, anchor: { right: 300, top: 12 }, width: 170 },
   { id: 'path', title: 'Flight path', group: 'instruments', visible: true, anchor: { right: 12, bottom: 12 }, width: 330, resizable: true, height: 270 },
-  { id: 'studio', title: 'Bandos · map & model editor', group: 'tools', visible: true, anchor: { right: 12, top: 60 }, width: 920, resizable: true, height: 720 },
+  { id: 'studio', title: 'Bandos · map & model editor', group: 'tools', visible: true, anchor: { right: 12, top: 60 }, width: 760, resizable: true, height: 540 },
   { id: 'blackbox', title: 'Blackbox', group: 'instruments', visible: false, anchor: { right: 12, top: 330 }, width: 360 },
   { id: 'video', title: 'Video', group: 'data', visible: false, anchor: { left: 280, top: 12 }, width: 380 },
   { id: 'live', title: 'Live link', group: 'data', visible: false, anchor: { left: 280, top: 12 }, width: 300 },

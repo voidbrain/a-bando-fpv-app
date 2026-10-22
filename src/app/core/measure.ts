@@ -57,9 +57,9 @@ export function orthoSnap(a: Pt, p: Pt, axisDeg = 0, tol = 3): Pt {
 export const lengthOf = (s: Seg): number => Math.hypot(s.b.x - s.a.x, s.b.z - s.a.z);
 export const fmtLength = (d: number): string => (d >= 1000 ? `${(d / 1000).toFixed(2)} km` : `${d.toFixed(d < 10 ? 2 : 1)} m`);
 
-/** Angles (degrees, 0..180) between every two measures that share an end point, with where they meet. */
-export function anglesAt(segs: readonly Seg[], tol = 0.05): { at: Pt; deg: number; i: number; j: number }[] {
-  const out: { at: Pt; deg: number; i: number; j: number }[] = [];
+/** Angles (degrees, 0..180) between every two measures that share an end point, with where they meet and the direction (radians) of each arm. */
+export function anglesAt(segs: readonly Seg[], tol = 0.05): { at: Pt; deg: number; i: number; j: number; d1: number; d2: number }[] {
+  const out: { at: Pt; deg: number; i: number; j: number; d1: number; d2: number }[] = [];
   for (let i = 0; i < segs.length; i++) {
     for (let j = i + 1; j < segs.length; j++) {
       for (const pa of [segs[i]!.a, segs[i]!.b]) {
@@ -71,10 +71,25 @@ export function anglesAt(segs: readonly Seg[], tol = 0.05): { at: Pt; deg: numbe
           const l = Math.hypot(v1.x, v1.z) * Math.hypot(v2.x, v2.z);
           if (l < 1e-6) continue;
           const c = Math.min(1, Math.max(-1, (v1.x * v2.x + v1.z * v2.z) / l));
-          out.push({ at: pa, deg: (Math.acos(c) * 180) / Math.PI, i, j });
+          out.push({ at: pa, deg: (Math.acos(c) * 180) / Math.PI, i, j, d1: Math.atan2(v1.z, v1.x), d2: Math.atan2(v2.z, v2.x) });
         }
       }
     }
   }
   return out;
+}
+
+/**
+ * SVG path of the arc that marks an angle: from arm 1 to arm 2 the short way round, radius `r`, plus the point
+ * (on the bisector) where its label goes. Plan coordinates: x right, z down, so the sweep flag follows the sign of the turn.
+ */
+export function arcOf(at: Pt, d1: number, d2: number, r: number): { path: string; label: Pt } {
+  let diff = d2 - d1;
+  while (diff > Math.PI) diff -= 2 * Math.PI;
+  while (diff <= -Math.PI) diff += 2 * Math.PI;
+  const s = { x: at.x + r * Math.cos(d1), z: at.z + r * Math.sin(d1) };
+  const e = { x: at.x + r * Math.cos(d2), z: at.z + r * Math.sin(d2) };
+  const mid = d1 + diff / 2;
+  const lr = r * 0.62;
+  return { path: `M ${s.x} ${s.z} A ${r} ${r} 0 0 ${diff > 0 ? 1 : 0} ${e.x} ${e.z}`, label: { x: at.x + lr * Math.cos(mid), z: at.z + lr * Math.sin(mid) } };
 }

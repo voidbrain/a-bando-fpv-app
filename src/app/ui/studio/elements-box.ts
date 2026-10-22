@@ -114,7 +114,7 @@ export class ElementsBox {
     (this.spec().structures ?? []).map((s, i) => ({ i, name: s.name, kind: s.kind.replace('_', ' '), glyph: GLYPH[s.kind] ?? '▲', x: s.x, z: s.z, size: Math.max(s.size, s.length ?? 0, 10) })).filter((s) => this.match(s.name)),
   );
   protected readonly fences = computed(() =>
-    (this.spec().walls ?? []).map((w, i) => ({ i, x: (w.a.x + w.b.x) / 2, z: (w.a.z + w.b.z) / 2, len: Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z) })).filter((f) => this.match('wall')),
+    (this.spec().walls ?? []).map((w, i) => ({ i, x: (w.a.x + w.b.x) / 2, z: (w.a.z + w.b.z) / 2, len: Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z) })).filter(() => this.match('wall')),
   );
   protected readonly treeTotal = computed(() => this.spec().trees.length);
   /** Trees grouped by 60 m cells: a count, a tiny dot map and where the cell is (m east / north of the origin). */

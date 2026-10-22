@@ -57,30 +57,39 @@ export const LayoutStore = signalStore(
   withMethods((store) => {
     const update = (id: PanelId, fn: (p: PanelState) => Partial<PanelState>): void =>
       patchState(store, (s) => ({ panels: { ...s.panels, [id]: { ...s.panels[id], ...fn(s.panels[id]) } } }));
+    /** Bring a panel to the front. Renumbers everything when the counter gets large. */
+    const raise = (id: PanelId): void =>
+      patchState(store, (s) => {
+        // already the only panel on top (initially every panel shares z = 10, so the counter must have moved)
+        if (s.panels[id].z === s.zTop && s.zTop > Z_START) return {};
+        let panels = s.panels;
+        let z = s.zTop + 1;
+        if (z > Z_MAX) {
+          const order = (Object.keys(panels) as PanelId[]).sort((a, b) => panels[a].z - panels[b].z);
+          const next = { ...panels };
+          z = Z_START;
+          for (const k of order) next[k] = { ...next[k], z: z++ };
+          panels = next;
+        }
+        return { zTop: z, panels: { ...panels, [id]: { ...panels[id], z } } };
+      });
     return {
-      setVisible: (id: PanelId, visible: boolean) => update(id, () => ({ visible })),
-      toggle: (id: PanelId) => update(id, (p) => ({ visible: !p.visible })),
+      /** Showing a panel also brings it to the front. */
+      setVisible: (id: PanelId, visible: boolean) => {
+        update(id, () => ({ visible }));
+        if (visible) raise(id);
+      },
+      toggle: (id: PanelId) => {
+        const show = !store.panels()[id].visible;
+        update(id, () => ({ visible: show }));
+        if (show) raise(id);
+      },
       toggleMinimized: (id: PanelId) => update(id, (p) => ({ minimized: !p.minimized })),
       toggleGhost: (id: PanelId) => update(id, (p) => ({ ghost: !p.ghost })),
       moveTo: (id: PanelId, x: number, y: number) => update(id, () => ({ x, y })),
       resizeTo: (id: PanelId, w: number, h: number) => update(id, () => ({ w, h })),
       setWidth: (id: PanelId, w: number) => update(id, () => ({ w })),
-      /** Bring a panel to the front. Renumbers everything when the counter gets large. */
-      raise: (id: PanelId) =>
-        patchState(store, (s) => {
-          // already the only panel on top (initially every panel shares z = 10, so the counter must have moved)
-          if (s.panels[id].z === s.zTop && s.zTop > Z_START) return {};
-          let panels = s.panels;
-          let z = s.zTop + 1;
-          if (z > Z_MAX) {
-            const order = (Object.keys(panels) as PanelId[]).sort((a, b) => panels[a].z - panels[b].z);
-            const next = { ...panels };
-            z = Z_START;
-            for (const k of order) next[k] = { ...next[k], z: z++ };
-            panels = next;
-          }
-          return { zTop: z, panels: { ...panels, [id]: { ...panels[id], z } } };
-        }),
+      raise,
       reset: () => patchState(store, defaults()),
     };
   }),
