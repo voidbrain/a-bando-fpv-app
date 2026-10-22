@@ -9,6 +9,7 @@ export interface Zone {
   lon: number;
   halfE: number;
   halfN: number;
+  rotDeg?: number;
 }
 
 /** Where the zone map starts: a centre and a Leaflet zoom level. */
@@ -41,7 +42,7 @@ export class StudioService {
   readonly mapOpacity = signal(1);
   /** Which editor tab a freshly opened bando starts on, and the half extents of its stored area (metres). */
   readonly initialMode = signal<'area' | 'model'>('area');
-  readonly startHalf = signal<{ e: number; n: number } | null>(null);
+  readonly startHalf = signal<{ e: number; n: number; rot?: number } | null>(null);
   readonly busy = this.site.generating;
 
   readonly isNew = computed(() => this.editingId() === null);
@@ -71,7 +72,7 @@ export class StudioService {
     this.editingId.set(id);
     this.name.set(spec.name);
     this.start.set(startFor(spec));
-    this.startHalf.set(spec.zone ? { e: spec.zone.halfE, n: spec.zone.halfN } : null);
+    this.startHalf.set(spec.zone ? { e: spec.zone.halfE, n: spec.zone.halfN, rot: spec.zone.rotDeg ?? 0 } : null);
     this.initialMode.set(spec.buildings.length > 0 && spec.bearingDeg === 0 ? 'model' : 'area');
     this.zone.set(null);
     this.view.set('zone');
@@ -100,7 +101,7 @@ export class StudioService {
     const label = this.name().trim() || 'New bando';
     const spec = await this.site.generate(
       { label, lat: z.lat, lon: z.lon },
-      { area: { halfE: z.halfE, halfN: z.halfN }, keep: existing ? { id: existing.id, name: label, createdAt: existing.createdAt } : { name: label } },
+      { area: { halfE: z.halfE, halfN: z.halfN, rotDeg: z.rotDeg ?? 0 }, keep: existing ? { id: existing.id, name: label, createdAt: existing.createdAt } : { name: label } },
     );
     if (spec) this.editingId.set(spec.id);
   }

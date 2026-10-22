@@ -90,6 +90,26 @@ const EXAMPLES: readonly string[] = [
             <div class="m dim thinking"><i class="spin"></i> thinking… <span class="small">(a small model on a laptop GPU can take 10–40 s)</span></div>
           }
         </div>
+        @if (ai.changes().length) {
+          <details class="chg" open>
+            <summary>
+              <b>Changes</b> <span class="dim small">{{ ai.unreviewed() }} to review of {{ ai.changes().length }}</span>
+              <button class="btn mini" [disabled]="!ai.unreviewed()" (click)="ai.acceptAll(); $event.preventDefault()" title="Mark everything as reviewed">Accept all</button>
+            </summary>
+            <div class="list">
+              @for (c of ai.changes(); track c.id) {
+                <div class="row" [class.done]="c.reviewed">
+                  <input type="checkbox" [checked]="c.reviewed" (change)="ai.setReviewed(c.id, chk($event))" title="Reviewed" />
+                  @if (c.target) {
+                    <button class="lnk" (click)="ai.show(c.id)" title="Select it, show the floor and zoom the map there">{{ c.text }} ↗</button>
+                  } @else {
+                    <span>{{ c.text }}</span>
+                  }
+                </div>
+              }
+            </div>
+          </details>
+        }
         <div class="in">
           <textarea #box rows="2" placeholder="e.g. split into 2 rooms, add a door on the east wall" (keydown)="key($event, box)" [disabled]="ai.busy()"></textarea>
           <button class="btn primary" (click)="send(box.value); box.value = ''" [disabled]="ai.busy()">Send</button>
@@ -104,6 +124,42 @@ const EXAMPLES: readonly string[] = [
     </app-float-box>
   `,
   styles: `
+    .chg {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 4px 6px;
+      max-height: 30%;
+      overflow: auto;
+    }
+    .chg summary {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .chg .list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-top: 4px;
+    }
+    .chg .row {
+      display: flex;
+      gap: 6px;
+      align-items: baseline;
+      font-size: 12px;
+    }
+    .chg .row.done {
+      opacity: 0.55;
+    }
+    .chg .lnk {
+      background: none;
+      border: 0;
+      color: var(--accent);
+      cursor: pointer;
+      text-align: left;
+      padding: 0;
+    }
     .seg {
       display: inline-flex;
       align-self: flex-start;
@@ -244,6 +300,10 @@ export class AssistantBox {
   protected context(): string {
     const b = this.site.editor.building();
     return b ? `Selected: ${b.name}` : `No building selected${this.site.editor.draft().buildings.length === 1 ? ' (only one: I will use it)' : ': name the building in your message'}`;
+  }
+
+  protected chk(e: Event): boolean {
+    return (e.target as HTMLInputElement).checked;
   }
 
   protected val(e: Event): string {

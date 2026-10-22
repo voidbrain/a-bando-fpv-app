@@ -169,11 +169,14 @@ export class GeoService {
    * (the model is still built, `partial` says trees / roads are missing). The query box is snapped to a ~55 m grid so
    * that nearby frames share one cached answer; the result is then cut back to the real frame.
    */
-  async areaData(lat: number, lon: number, halfE: number, halfN: number): Promise<{ footprints: Footprint[]; trees: TreeSpec[]; roads: PadSpec[]; structures: StructureSpec[]; partial: boolean }> {
+  async areaData(lat: number, lon: number, halfE: number, halfN: number, rotDeg = 0): Promise<{ footprints: Footprint[]; trees: TreeSpec[]; roads: PadSpec[]; structures: StructureSpec[]; partial: boolean }> {
     const mLon = metresPerDegLon(lat);
     const G = 0.0005;
-    const south = Math.floor((lat - halfN / M_LAT) / G) * G, north = Math.ceil((lat + halfN / M_LAT) / G) * G;
-    const west = Math.floor((lon - halfE / mLon) / G) * G, east = Math.ceil((lon + halfE / mLon) / G) * G;
+    // a turned frame: ask for its bounding box, then keep only what is inside the turned rectangle (inZone)
+    const rr = (rotDeg * Math.PI) / 180, cr = Math.abs(Math.cos(rr)), sr = Math.abs(Math.sin(rr));
+    const bE = cr * halfE + sr * halfN, bN = sr * halfE + cr * halfN;
+    const south = Math.floor((lat - bN / M_LAT) / G) * G, north = Math.ceil((lat + bN / M_LAT) / G) * G;
+    const west = Math.floor((lon - bE / mLon) / G) * G, east = Math.ceil((lon + bE / mLon) / G) * G;
     const bbox = `${south.toFixed(4)},${west.toFixed(4)},${north.toFixed(4)},${east.toFixed(4)}`; // south,west,north,east
     const buildingsQ = `way["building"]["building"!~"^(roof|hangar)$"](${bbox});`;
     const fullQ = `[out:json][timeout:25];(${buildingsQ}node["natural"="tree"](${bbox});way["natural"="tree_row"](${bbox});way["highway"~"^(primary|secondary|tertiary|residential|unclassified|service)$"](${bbox});` +
@@ -191,7 +194,11 @@ export class GeoService {
         throw e;
       }
     }
-    const inZone = (la: number, lo: number): boolean => Math.abs((lo - lon) * mLon) <= halfE + 8 && Math.abs((la - lat) * M_LAT) <= halfN + 8;
+    const inZone = (la: number, lo: number): boolean => {
+      const dx = (lo - lon) * mLon, dz = -(la - lat) * M_LAT; // east, south
+      const u = dx * Math.cos(rr) + dz * Math.sin(rr), v = -dx * Math.sin(rr) + dz * Math.cos(rr); // in the frame's own axes
+      return Math.abs(u) <= halfE + 8 && Math.abs(v) <= halfN + 8;
+    };
     const footprints: Footprint[] = [];
     const trees: TreeSpec[] = [];
     const roads: PadSpec[] = [];

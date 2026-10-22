@@ -28,7 +28,7 @@ export interface GenerateOptions {
   scale?: number;
   seed?: number;
   /** Half extents (metres) of the map zone to pull from OpenStreetMap. Default 250 × 250. */
-  area?: { halfE: number; halfN: number };
+  area?: { halfE: number; halfN: number; rotDeg?: number };
   /** Regenerate an existing bando in place: keep its id / name / creation date. */
   keep?: { id?: string; name: string; createdAt?: number };
 }
@@ -130,10 +130,10 @@ export class SiteService {
     try {
       const k = Math.min(5, Math.max(0.2, opts.scale ?? 1));
       const seed = opts.seed ?? 7;
-      const area = opts.area ? { halfE: clampHalf(opts.area.halfE), halfN: clampHalf(opts.area.halfN) } : { halfE: 250, halfN: 250 };
+      const area = opts.area ? { halfE: clampHalf(opts.area.halfE), halfN: clampHalf(opts.area.halfN), rotDeg: opts.area.rotDeg ?? 0 } : { halfE: 250, halfN: 250, rotDeg: 0 };
       let data;
       try {
-        data = await this.geo.areaData(info.lat, info.lon, area.halfE, area.halfN);
+        data = await this.geo.areaData(info.lat, info.lon, area.halfE, area.halfN, area.rotDeg);
       } catch (e) {
         // never swap in a made-up model: keep what is on screen and say what happened
         this.toast.show(e instanceof Error ? e.message : 'Could not load OpenStreetMap data.');
@@ -142,7 +142,7 @@ export class SiteService {
       void k;
       if (data.partial) this.toast.show('Trees and roads could not be loaded (servers busy): buildings only. Regenerate later to add them.');
       const spec = this.specFromZone(info, data.footprints, data.trees, data.roads, data.structures, area, seed);
-      spec.zone = { lat: info.lat, lon: info.lon, halfE: area.halfE, halfN: area.halfN };
+      spec.zone = { lat: info.lat, lon: info.lon, halfE: area.halfE, halfN: area.halfN, ...(area.rotDeg ? { rotDeg: area.rotDeg } : {}) };
       // regenerating an existing bando keeps its identity
       if (opts.keep) {
         if (opts.keep.id) spec.id = opts.keep.id;
@@ -316,7 +316,7 @@ export class SiteService {
    * +z = south), origin at the zone centre. Each footprint keeps its true outline when it is rectilinear (L, T, U, H
    * shapes ...) or becomes a rectangle along its longest edge otherwise; roads are rotated pads.
    */
-  private specFromZone(info: LocationInfo, fps: Footprint[], osmTrees: TreeSpec[], roads: PadSpec[], structures: StructureSpec[], area: { halfE: number; halfN: number }, seed: number): SiteSpec {
+  private specFromZone(info: LocationInfo, fps: Footprint[], osmTrees: TreeSpec[], roads: PadSpec[], structures: StructureSpec[], area: { halfE: number; halfN: number; rotDeg?: number }, seed: number): SiteSpec {
     const mLat = 111132;
     const mLon = 111320 * Math.cos((info.lat * Math.PI) / 180);
     const buildings: BuildingSpec[] = [];

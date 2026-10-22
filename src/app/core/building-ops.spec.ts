@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { stairsFor, addFloor, buildingsOverlap, columnGrid, columnRow, convertBuilding, duplicateColumn, mergeBuildings, overlapsOthers, removeFloor, repeatOpening } from './building-ops';
+import { stairsFor, addFloor, buildingsOverlap, columnGrid, columnRow, convertBuilding, duplicateColumn, duplicateColumns, fillModule, mergeBuildings, overlapsOthers, removeFloor, repeatOpening } from './building-ops';
 import { addOpening, listOpenings, patchOpening } from './openings';
 import { emptySpec, type BuildingSpec } from './site-spec';
 
@@ -134,5 +134,39 @@ describe('stairs on a floor', () => {
     expect(r.voidAbove!.x1).toBeCloseTo(6 + 6.2 / 2 + 0.3, 3);
     // the top floor has nothing above it
     expect(stairsFor(b, 1, { x: 6, z: 5 }, 'ramp', { length: 10, size: 3, name: 'Ramp' }).voidAbove).toBeNull();
+  });
+});
+
+describe('column modules', () => {
+  const hall = (): BuildingSpec => ({
+    id: 'h', name: 'H', pos: { x: 0, z: 0 }, rotDeg: 0, length: 40, width: 20,
+    levels: [{ baseY: 0, height: 5, sides: { n: true, s: true, e: true, w: true }, doors: {}, partitions: [], roof: 'flat', roofRise: 0, columns: [{ x: 10, z: 10, size: 0.6 }, { x: 15, z: 10, size: 0.6 }] }],
+  });
+  it('fills the floor on the lattice of the selected columns and keeps clear of the walls', () => {
+    const b = hall();
+    const n = fillModule(b, 0, [0, 1], 4);
+    expect(n).toBeGreaterThan(5);
+    const cols = b.levels[0]!.columns!;
+    expect(cols.every((c) => (c.x - 10) % 5 === 0 || Math.abs(((c.x - 10) % 5 + 5) % 5) < 0.01 || Math.abs(((c.x - 10) % 5 + 5) % 5 - 5) < 0.01)).toBe(true);
+    expect(cols.every((c) => c.x > 1 && c.x < 39 && c.z > 1 && c.z < 19)).toBe(true);
+    expect(new Set(cols.map((c) => `${c.x}/${c.z}`)).size).toBe(cols.length);
+  });
+  it('duplicates a selection as one module', () => {
+    const b = hall();
+    expect(duplicateColumns(b, 0, [0, 1], 0, 5).length).toBe(2);
+    expect(b.levels[0]!.columns!.length).toBe(4);
+  });
+});
+
+describe('merge across a gap', () => {
+  it('closes a small gap and merges; refuses (and leaves the building where it was) when too far', () => {
+    const s = emptySpec({ lat: 45, lon: 12 }, 'T');
+    s.buildings = [mk('a', 0, 0, 20, 10), mk('b', 21.5, 0, 10, 10)]; // 21.5 - 5 = 16.5 .. gap of 6.5? no: a ends at 10, b starts at 16.5
+    expect(mergeBuildings(s, 'a', 'b')).not.toBeNull();
+    expect(s.buildings.find((x) => x.id === 'b')!.pos.x).toBe(21.5);
+    s.buildings = [mk('a', 0, 0, 20, 10), mk('b', 17, 0, 10, 10)]; // a ends 10, b starts 12: a 2 m gap
+    expect(mergeBuildings(s, 'a', 'b')).toBeNull();
+    expect(s.buildings.length).toBe(1);
+    expect(s.buildings[0]!.length).toBeCloseTo(30);
   });
 });

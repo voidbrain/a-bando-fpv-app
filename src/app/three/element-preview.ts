@@ -147,6 +147,8 @@ export class PreviewRenderer {
   private dist = 30;
   private centre = new THREE.Vector3();
   private lastInput = 0;
+  /** Turn slowly when left alone (can be stopped). */
+  spin = true;
   private raf = 0;
   private last = 0;
   private dragging: { x: number; y: number } | null = null;
@@ -238,7 +240,7 @@ export class PreviewRenderer {
       this.camera.aspect = w / h;
       this.camera.updateProjectionMatrix();
     }
-    if (!this.dragging && now - this.lastInput > 2500) this.yaw += dt * 0.35; // slow turntable once you let go
+    if (this.spin && !this.dragging && now - this.lastInput > 1500) this.yaw += dt * 0.35; // slow turntable once you let go
     const cp = Math.cos(this.pitch);
     this.camera.position.set(this.centre.x + this.dist * cp * Math.sin(this.yaw), this.centre.y + this.dist * Math.sin(this.pitch), this.centre.z + this.dist * cp * Math.cos(this.yaw));
     this.camera.lookAt(this.centre);

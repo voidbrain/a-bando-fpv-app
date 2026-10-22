@@ -2,9 +2,11 @@ import { Component, DestroyRef, ElementRef, afterNextRender, computed, effect, i
 import { FormsModule } from '@angular/forms';
 import * as L from 'leaflet';
 import { contains, edgesOf, type Pt, type Rect } from '../../core/footprint';
-import { buildingsOverlap, stairsFor, columnGrid, columnRow, convertBuilding, duplicateColumn, mergeBuildings, overlapsOthers, repeatOpening } from '../../core/building-ops';
+import { buildingsOverlap, stairsFor, columnGrid, columnRow, convertBuilding, duplicateColumn, duplicateColumns, fillModule, mergeBuildings, overlapsOthers, repeatOpening } from '../../core/building-ops';
 import { addOpening, insideBuilding, listOpenings, moveOpening, outlineOf, previewOpening, patchOpening, removeOpening, reshapeBuilding, resetToRect, resizeOpening, type OpenSeg } from '../../core/openings';
 import { cloneSpec, uid, type BuildingSpec, type LevelSpec, type LocationInfo, type SiteSpec, type StructureKind, type StructureSpec } from '../../core/site-spec';
+import { autoAlign } from '../../core/align';
+import { anglesAt, fmtLength, lengthOf, nearestSnap, orthoSnap, snapTargets, type Seg } from '../../core/measure';
 import { applyStore } from '../../core/modules';
 import { areaOf, nearBuilding, scatterTrees, type ScatterMode } from '../../core/scatter';
 import { placeColumn, type Placement } from '../../core/placement';
@@ -22,12 +24,13 @@ import { speedHsl } from '../../core/math';
 import { checkedFrom, numberFrom, selectedFrom, textFrom } from '../dom';
 import { FloatBox } from '../float-box';
 import { AssistantBox } from './assistant-box';
+import { ElementsBox, type ElementGo } from './elements-box';
 import { ElementPreview } from './element-preview';
 import type { SitePick } from '../../three/site-view';
 import { SiteView } from './site-view';
 import type { PreviewTarget } from '../../three/element-preview';
 
-type Tool = 'select' | 'building' | 'structure' | 'stairs' | 'merge' | 'cut' | 'wing' | 'tree' | 'scatter' | 'fence' | 'door' | 'window' | 'wall' | 'void' | 'column' | 'measure';
+type Tool = 'select' | 'building' | 'structure' | 'stairs' | 'merge' | 'cut' | 'wing' | 'tree' | 'scatter' | 'fence' | 'door' | 'window' | 'wall' | 'void' | 'column' | 'colbox' | 'measure';
 type Pick = { t: 'building' } | { t: 'tree'; i: number } | { t: 'opening'; id: string } | { t: 'wall'; i: number } | { t: 'fence'; i: number } | { t: 'void'; i: number } | { t: 'column'; i: number } | { t: 'structure'; i: number } | null;
 type Handle = 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se';
 type Drag =
@@ -49,10 +52,12 @@ type Drag =
   | { t: 'fenceEnd'; i: number; end: 0 | 1 }
   | { t: 'voidDraw'; a: Pt; b: Pt }
   | { t: 'column'; i: number; dx: number; dz: number }
-  | { t: 'frame'; h: Handle };
+  | { t: 'colBox'; a: Pt; b: Pt }
+  | { t: 'frame'; h: Handle }
+  | { t: 'frameRot' };
 
 /** Tools that place something on the selected building: while one is active, a click puts the thing where the ghost is. */
-const PLACE: readonly Tool[] = ['door', 'window', 'wall', 'void', 'column', 'stairs', 'cut', 'wing'];
+const PLACE: readonly Tool[] = ['door', 'window', 'wall', 'void', 'column', 'colbox', 'stairs', 'cut', 'wing'];
 const MIN_HALF = 20;
 const M_LAT = 111132;
 const snap = (v: number, step: number): number => Math.round(v / step) * step;
@@ -72,7 +77,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
  */
 @Component({
   selector: 'app-bando-editor',
-  imports: [FormsModule, FloatBox, AssistantBox, ElementPreview, SiteView],
+  imports: [FormsModule, FloatBox, AssistantBox, ElementsBox, ElementPreview, SiteView],
   host: { class: 'be' },
   template: `
     <div class="bar">
@@ -105,6 +110,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
       @if (mode() === 'model') {
         <button class="btn" [disabled]="!ed.canUndo()" (click)="undo()" title="Undo (Ctrl+Z)">↶</button>
         <button class="btn" [disabled]="!ed.canRedo()" (click)="redo()" title="Redo">↷</button>
+        <button class="btn" [class.on]="elementsOpen()" (click)="elementsOpen.set(!elementsOpen())" title="List of all buildings, structures, walls and trees (grouped by area), with thumbnails and links">☰ Elements</button>
         <button class="btn" [class.on]="ai.open()" (click)="ai.open.set(!ai.open())" title="Chat with the AI assistant to edit buildings and interiors">💬 AI @if (ai.busy()) { <i class="spin"></i> }</button>
         <button class="btn primary" (click)="save()">Save</button>
       }
@@ -131,6 +137,9 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
                     }
                   </select>
                 }
+                @case ('measure') {
+                  <button class="btn" [disabled]="!meas().segs.length" (click)="meas.set({ segs: [], a: null })" title="Remove all measures">Clear</button>
+                }
                 @case ('scatter') {
                   <select class="mini" [value]="scatterMode()" (change)="scatterMode.set(scatterModeOf($event))" title="Brush shape">
                     <option value="pen" [selected]="scatterMode() === 'pen'">Pen (stroke)</option>
@@ -144,6 +153,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
                   }
                 }
                 @case ('building') {
+                  <label class="lay" title="Snap the new building flush against close neighbours (closes small gaps, straightens small angles)"><input type="checkbox" [checked]="autoAlign()" (change)="autoAlign.set(checked($event))" /> auto-align</label>
                   <select class="mini" [value]="buildKind()" (change)="buildKind.set(buildKindOf($event))" title="What to draw">
                     <option value="building" [selected]="buildKind() === 'building'">Building</option>
                     <option value="greenhouse" [selected]="buildKind() === 'greenhouse'">Greenhouse (arched steel frame)</option>
@@ -214,7 +224,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
             }
           }
           @if (zoneRect(); as zr) {
-            <rect [attr.x]="zr.x" [attr.y]="zr.z" [attr.width]="zr.w" [attr.height]="zr.d" fill="none" stroke="#ffd166" stroke-width="2" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" />
+            <rect [attr.transform]="'rotate(' + zr.rot + ' ' + (zr.x + zr.w / 2) + ' ' + (zr.z + zr.d / 2) + ')'" [attr.x]="zr.x" [attr.y]="zr.z" [attr.width]="zr.w" [attr.height]="zr.d" fill="none" stroke="#ffd166" stroke-width="2" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" />
           }
           @for (st of ed.draft().structures ?? []; track st.id) {
             <g class="hit" [class.out]="indoor() && st.kind !== 'stairs' && st.kind !== 'ramp'" [attr.transform]="'translate(' + st.x + ' ' + st.z + ') rotate(' + st.rotDeg + ')'" (pointerdown)="structDown($event, $index)">
@@ -296,11 +306,14 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
                 @for (v of lvl()?.voids ?? []; track $index) {
                   <rect class="hit" [attr.x]="v.x0 - bd.length / 2" [attr.y]="v.z0 - bd.width / 2" [attr.width]="v.x1 - v.x0" [attr.height]="v.z1 - v.z0" [attr.fill]="v.water ? '#3d86b6' : '#0b0e0c'" fill-opacity="0.65" [attr.stroke]="voidI() === $index ? '#ffd166' : '#8fb7d1'" stroke-width="2" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" (pointerdown)="voidDown($event, $index)" />
                 }
+                @if (colBoxRect(); as cb) {
+                  <rect [attr.x]="cb.x" [attr.y]="cb.z" [attr.width]="cb.w" [attr.height]="cb.d" fill="#ffd166" fill-opacity="0.15" stroke="#ffd166" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" pointer-events="none" />
+                }
                 @for (c of lvl()?.columns ?? []; track $index) {
                   @if (c.round) {
-                    <circle class="hit" [attr.cx]="c.x - bd.length / 2" [attr.cy]="c.z - bd.width / 2" [attr.r]="c.size / 2" fill="#c9c5b8" [attr.stroke]="colI() === $index ? '#ffd166' : '#222'" stroke-width="2" vector-effect="non-scaling-stroke" (pointerdown)="colDown($event, $index)" />
+                    <circle class="hit" [attr.cx]="c.x - bd.length / 2" [attr.cy]="c.z - bd.width / 2" [attr.r]="c.size / 2" fill="#c9c5b8" [attr.stroke]="isColSel($index) ? '#ffd166' : '#222'" [attr.stroke-width]="isColSel($index) ? 3 : 2" vector-effect="non-scaling-stroke" (pointerdown)="colDown($event, $index)" />
                   } @else {
-                    <rect class="hit" [attr.x]="c.x - bd.length / 2 - c.size / 2" [attr.y]="c.z - bd.width / 2 - c.size / 2" [attr.width]="c.size" [attr.height]="c.size" fill="#c9c5b8" [attr.stroke]="colI() === $index ? '#ffd166' : '#222'" stroke-width="2" vector-effect="non-scaling-stroke" (pointerdown)="colDown($event, $index)" />
+                    <rect class="hit" [attr.x]="c.x - bd.length / 2 - c.size / 2" [attr.y]="c.z - bd.width / 2 - c.size / 2" [attr.width]="c.size" [attr.height]="c.size" fill="#c9c5b8" [attr.stroke]="isColSel($index) ? '#ffd166' : '#222'" [attr.stroke-width]="isColSel($index) ? 3 : 2" vector-effect="non-scaling-stroke" (pointerdown)="colDown($event, $index)" />
                   }
                 }
                 @if (pv(); as g) {
@@ -364,21 +377,27 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
           @if (drag()?.t === 'draw') {
             <rect [attr.x]="dr().x" [attr.y]="dr().z" [attr.width]="dr().w" [attr.height]="dr().d" fill="#b7ed83" fill-opacity="0.25" stroke="#b7ed83" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
           }
-          @if (meas().a; as a) {
-            @if (meas().b; as mb) {
-              <line class="hit" [attr.x1]="a.x" [attr.y1]="a.z" [attr.x2]="mb.x" [attr.y2]="mb.z" stroke="#ffd166" stroke-width="2" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" (pointerdown)="measureLineDown($event)" />
-              <line [attr.x1]="a.x" [attr.y1]="a.z" [attr.x2]="mb.x" [attr.y2]="mb.z" stroke="transparent" stroke-width="14" vector-effect="non-scaling-stroke" class="hit" (pointerdown)="measureLineDown($event)" />
-              <text [attr.x]="(a.x + mb.x) / 2" [attr.y]="(a.z + mb.z) / 2" text-anchor="middle" [attr.font-size]="13 / ppm()" fill="#ffe9ad" stroke="#222" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ measureLabel() }}</text>
-            }
-            <circle [attr.cx]="a.x" [attr.cy]="a.z" [attr.r]="4 / ppm()" fill="#ffd166" pointer-events="none" />
-            @if (meas().b; as mb) {
-              <circle [attr.cx]="mb.x" [attr.cy]="mb.z" [attr.r]="4 / ppm()" fill="#ffd166" pointer-events="none" />
+          @for (m of meas().segs; track $index) {
+            <line [attr.x1]="m.a.x" [attr.y1]="m.a.z" [attr.x2]="m.b.x" [attr.y2]="m.b.z" stroke="#38d6ff" stroke-width="2" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" pointer-events="none" />
+            <line class="hit" [attr.x1]="m.a.x" [attr.y1]="m.a.z" [attr.x2]="m.b.x" [attr.y2]="m.b.z" stroke="transparent" stroke-width="14" vector-effect="non-scaling-stroke" (pointerdown)="measureLineDown($event, $index)"><title>Click to remove this measure</title></line>
+            <circle [attr.cx]="m.a.x" [attr.cy]="m.a.z" [attr.r]="4 / ppm()" fill="#38d6ff" pointer-events="none" />
+            <circle [attr.cx]="m.b.x" [attr.cy]="m.b.z" [attr.r]="4 / ppm()" fill="#38d6ff" pointer-events="none" />
+            <text [attr.x]="(m.a.x + m.b.x) / 2" [attr.y]="(m.a.z + m.b.z) / 2" text-anchor="middle" [attr.font-size]="13 / ppm()" fill="#c8f4ff" stroke="#222" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ fmt(m) }}</text>
+          }
+          @for (an of measAngles(); track $index) {
+            <text [attr.x]="an.at.x + 6 / ppm()" [attr.y]="an.at.z - 6 / ppm()" [attr.font-size]="13 / ppm()" fill="#ffb3f0" stroke="#222" stroke-width="0.4" paint-order="stroke" pointer-events="none">∠ {{ an.deg.toFixed(1) }}°</text>
+          }
+          @if (meas().a; as ma) {
+            <circle [attr.cx]="ma.x" [attr.cy]="ma.z" [attr.r]="5 / ppm()" fill="#38d6ff" stroke="#fff" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none" />
+            @if (measHover(); as mh) {
+              <line [attr.x1]="ma.x" [attr.y1]="ma.z" [attr.x2]="mh.x" [attr.y2]="mh.z" stroke="#38d6ff" stroke-width="2" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" pointer-events="none" />
+              <text [attr.x]="(ma.x + mh.x) / 2" [attr.y]="(ma.z + mh.z) / 2" text-anchor="middle" [attr.font-size]="13 / ppm()" fill="#c8f4ff" stroke="#222" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ fmt({ a: ma, b: mh }) }}</text>
             }
           }
-          @if (!meas().b && measHover(); as mh) {
-            @if (meas().a; as ma) {
-              <line [attr.x1]="ma.x" [attr.y1]="ma.z" [attr.x2]="mh.x" [attr.y2]="mh.z" stroke="#ffd166" stroke-width="2" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" pointer-events="none" />
-              <text [attr.x]="(ma.x + mh.x) / 2" [attr.y]="(ma.z + mh.z) / 2" text-anchor="middle" [attr.font-size]="13 / ppm()" fill="#ffe9ad" stroke="#222" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ hoverLabel() }}</text>
+          @if (measHover(); as mh) {
+            @if (measSnap()) {
+              <circle [attr.cx]="mh.x" [attr.cy]="mh.z" [attr.r]="8 / ppm()" fill="none" stroke="#ffe066" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none" />
+              <text [attr.x]="mh.x + 11 / ppm()" [attr.y]="mh.z + 14 / ppm()" [attr.font-size]="11 / ppm()" fill="#ffe066" stroke="#222" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ measSnap() }}</text>
             }
           }
           <circle [attr.cx]="ed.draft().droneStart.x" [attr.cy]="ed.draft().droneStart.z" [attr.r]="2" fill="#ff6b6b" pointer-events="none" />
@@ -410,7 +429,8 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
         </svg>
       }
       @if (mode() === 'area') {
-        <div class="frame" [style.left.px]="fb().l" [style.top.px]="fb().t" [style.width.px]="fb().w" [style.height.px]="fb().h">
+        <div class="frame" [style.left.px]="fb().l" [style.top.px]="fb().t" [style.width.px]="fb().w" [style.height.px]="fb().h" [style.transform]="'rotate(' + rot() + 'deg)'">
+          <div class="rotk" (pointerdown)="frameRotDown($event)" (pointermove)="move($event)" (pointerup)="up($event)" (pointercancel)="up($event)" title="Drag to turn the frame (shift = steps of 15°). Only what is inside the turned frame is used."></div>
           @for (h of handles; track h) {
             <div [class]="'h ' + h" (pointerdown)="frameDown($event, h)" (pointermove)="move($event)" (pointerup)="up($event)" (pointercancel)="up($event)"></div>
           }
@@ -426,13 +446,16 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
             }
           </div>
         }
-        <div class="read" [class.warn]="atMax()">{{ round(half().e * 2) }} × {{ round(half().n * 2) }} m{{ atMax() ? ' (maximum)' : '' }}</div>
+        <div class="read" [class.warn]="atMax()">{{ round(half().e * 2) }} × {{ round(half().n * 2) }} m{{ rot() ? ' · ' + round(rot()) + '°' : '' }}{{ atMax() ? ' (maximum)' : '' }} <button class="btn mini" [disabled]="!rot()" (click)="rot.set(0)" title="Turn the frame back to north-up">↺</button></div>
       } @else if (!overlayOn()) {
         <div class="notice">This bando was built with the old rotated layout and can't be drawn over the map. Go to <b>1 · Area</b> and press <b>Regenerate</b> to rebuild it aligned to the map.</div>
       }
 
       @if (mode() === 'model' && overlayOn() && ai.open()) {
         <app-assistant-box />
+      }
+      @if (mode() === 'model' && overlayOn() && elementsOpen()) {
+        <app-elements-box [spec]="ed.draft()" [selectedId]="ed.selectedId()" (go)="goTo($event)" />
       }
 
       @if (mode() === 'model' && overlayOn()) {
@@ -503,6 +526,9 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
             }
             @case ('column') {
               @if (colSel(); as c) {
+                @if (colIdxs().length > 1) {
+                  <div class="f"><span class="dim">{{ colIdxs().length }} columns selected</span></div>
+                }
                 <div class="f"><label>size <input type="number" min="0.15" step="0.05" [value]="c.size" (change)="setColumn({ size: num($event) })" /></label>
                 <label><input type="checkbox" [checked]="!!c.round" (change)="setColumn({ round: checked($event) })" /> round</label></div>
                 <div class="f"><label>from west wall <input type="number" step="0.1" [value]="c.x.toFixed(2)" (change)="setColumn({ x: num($event) })" /></label>
@@ -701,11 +727,25 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
     .h.se { bottom: -10px; right: -10px; cursor: nwse-resize; }
     .h.ne { top: -10px; right: -10px; cursor: nesw-resize; }
     .h.sw { bottom: -10px; left: -10px; cursor: nesw-resize; }
+    .rotk {
+      position: absolute;
+      left: 50%;
+      top: -30px;
+      width: 16px;
+      height: 16px;
+      margin-left: -8px;
+      border-radius: 50%;
+      background: #ffd166;
+      border: 2px solid #12200b;
+      cursor: grab;
+      pointer-events: auto;
+      touch-action: none;
+    }
     .search {
       position: absolute;
       z-index: 1100;
       top: 8px;
-      left: 8px;
+      left: 56px; /* clear of the map's zoom [+] [-] buttons */
       right: 56px;
       display: flex;
       gap: 6px;
@@ -717,7 +757,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
       position: absolute;
       z-index: 1100;
       top: 40px;
-      left: 8px;
+      left: 56px;
       right: 56px;
       max-height: 40%;
       overflow: auto;
@@ -843,7 +883,7 @@ export class BandoEditor {
   /** `where`: shown outdoors ('out'), only while editing a floor ('in'), or always. Tools that need a building hide without one. */
   protected readonly tools: readonly { id: Tool; label: string; hint: string; where: 'out' | 'in' | 'both'; needsBuilding?: boolean }[] = [
     { id: 'select', label: '↖ Select', hint: 'Select · move · resize · rotate', where: 'both' },
-    { id: 'building', label: '＋ Building', hint: 'Drag a rectangle on the map (it cannot overlap another building)', where: 'out' },
+    { id: 'building', label: '＋ Building', hint: 'Drag a rectangle on the map; it snaps flush to close neighbours unless auto-align is off', where: 'out' },
     { id: 'structure', label: '▲ Structure', hint: 'Place a tower, bridge, container, vehicle ... (choose the kind next to the button)', where: 'out' },
     { id: 'tree', label: '＋ Tree', hint: 'Click the map to plant a tree', where: 'out' },
     { id: 'scatter', label: '🌲 Brush', hint: 'Paint trees with a pen, or fill a square, circle or hand-drawn area with random trees', where: 'out' },
@@ -856,6 +896,7 @@ export class BandoEditor {
     { id: 'window', label: '＋ Window', hint: 'Click a wall of this floor', where: 'in' },
     { id: 'void', label: '▢ Void', hint: 'Drag a hole in this floor (water on the ground floor)', where: 'in' },
     { id: 'column', label: '● Column', hint: 'Click to place a column: it snaps to the other columns and shows the distances', where: 'in' },
+    { id: 'colbox', label: '▢ Pick columns', hint: 'Drag a box around columns to select them (shift-click adds / removes one). Duplicate and Fill then use the whole selection as the module.', where: 'in', needsBuilding: true },
     { id: 'stairs', label: '⌸ Stairs', hint: 'Click to place stairs (or a ramp) on this floor', where: 'in' },
     { id: 'measure', label: '↔ Measure', hint: 'Click point A, then point B · click the line to remove it', where: 'both' },
   ];
@@ -898,6 +939,27 @@ export class BandoEditor {
   protected readonly pick = signal<Pick>(null);
   protected levelName = (i: number): string => (i === 0 ? 'G' : `L${i}`);
   protected readonly drag = signal<Drag | null>(null);
+  protected readonly autoAlign = signal(true);
+  protected readonly elementsOpen = signal(false);
+  /** A click in the elements list: select it and bring it into view. */
+  protected goTo(g: ElementGo): void {
+    if (g.kind === 'building' && g.id) {
+      this.ed.select(g.id);
+      this.pick.set({ t: 'building' });
+    } else if (g.kind === 'structure' && g.index !== undefined) this.pick.set({ t: 'structure', i: g.index });
+    else if (g.kind === 'fence' && g.index !== undefined) this.pick.set({ t: 'fence', i: g.index });
+    else this.pick.set(null);
+    this.flyTo(g.x, g.z, g.size);
+  }
+  /** Extra selected columns (indices on the current floor); the primary pick is always included. */
+  protected readonly colSet = signal<number[]>([]);
+  protected isColSel = (i: number): boolean => this.colI() === i || this.colSet().includes(i);
+  protected readonly colIdxs = computed(() => [...new Set([...(this.colI() >= 0 ? [this.colI()] : []), ...this.colSet()])]);
+  protected readonly colBoxRect = computed(() => {
+    const d = this.drag();
+    if (d?.t !== 'colBox') return null;
+    return { x: Math.min(d.a.x, d.b.x) - (this.b()?.length ?? 0) / 2, z: Math.min(d.a.z, d.b.z) - (this.b()?.width ?? 0) / 2, w: Math.abs(d.b.x - d.a.x), d: Math.abs(d.b.z - d.a.z) };
+  });
   protected readonly scatterMode = signal<ScatterMode>('pen');
   protected readonly scatterSpacing = signal(5);
   protected readonly scatterWidth = signal(10);
@@ -910,7 +972,22 @@ export class BandoEditor {
     return poly.map((q) => `${q.x},${q.z}`).join(' ');
   });
   protected readonly pinMode = this.scene.pin;
-  protected readonly meas = signal<{ a: Pt | null; b: Pt | null }>({ a: null, b: null });
+  protected readonly meas = signal<{ segs: Seg[]; a: Pt | null }>({ segs: [], a: null });
+  /** What the pointer is magnetised to while measuring ('corner', 'tree' ...), or ''. */
+  protected readonly measSnap = signal('');
+  protected readonly measAngles = computed(() => anglesAt(this.meas().segs));
+  protected fmt = (m: Seg): string => fmtLength(lengthOf(m));
+  /** Where a measure click or hover lands: magnet to elements within ~10 px, else straightened against the building axes. */
+  private measPoint(raw: Pt): Pt {
+    const m = this.meas();
+    const snap = nearestSnap(snapTargets(this.ed.draft(), m.segs), raw, 10 / Math.max(0.01, this.ppm()));
+    if (snap) {
+      this.measSnap.set(snap.kind);
+      return snap.pt;
+    }
+    this.measSnap.set('');
+    return m.a ? orthoSnap(m.a, raw, this.b()?.rotDeg ?? 0, 2.5) : raw;
+  }
   protected query = '';
   protected readonly hits = signal<LocationInfo[]>([]);
   protected readonly searching = signal(false);
@@ -921,6 +998,10 @@ export class BandoEditor {
   private readonly size = signal({ w: 600, h: 400 });
   /** The area to build, in metres either side of the map centre: independent of the window size and the zoom. */
   protected readonly half = signal<{ e: number; n: number }>({ e: 120, n: 80 });
+  /** The frame's centre relative to the map centre, in the frame's own axes (metres, u = its east, v = its south): resizing one edge moves only that edge. */
+  protected readonly off = signal<{ u: number; v: number }>({ u: 0, v: 0 });
+  /** The frame is turned this many degrees clockwise. */
+  protected readonly rot = signal(0);
 
   private map: L.Map | null = null;
   private tiles: L.TileLayer | null = null;
@@ -956,13 +1037,15 @@ export class BandoEditor {
     if (!z) return null;
     const mLon = 111320 * Math.cos((o.lat * Math.PI) / 180);
     const cx = (z.lon - o.lon) * mLon, cz = -(z.lat - o.lat) * M_LAT;
-    return { x: cx - z.halfE, z: cz - z.halfN, w: z.halfE * 2, d: z.halfN * 2 };
+    return { x: cx - z.halfE, z: cz - z.halfN, w: z.halfE * 2, d: z.halfN * 2, rot: z.rotDeg ?? 0 };
   });
   protected readonly fb = computed(() => {
     const { w, h } = this.size();
     const k = this.ppm();
     const fw = Math.min(this.half().e * 2 * k, w - 8), fh = Math.min(this.half().n * 2 * k, h - 8);
-    return { l: (w - fw) / 2, t: (h - fh) / 2, w: fw, h: fh };
+    const r = (this.rot() * Math.PI) / 180, o = this.off();
+    const cx = w / 2 + (o.u * Math.cos(r) - o.v * Math.sin(r)) * k, cy = h / 2 + (o.u * Math.sin(r) + o.v * Math.cos(r)) * k;
+    return { l: cx - fw / 2, t: cy - fh / 2, w: fw, h: fh };
   });
   protected readonly lvl = computed<LevelSpec | null>(() => {
     const bd = this.b();
@@ -1160,12 +1243,6 @@ export class BandoEditor {
     const d = this.drag();
     return d?.t === 'wallDraw' ? d : { a: { x: 0, z: 0 }, b: { x: 0, z: 0 } };
   });
-  protected readonly measureLabel = computed(() => {
-    const m = this.meas();
-    if (!m.a || !m.b) return '';
-    const d = Math.hypot(m.b.x - m.a.x, m.b.z - m.a.z);
-    return d >= 1000 ? `${(d / 1000).toFixed(2)} km` : `${d.toFixed(1)} m`;
-  });
   protected readonly hint = computed(() => {
     if (this.mode() === 'area') return 'Pan and zoom the map to place the area, drag the frame\'s edges and corners to size it, then Generate.';
     const t = this.tool();
@@ -1181,7 +1258,7 @@ export class BandoEditor {
     if (t === 'scatter') return { pen: 'Drag along a path: trees are planted randomly in a strip around it.', rect: 'Drag a square: it is filled with random trees.', circle: 'Drag from the centre: a circle is filled with random trees.', lasso: 'Draw a loop freehand: it is filled with random trees.' }[this.scatterMode()];
     if (t === 'door' || t === 'window') return this.b() ? `Click a wall of “${this.b()!.name}” to add a ${t}.` : 'Select a building first.';
     if (t === 'wall') return this.b() ? 'Drag inside the building to draw an interior wall.' : 'Select a building first.';
-    if (t === 'measure') return 'Click point A, then point B. Click the line to remove it.';
+    if (t === 'measure') return 'Click point A, then B (it magnetises to corners, columns, trees ...). Start a new measure on an existing end to see the angle. Click a line to remove it.';
     if (this.indoor()) return `Floor ${this.levelName(this.level())}: roof off in 3D. Doors, windows, walls, voids and columns are edited here, per floor. Delete removes the selection.`;
     return 'Drag a building to move it, corners / edge squares to resize or reshape, the yellow knob to rotate. Drag the map to pan.';
   });
@@ -1191,8 +1268,11 @@ export class BandoEditor {
     effect(() => {
       // while framing the area, the zone the Generate button uses follows the map centre and the frame size
       if (this.mode() !== 'area') return;
-      const c = this.center(), h = this.half();
-      this.studio.zone.set({ lat: c.lat, lon: c.lon, halfE: h.e, halfN: h.n });
+      const c = this.center(), h = this.half(), o = this.off(), rd = this.rot();
+      const r = (rd * Math.PI) / 180;
+      const east = o.u * Math.cos(r) - o.v * Math.sin(r), south = o.u * Math.sin(r) + o.v * Math.cos(r);
+      const mLon = 111320 * Math.cos((c.lat * Math.PI) / 180);
+      this.studio.zone.set({ lat: c.lat - south / 111132, lon: c.lon + east / mLon, halfE: h.e, halfN: h.n, ...(rd ? { rotDeg: rd } : {}) });
     });
     effect(() => this.applyBase(this.studio.basemap(), this.studio.mapOpacity()));
     effect(() => {
@@ -1209,12 +1289,25 @@ export class BandoEditor {
         this.ed.select(f.id);
         this.pick.set({ t: 'building' });
         this.level.set(f.level);
+        const fb = this.ed.draft().buildings.find((x) => x.id === f.id);
+        if (fb) this.flyTo(fb.pos.x, fb.pos.z, Math.max(fb.length, fb.width));
         if (f.interior && !this.indoor()) this.enterIndoor();
       });
     });
   }
 
   // ---- map ----
+
+  /** Pan (and zoom in if needed) the map to a point of the model, so a building fills about a third of the view. */
+  protected flyTo(x: number, z: number, size = 30): void {
+    const map = this.map;
+    if (!map) return;
+    const o = this.ed.draft().origin;
+    const mLon = 111320 * Math.cos((o.lat * Math.PI) / 180);
+    const w = Math.max(200, this.size().w);
+    const zoom = Math.min(20, Math.max(17, Math.log2((156543.03392 * Math.cos((o.lat * Math.PI) / 180) * w) / (size * 3))));
+    map.setView([o.lat - z / 111132, o.lon + x / mLon], Math.floor(zoom * 4) / 4);
+  }
 
   private init(): void {
     const st = this.studio.start();
@@ -1241,6 +1334,7 @@ export class BandoEditor {
     // starting state
     const sh = this.studio.startHalf();
     const mpp = this.mpp();
+    this.rot.set(sh?.rot ?? 0);
     this.half.set(sh ? { e: clampHalf(sh.e), n: clampHalf(sh.n) } : { e: clampHalf(this.size().w * 0.35 * mpp), n: clampHalf(this.size().h * 0.35 * mpp) });
     this.mode.set(this.studio.initialMode() === 'model' && this.hasModel() ? 'model' : 'area');
     this.destroyRef.onDestroy(() => {
@@ -1367,7 +1461,7 @@ export class BandoEditor {
     this.dragPlacement.set(null);
     this.tool.set(t);
     if (t === 'wall' && this.b()) this.enterIndoor();
-    if (t !== 'measure') this.meas.set({ a: null, b: null });
+    if (t !== 'measure') this.meas.update((m) => ({ segs: m.segs, a: null }));
     this.measHover.set(null);
   }
 
@@ -1461,11 +1555,11 @@ export class BandoEditor {
       this.applyNow();
     } else if (t === 'measure') {
       const m = this.meas();
-      if (m.a && m.b) this.meas.set({ a: p, b: null });
-      else if (m.a) {
-        this.meas.set({ a: m.a, b: p });
+      const q = this.measPoint(p);
+      if (m.a) {
+        if (Math.hypot(q.x - m.a.x, q.z - m.a.z) > 0.05) this.meas.set({ segs: [...m.segs, { a: m.a, b: q }], a: null });
         this.measHover.set(null);
-      } else this.meas.set({ a: p, b: null });
+      } else this.meas.set({ segs: m.segs, a: q });
     } else if ((t === 'cut' || t === 'wing') && bd) {
       const l = this.toLocal(bd, p);
       const a = { x: snap(l.x, 0.5), z: snap(l.z, 0.5) };
@@ -1474,9 +1568,9 @@ export class BandoEditor {
     else if ((t === 'door' || t === 'window') && bd) this.addOpeningAt(bd, p, t);
   }
 
-  protected measureLineDown(e: PointerEvent): void {
+  protected measureLineDown(e: PointerEvent, i: number): void {
     e.stopPropagation();
-    this.meas.set({ a: null, b: null });
+    this.meas.update((m) => ({ segs: m.segs.filter((_, k) => k !== i), a: null }));
     this.measHover.set(null);
   }
 
@@ -1514,6 +1608,11 @@ export class BandoEditor {
       const l = this.toLocal(bd, p);
       const a = { x: Math.min(bd.length, Math.max(0, snap(l.x + bd.length / 2, 0.5))), z: Math.min(bd.width, Math.max(0, snap(l.z + bd.width / 2, 0.5))) };
       this.drag.set({ t: 'voidDraw', a, b: { ...a } });
+    } else if (t === 'colbox') {
+      const l = this.toLocal(bd, p);
+      const a = { x: l.x + bd.length / 2, z: l.z + bd.width / 2 };
+      this.colSet.set([]);
+      this.drag.set({ t: 'colBox', a, b: { ...a } });
     } else if (t === 'column') this.columnClick(bd, p);
     else if (t === 'stairs') this.placeStairsAt(bd);
     else if (t === 'cut' || t === 'wing') {
@@ -1682,12 +1781,6 @@ export class BandoEditor {
     this.measHover.set(null);
   }
 
-  protected readonly hoverLabel = computed(() => {
-    const a = this.meas().a, h = this.measHover();
-    if (!a || !h) return '';
-    const d = Math.hypot(h.x - a.x, h.z - a.z);
-    return d >= 1000 ? `${(d / 1000).toFixed(2)} km` : `${d.toFixed(1)} m`;
-  });
 
   /** Repeat the selected door / window along its wall. */
   protected repeatSel(): void {
@@ -1702,6 +1795,16 @@ export class BandoEditor {
 
   protected colDup(): void {
     const i = this.colI();
+    if (this.colIdxs().length > 1) {
+      let made: number[] = [];
+      this.mutate((b) => {
+        made = duplicateColumns(b, Math.min(this.level(), b.levels.length - 1), this.colIdxs(), this.colAxis() === 'x' ? this.colS() : 0, this.colAxis() === 'z' ? this.colS() : 0);
+      }, 0);
+      this.colSet.set(made);
+      this.pick.set(made.length ? { t: 'column', i: made[made.length - 1]! } : { t: 'building' });
+      this.toast.show(made.length ? `${made.length} columns copied as a group.` : 'The copy does not fit there (wall, void or another column).');
+      return;
+    }
     let idx = -1;
     this.mutate((b) => {
       idx = duplicateColumn(b, Math.min(this.level(), b.levels.length - 1), i, this.colAxis() === 'x' ? this.colS() : 0, this.colAxis() === 'z' ? this.colS() : 0);
@@ -1722,6 +1825,14 @@ export class BandoEditor {
   protected colFill(): void {
     const i = this.colI();
     let n = 0;
+    if (this.colIdxs().length > 1) {
+      this.mutate((b) => {
+        n = fillModule(b, Math.min(this.level(), b.levels.length - 1), this.colIdxs(), this.colS(), 0.8);
+      }, 0);
+      this.colSet.set([]);
+      this.toast.show(n ? `${n} columns added on the grid of your selection.` : 'The selection\'s grid has no more room.');
+      return;
+    }
     this.mutate((b) => {
       n = columnGrid(b, Math.min(this.level(), b.levels.length - 1), i, this.colS(), this.colS(), 0.8);
     }, 0);
@@ -1806,6 +1917,14 @@ export class BandoEditor {
     const c = this.lvl()?.columns?.[i];
     if (!bd || !c) return;
     const l = this.toLocal(bd, this.toWorld(e));
+    if (e.shiftKey) {
+      const cur = this.colIdxs();
+      const next = cur.includes(i) ? cur.filter((k) => k !== i) : [...cur, i];
+      this.colSet.set(next);
+      this.pick.set(next.length ? { t: 'column', i: next[next.length - 1]! } : { t: 'building' });
+      return;
+    }
+    this.colSet.set([]);
     this.pick.set({ t: 'column', i });
     this.drag.set({ t: 'column', i, dx: c.x - bd.length / 2 - l.x, dz: c.z - bd.width / 2 - l.z });
   }
@@ -1889,6 +2008,12 @@ export class BandoEditor {
     this.pick.set({ t: 'wall', i });
   }
 
+  protected frameRotDown(e: PointerEvent): void {
+    e.stopPropagation();
+    this.capture(e);
+    this.drag.set({ t: 'frameRot' });
+  }
+
   protected frameDown(e: PointerEvent, h: Handle): void {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     this.drag.set({ t: 'frame', h });
@@ -1927,7 +2052,7 @@ export class BandoEditor {
     if (!d) {
       if (this.placing()) this.hover.set(this.toWorld(e)); // the ghost (and its guides) follow the pointer
       // measuring: after the first point, a live line follows the pointer
-      if (this.tool() === 'measure' && this.meas().a && !this.meas().b) this.measHover.set(this.toWorld(e));
+      if (this.tool() === 'measure') this.measHover.set(this.measPoint(this.toWorld(e)));
       return;
     }
     const p = this.toWorld(e);
@@ -1935,10 +2060,31 @@ export class BandoEditor {
     const li = bd ? Math.min(this.level(), bd.levels.length - 1) : 0;
     switch (d.t) {
       case 'frame': {
+        // only the dragged edge / corner moves: the opposite side stays where it is on the map
         const host = this.wrapEl().nativeElement.getBoundingClientRect();
-        const dx = Math.abs(e.clientX - (host.left + host.width / 2)) * this.mpp();
-        const dz = Math.abs(e.clientY - (host.top + host.height / 2)) * this.mpp();
-        this.half.update((h) => ({ e: d.h.includes('e') || d.h.includes('w') ? clampHalf(snap(dx, 5)) : h.e, n: d.h.includes('n') || d.h.includes('s') ? clampHalf(snap(dz, 5)) : h.n }));
+        const r = (this.rot() * Math.PI) / 180;
+        const px = (e.clientX - (host.left + host.width / 2)) * this.mpp(), pz = (e.clientY - (host.top + host.height / 2)) * this.mpp();
+        const u = px * Math.cos(r) + pz * Math.sin(r), v = -px * Math.sin(r) + pz * Math.cos(r); // pointer in the frame's axes
+        const h0 = this.half(), o0 = this.off();
+        let E = o0.u + h0.e, W = o0.u - h0.e, S = o0.v + h0.n, N = o0.v - h0.n;
+        if (d.h.includes('e')) E = snap(u, 5);
+        if (d.h.includes('w')) W = snap(u, 5);
+        if (d.h.includes('s')) S = snap(v, 5);
+        if (d.h.includes('n')) N = snap(v, 5);
+        const he = clampHalf((E - W) / 2), hn = clampHalf((S - N) / 2);
+        // keep the edge that was not dragged fixed even when the size is clamped
+        const ou = d.h.includes('e') ? W + he : d.h.includes('w') ? E - he : o0.u;
+        const ov = d.h.includes('s') ? N + hn : d.h.includes('n') ? S - hn : o0.v;
+        this.half.set({ e: he, n: hn });
+        this.off.set({ u: ou, v: ov });
+        break;
+      }
+      case 'frameRot': {
+        const f = this.fb();
+        const host = this.wrapEl().nativeElement.getBoundingClientRect();
+        const cx = host.left + f.l + f.w / 2, cy = host.top + f.t + f.h / 2;
+        const ang = (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI + 90;
+        this.rot.set((((snap(ang, e.shiftKey ? 15 : 1) % 360) + 540) % 360) - 180);
         break;
       }
       case 'move':
@@ -2059,6 +2205,12 @@ export class BandoEditor {
         this.drag.set({ ...d, b: { x: Math.min(bd.length, Math.max(0, snap(l.x + bd.length / 2, 0.5))), z: Math.min(bd.width, Math.max(0, snap(l.z + bd.width / 2, 0.5))) } });
         break;
       }
+      case 'colBox': {
+        if (!bd) break;
+        const l = this.toLocal(bd, p);
+        this.drag.set({ ...d, b: { x: l.x + bd.length / 2, z: l.z + bd.width / 2 } });
+        break;
+      }
       case 'column': {
         if (!bd) break;
         const l = this.toLocal(bd, p);
@@ -2121,6 +2273,12 @@ export class BandoEditor {
     if (d.t === 'bridgeDraw') {
       const len = Math.hypot(d.b.x - d.a.x, d.b.z - d.a.z);
       if (len >= 6) this.placeStructure('bridge', { x: (d.a.x + d.b.x) / 2, z: (d.a.z + d.b.z) / 2 }, { length: Math.round(len), rotDeg: Math.round((Math.atan2(d.b.z - d.a.z, d.b.x - d.a.x) * 180) / Math.PI) });
+    } else if (d.t === 'colBox' && bd) {
+      const x0 = Math.min(d.a.x, d.b.x), x1 = Math.max(d.a.x, d.b.x), z0 = Math.min(d.a.z, d.b.z), z1 = Math.max(d.a.z, d.b.z);
+      const hit = (this.lvl()?.columns ?? []).map((c, i) => (c.x >= x0 && c.x <= x1 && c.z >= z0 && c.z <= z1 ? i : -1)).filter((i) => i >= 0);
+      this.colSet.set(hit);
+      this.pick.set(hit.length ? { t: 'column', i: hit[hit.length - 1]! } : { t: 'building' });
+      this.toast.show(hit.length ? `${hit.length} column(s) selected. Duplicate repeats the group; Fill floor continues its grid.` : 'No columns in that box.');
     } else if (d.t === 'scatter') {
       const poly = areaOf(this.scatterMode(), d.pts, this.scatterWidth());
       const live = this.ed.draft();
@@ -2157,13 +2315,17 @@ export class BandoEditor {
     } else if (d.t === 'draw') {
       const w = Math.abs(d.x1 - d.x0), h = Math.abs(d.z1 - d.z0);
       const ghost: BuildingSpec = { id: '~', name: '', pos: { x: (d.x0 + d.x1) / 2, z: (d.z0 + d.z1) / 2 }, rotDeg: 0, length: w, width: h, levels: [] };
+      if (w >= 3 && h >= 3 && this.autoAlign()) {
+        const n = autoAlign(ghost, this.ed.draft().buildings);
+        if (n) this.toast.show(`Aligned to ${n} neighbouring building${n > 1 ? 's' : ''}.`);
+      }
       if (w >= 3 && h >= 3 && this.ed.draft().buildings.some((o) => buildingsOverlap(ghost, o))) this.toast.show('Buildings cannot overlap: draw it on free ground (use Merge to join them).');
       else if (w >= 3 && h >= 3) {
         const preset: Partial<BuildingSpec> = this.buildKind() === 'greenhouse'
           ? { name: 'Greenhouse', frame: 'greenhouse', color: '#9ec1b6', levels: [{ baseY: 0, height: 2.4, sides: { n: false, s: false, e: false, w: false }, doors: {}, partitions: [], roof: 'vault', roofRise: 0, vaultK: 0.7 }] }
           : { name: `Building ${this.ed.draft().buildings.length + 1}` };
         const gh = this.buildKind() === 'greenhouse'; // a greenhouse tunnel always runs along its long side
-        this.ed.addBuilding({ pos: { x: (d.x0 + d.x1) / 2, z: (d.z0 + d.z1) / 2 }, length: gh ? Math.max(w, h) : w, width: gh ? Math.min(w, h) : h, rotDeg: gh && h > w ? 90 : 0, ...preset });
+        this.ed.addBuilding({ pos: { ...ghost.pos }, length: gh ? Math.max(w, h) : w, width: gh ? Math.min(w, h) : h, rotDeg: (ghost.rotDeg + (gh && h > w ? 90 : 0)) % 360, ...preset });
         this.pick.set({ t: 'building' });
         this.tool.set('select');
         this.applyNow();
@@ -2194,7 +2356,7 @@ export class BandoEditor {
         });
         this.applyNow();
       }
-    } else if (d.t !== 'frame' && this.gestureStarted) this.applyNow();
+    } else if (d.t !== 'frame' && d.t !== 'frameRot' && this.gestureStarted) this.applyNow();
     this.gestureStarted = false;
   }
 
@@ -2216,7 +2378,7 @@ export class BandoEditor {
       this.tool.set('select');
       this.scene.pin.set(null);
       this.drag.set(null);
-      this.meas.set({ a: null, b: null });
+      this.meas.update((m) => ({ segs: m.segs, a: null }));
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       e.preventDefault();
       if (e.shiftKey) this.redo();
@@ -2235,7 +2397,11 @@ export class BandoEditor {
     else if (p?.t === 'structure') this.ed.commitSite((s) => void s.structures?.splice(p.i, 1));
     else if (p?.t === 'fence') this.ed.commitSite((s) => void s.walls?.splice(p.i, 1));
     else if (p?.t === 'void' && bd) this.ed.commitSite((s) => void this.index(s, bd.id)?.levels[li]?.voids?.splice(p.i, 1));
-    else if (p?.t === 'column' && bd) this.ed.commitSite((s) => void this.index(s, bd.id)?.levels[li]?.columns?.splice(p.i, 1));
+    else if (p?.t === 'column' && bd) {
+      const gone = [...this.colIdxs()].sort((x, y) => y - x);
+      this.ed.commitSite((s) => gone.forEach((k) => void this.index(s, bd.id)?.levels[li]?.columns?.splice(k, 1)));
+      this.colSet.set([]);
+    }
     else if (p?.t === 'opening' && bd) {
       this.ed.commitSite((s) => {
         const x = this.index(s, bd.id);

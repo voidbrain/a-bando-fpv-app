@@ -1,4 +1,4 @@
-import { Service, inject, signal } from '@angular/core';
+import { Service, computed, inject, signal } from '@angular/core';
 import type { MLCEngine } from '@mlc-ai/web-llm';
 import { AI_SCHEMA, SYSTEM_PROMPT, buildContext, parseReply } from '../core/ai-prompt';
 import { runCommands, type AiCommand } from '../core/ai-commands';
@@ -36,6 +36,17 @@ export interface ChatMsg {
   changed?: boolean;
 }
 
+/** One thing the assistant changed, kept in a list so it can be found again (and ticked off as reviewed). */
+export interface AiChange {
+  id: number;
+  text: string;
+  /** Building it happened on (the list links to it); absent for site-level changes like a new structure. */
+  target?: string;
+  level: number;
+  interior: boolean;
+  reviewed: boolean;
+}
+
 const MODEL_KEY = 'abando-ai-model';
 const PROVIDER_KEY = 'abando-ai-provider';
 const SERVER_KEY = 'abando-ai-server';
@@ -66,6 +77,27 @@ export class AiService {
   readonly canUndo = signal(false);
   /** Set after an edit so the editor can select the building and, for interior work, open it indoors (roof off). */
   readonly focus = signal<{ id: string; interior: boolean; level: number; n: number } | null>(null);
+
+  /** Everything the assistant changed, newest first, with a reviewed flag. */
+  readonly changes = signal<AiChange[]>([]);
+  readonly unreviewed = computed(() => this.changes().filter((c) => !c.reviewed).length);
+  private changeSeq = 0;
+
+  /** Jump to a change (select the building, show the floor, zoom the map there) and mark it reviewed. */
+  show(id: number): void {
+    const c = this.changes().find((x) => x.id === id);
+    if (!c) return;
+    this.changes.update((l) => l.map((x) => (x.id === id ? { ...x, reviewed: true } : x)));
+    if (c.target) this.focus.update((f) => ({ id: c.target!, interior: c.interior, level: c.level, n: (f?.n ?? 0) + 1 }));
+  }
+
+  setReviewed(id: number, reviewed: boolean): void {
+    this.changes.update((l) => l.map((x) => (x.id === id ? { ...x, reviewed } : x)));
+  }
+
+  acceptAll(): void {
+    this.changes.update((l) => l.map((x) => ({ ...x, reviewed: true })));
+  }
 
   private engine: MLCEngine | null = null;
 
@@ -196,6 +228,14 @@ export class AiService {
       const parsed = parseReply(await this.complete(msgs));
       const probe = cloneSpec(spec);
       const dry = runCommands(probe, parsed.commands, sel);
+      // the same commands one by one on another copy, to know which change belongs to which building
+      const each = cloneSpec(spec);
+      const entries: AiChange[] = [];
+      for (const c of parsed.commands) {
+        const r = runCommands(each, [c], sel);
+        if (r.changed) entries.push({ id: ++this.changeSeq, text: r.done.join('; '), target: r.touched[0], level: Math.max(0, (c.level ?? 1) - 1), interior: r.interior, reviewed: false });
+      }
+      if (entries.length) this.changes.update((l) => [...entries.reverse(), ...l]);
       if (dry.changed) {
         ed.commitSite((s) => {
           runCommands(s, parsed.commands, sel);
@@ -241,6 +281,7 @@ export class AiService {
 
   clear(): void {
     this.messages.set([]);
+    this.changes.set([]);
     this.canUndo.set(false);
   }
 }

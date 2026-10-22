@@ -171,6 +171,8 @@ export interface ZoneSpec {
   lon: number;
   halfE: number;
   halfN: number;
+  /** The frame was turned this many degrees (clockwise): only what lies inside the turned rectangle is used. */
+  rotDeg?: number;
 }
 
 export interface SiteSpec {
@@ -327,7 +329,7 @@ export function sanitizeSpec(raw: unknown): SiteSpec | null {
         : undefined,
     zone:
       s.zone && [s.zone.lat, s.zone.lon, s.zone.halfE, s.zone.halfN].every((v) => typeof v === 'number' && isFinite(v))
-        ? { lat: s.zone.lat, lon: s.zone.lon, halfE: s.zone.halfE, halfN: s.zone.halfN }
+        ? { lat: s.zone.lat, lon: s.zone.lon, halfE: s.zone.halfE, halfN: s.zone.halfN, ...(typeof s.zone.rotDeg === 'number' && isFinite(s.zone.rotDeg) && s.zone.rotDeg ? { rotDeg: s.zone.rotDeg } : {}) }
         : undefined,
     bearingDeg: typeof s.bearingDeg === 'number' ? s.bearingDeg : 0,
     genScale: typeof s.genScale === 'number' ? s.genScale : 1,

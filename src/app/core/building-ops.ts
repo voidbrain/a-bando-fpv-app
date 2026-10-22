@@ -1,3 +1,4 @@
+import { snapBeside } from './align';
 import { obbOverlap, slabs, type Pt, type Rect } from './footprint';
 import { addOpening, insideBuilding, listOpenings, outlineOf, patchOpening, reshapeBuilding } from './openings';
 import { cloneSpec, type BuildingSpec, type SiteSpec } from './site-spec';
@@ -77,7 +78,20 @@ export function overlapsOthers(spec: SiteSpec, id: string): boolean {
  * touch or overlap. Floors, interior walls, doors / windows on the new outer walls, columns and voids of B are
  * carried over. Returns an error message, or null on success (then B is gone from the site).
  */
-export function mergeBuildings(spec: SiteSpec, aId: string, bId: string): string | null {
+export function mergeBuildings(spec: SiteSpec, aId: string, bId: string, maxGap = 3): string | null {
+  // a small gap (or a slightly different angle) is closed first: B is moved flush against A
+  const a = spec.buildings.find((x) => x.id === aId), moving = spec.buildings.find((x) => x.id === bId);
+  const keep = moving ? { pos: { ...moving.pos }, rotDeg: moving.rotDeg } : null;
+  if (a && moving && a !== moving && !a.frame && !moving.frame) snapBeside(a, moving, maxGap);
+  const err = mergeCore(spec, aId, bId);
+  if (err && moving && keep) {
+    moving.pos = keep.pos;
+    moving.rotDeg = keep.rotDeg;
+  }
+  return err;
+}
+
+function mergeCore(spec: SiteSpec, aId: string, bId: string): string | null {
   const a0 = spec.buildings.find((x) => x.id === aId), b = spec.buildings.find((x) => x.id === bId);
   if (!a0 || !b || a0 === b) return 'pick two different buildings';
   if (a0.frame || b.frame) return 'greenhouse frames cannot be merged';
@@ -171,6 +185,50 @@ export function duplicateColumn(b: BuildingSpec, li: number, i: number, dx: numb
   if (!usable(b, li, x, z) || near(l.columns!, x, z)) return -1;
   l.columns!.push({ ...c, x, z });
   return l.columns!.length - 1;
+}
+
+/** Copy the columns `idxs` by (dx, dz) as one module; copies that do not fit are skipped. Returns the indices of the new ones. */
+export function duplicateColumns(b: BuildingSpec, li: number, idxs: readonly number[], dx: number, dz: number): number[] {
+  const out: number[] = [];
+  for (const i of [...idxs].sort((a, c) => a - c)) {
+    const n = duplicateColumn(b, li, i, dx, dz);
+    if (n >= 0) out.push(n);
+  }
+  return out;
+}
+
+/**
+ * Replicate a module over the whole floor: the selected columns define the lattice (their smallest spacing along x and z;
+ * `fallback` metres when they all share a line), anchored on them, so existing columns stay and new ones fall on the same
+ * grid. Columns keep clear of walls by `gap` metres and skip voids. Returns how many were added.
+ */
+export function fillModule(b: BuildingSpec, li: number, idxs: readonly number[], fallback: number, gap = 0.8): number {
+  const l = b.levels[li];
+  const sel = idxs.map((i) => l?.columns?.[i]).filter((c): c is NonNullable<typeof c> => !!c);
+  if (!l || !sel.length) return 0;
+  const pitch = (vals: number[]): number => {
+    const u = [...new Set(vals.map((v) => Math.round(v * 100) / 100))].sort((p, q) => p - q);
+    let best = Infinity;
+    for (let k = 1; k < u.length; k++) best = Math.min(best, u[k]! - u[k - 1]!);
+    return best === Infinity || best < 0.8 ? Math.max(0.8, fallback) : best;
+  };
+  const sx = pitch(sel.map((c) => c.x)), sz = pitch(sel.map((c) => c.z));
+  const tpl = sel[0]!;
+  const h = tpl.size / 2 + 0.25 + gap;
+  let added = 0;
+  const kx = Math.ceil(b.length / sx), kz = Math.ceil(b.width / sz);
+  for (let i = -kx; i <= kx; i++) {
+    for (let j = -kz; j <= kz; j++) {
+      const x = Math.round((tpl.x + i * sx) * 100) / 100, z = Math.round((tpl.z + j * sz) * 100) / 100;
+      if (x < 0 || z < 0 || x > b.length || z > b.width) continue;
+      if (![[h, h], [-h, h], [h, -h], [-h, -h]].every(([ox, oz]) => usable(b, li, x + ox!, z + oz!))) continue;
+      if (near(l.columns!, x, z)) continue;
+      if (added >= 400) return added;
+      l.columns!.push({ ...tpl, x, z });
+      added++;
+    }
+  }
+  return added;
 }
 
 /** `count` columns in a row starting at column `i` (it counts as the first), `spacing` metres apart along x or z. Returns how many were added. */

@@ -115,3 +115,11 @@ npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
 - `core/modules.ts`: façade patterns (`doors` / `panels` / `store` = 2 lower-panel bays + 1 full-height door, repeated), column rows and the "industrial store" preset. They only write ordinary openings and columns, and replace what was there, so applying twice never stacks. AI ops: `set_facade`, `set_columns`, `industrial_store`.
 - `core/scatter.ts`: random trees inside a pen strip / square / circle / lasso outline (dart throwing, seedable). One stroke = one undo step.
 - Level 0 is labelled "G" in the UI (`levelName`), the others L1, L2 ...
+
+## Aids, measures, review
+- `core/align.ts`: `snapBeside` / `autoAlign` put a (new or merging) building flush against close neighbours (closes gaps up to 3 m, straightens angles up to 10°, lines up almost-aligned edges). `mergeBuildings` uses it first and restores the building if the merge fails.
+- `core/measure.ts`: magnet targets (corners, wall middles, columns, trees, structures, wall ends, other measures), axis straightening and the angle between measures that share a point. The editor keeps a list of measures (cyan); the area frame stays yellow.
+- Area frame: `half` + `off` (centre offset in the frame's own axes) + `rot`. Dragging an edge moves only that edge. `ZoneSpec.rotDeg` is carried to `GeoService.areaData`, which asks for the bounding box and keeps only what is inside the turned rectangle.
+- Columns: `colSet` (+ primary pick) is the selection; `duplicateColumns` copies it as a module, `fillModule` continues its lattice over the floor. The "Pick columns" tool rubber-bands.
+- `AiService.changes`: one entry per command that changed something, with a link (`show`) that selects the building, opens the floor and flies the map there, a reviewed flag and `acceptAll`.
+- `ui/studio/elements-box.ts`: list of all elements with outline thumbnails; trees are grouped in 60 m cells.
