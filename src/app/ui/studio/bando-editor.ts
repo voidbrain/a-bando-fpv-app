@@ -491,6 +491,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                       <app-pick-menu label="Edge" [compact]="true" [options]="falloffOptions" [value]="terrFalloff()" (valueChange)="terrFalloff.set(asFalloff($event))" />
                     }
                     <button class="btn" [disabled]="!ed.draft().terrain?.strokes?.length" (click)="clearTerrain()" title="Remove every terrain stroke (back to the real ground, or flat)">Reset</button>
+                    <button class="btn" [disabled]="loadingGround()" (click)="realGround()" [title]="ed.draft().terrain?.base ? 'Download the real ground again (your strokes stay)' : 'Download the real ground heights for this bando (your strokes stay)'">@if (loadingGround()) {<i class="spin"></i> } {{ ed.draft().terrain?.base ? 'Re-load real ground' : 'Real ground' }}</button>
                   }
                   @case ('tree') {
                     <app-pick-menu label="Tree" [options]="treeMixOptions" [value]="treeMix()" (valueChange)="treeMix.set(asMix($event))" />
@@ -1649,6 +1650,15 @@ export class BandoEditor {
       s.terrain.strokes.push(stroke);
     });
     this.applyNow();
+  }
+  protected readonly loadingGround = signal(false);
+  protected async realGround(): Promise<void> {
+    this.loadingGround.set(true);
+    try {
+      await this.site.loadRealGround();
+    } finally {
+      this.loadingGround.set(false);
+    }
   }
   /** Back to flat ground (one undo step). */
   protected clearTerrain(): void {

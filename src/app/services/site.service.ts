@@ -7,7 +7,8 @@ import type { BuildingSpec, LocationInfo, PadSpec, SiteSpec, StructureSpec, Tree
 import { keepInsideAreas } from '../core/areas';
 import { emptySpec, uid } from '../core/site-spec';
 import { setActiveGround, setTakeoff } from '../core/takeoff';
-import type { HeightGrid } from '../core/terrain';
+import { hasTerrainBase, type HeightGrid } from '../core/terrain';
+import { ElevationService } from './elevation.service';
 import { siteGround } from '../core/site-ground';
 import type { Footprint } from './geo.service';
 import { SiteEditor } from '../core/site-editor';
@@ -52,6 +53,7 @@ export class SiteService {
   private readonly scene = inject(SceneService);
   private readonly calibration = inject(CalibrationStore);
   private readonly toast = inject(ToastService);
+  private readonly elevation = inject(ElevationService);
 
   /** The editor draft (the "Sites" panel binds to this; apply() pushes it into the scene). */
   readonly editor = new SiteEditor();
@@ -159,6 +161,14 @@ export class SiteService {
         spec.name = opts.keep.name;
         spec.createdAt = opts.keep.createdAt ?? spec.createdAt;
       }
+      // the real ground under the bando (flat when the elevation tiles cannot be had: it can be loaded later)
+      let groundNote = '';
+      try {
+        const r = await this.elevation.fetchBase(spec);
+        spec.terrain = { cell: r.dims.cell, half: r.dims.half, base: r.base, strokes: [] };
+      } catch {
+        groundNote = ' The real ground could not be loaded (offline?): it is flat for now; Terrain → Real ground loads it later.';
+      }
       this.applySpec(spec, true);
       this.library.save(spec);
       this.toast.show(
@@ -166,6 +176,7 @@ export class SiteService {
           ? `Generated “${spec.name}”: ${spec.buildings.length} buildings, ${spec.trees.length} trees.`
           : `No buildings mapped in this area: “${spec.name}” has ${spec.trees.length} trees and ${spec.pads.length} roads. Add buildings in the Model editor.`,
       );
+      if (groundNote) this.toast.show(groundNote.trim(), 5000);
       return spec;
     } finally {
       this.generating.set(false);
@@ -444,6 +455,29 @@ export class SiteService {
       const site = this.scene.host.setSite(spec);
       // the x-ray and the simulator collider point at the old model object graph: re-arm them
       this.scene.rebindSite(site);
+    }
+    // a saved bando with real ground: its heights come from the cache (or are downloaded again), then the scene is rebuilt
+    const base = spec.terrain?.base;
+    if (base && !hasTerrainBase(base.key)) {
+      void this.elevation.ensure(spec).then((ok) => {
+        if (ok && this.active().id === spec.id) this.applySpec(this.active(), false);
+      });
+    }
+  }
+
+  /** Load (or re-load) the real ground under the bando being edited; the pilot's terrain strokes are kept. One undo step. */
+  async loadRealGround(): Promise<boolean> {
+    try {
+      const r = await this.elevation.fetchBase(this.editor.snapshot());
+      this.editor.commitSite((s) => {
+        s.terrain = { cell: r.dims.cell, half: r.dims.half, base: r.base, strokes: s.terrain?.strokes ?? [] };
+      });
+      this.applyDraft();
+      this.toast.show(`Real ground loaded (${r.base.datum} m above sea level at the centre).`);
+      return true;
+    } catch (e) {
+      this.toast.show(`Could not load the real ground: ${e instanceof Error ? e.message : 'network error'}.`);
+      return false;
     }
   }
 
