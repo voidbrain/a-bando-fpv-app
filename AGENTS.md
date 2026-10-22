@@ -73,6 +73,13 @@ You are an expert in TypeScript, Angular, and scalable web application developme
 - Every wall builder must add `level.baseY`. A new geometry builder needs a collider: the collider only knows axis-aligned
   boxes and vertical cylinders (ground based); cut long or rotated parts into short boxes.
 
+### Design system
+
+- Before any UI change (templates, styles, user-facing text) read [design-system/README.md](design-system/README.md) and the
+  guideline of the component you touch in `design-system/components/`. Follow its colours, type styles, spacing, radii and
+  voice; use `var(--…)` tokens from `src/styles.scss`, never a new literal colour.
+- A new token, tool colour or shared component updates `design-system/` in the same change (see "Keeping it in step" there).
+
 ### Adding things
 
 - **A structure kind**: add it to `StructureKind` and `STRUCTURE_DEFAULTS` / `RECT_KINDS` (`three/structures.ts`), build it
