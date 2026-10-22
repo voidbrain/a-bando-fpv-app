@@ -9,6 +9,11 @@ ToolPalette is the editor's vertical tool strip: one 32px icon button per tool g
 - Active: `wash-on` fill and a border in the tool colour. Hover: `wash-hover`.
 - `.psep` hairlines separate outdoor, indoor and measuring groups.
 - Icons are 20px outlines on a 24 grid, stroke 1.7, round caps, in `currentColor` (see the Icons assets).
+- It sits above the float boxes (inspector, elements, assistant): `z-index` 1250, flyouts 1260.
+- A `⠿` grip (`.tgrip`) at the top drags it anywhere in the editor; the place is remembered (`abando-float-palette`) and
+  double-clicking the grip, or Reset UI, puts it back top-left.
+- Tools that need a selected building (Merge, Cut, Wing) stay in the palette; picking one without a building says so in
+  a toast instead of hiding.
 
 ## Consumer provides
 

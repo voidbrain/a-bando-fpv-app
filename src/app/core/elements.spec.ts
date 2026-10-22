@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { columnGroups, convexHull, stairsIn, treeZones } from './elements';
-import { emptySpec, type BuildingSpec, type TreeSpec } from './site-spec';
+import { columnGroups, columnsInLine, convexHull, pointsInside, stairsIn, treeZones } from './elements';
+import { emptySpec, type BuildingSpec, type ColumnSpec, type TreeSpec } from './site-spec';
 
 const tree = (x: number, z: number): TreeSpec => ({ x, z, h: 8, r: 2, kind: 'd' });
 
@@ -39,5 +39,27 @@ describe('elements helpers', () => {
     const r = stairsIn(s, b);
     expect(r.length).toBe(1);
     expect(r[0]!.level).toBe(1);
+  });
+});
+
+describe('selecting columns and points', () => {
+  const grid: ColumnSpec[] = [0, 6, 12].flatMap((z) => [0, 6, 12, 18].map((x) => ({ x, z, size: 0.4 })));
+  grid.push({ x: 3, z: 3, size: 0.8, round: true });
+
+  it('finds the row, the line and the module of a column', () => {
+    expect(columnsInLine(grid, 5, 'x')).toEqual([4, 5, 6, 7]); // z = 6
+    expect(columnsInLine(grid, 5, 'z')).toEqual([1, 5, 9]); // x = 6
+    expect(columnsInLine(grid, 0, 'grid')).toHaveLength(12);
+    expect(columnsInLine(grid, 12, 'grid')).toEqual([12]);
+    expect(columnsInLine(grid, 99, 'x')).toEqual([]);
+  });
+
+  it('keeps the points inside a box or a lasso', () => {
+    expect(pointsInside(grid, [{ x: -1, z: -1 }, { x: 7, z: -1 }, { x: 7, z: 7 }, { x: -1, z: 7 }])).toEqual([0, 1, 4, 5, 12]);
+    const lasso = [{ x: -1, z: -1 }, { x: 19, z: -1 }, { x: -1, z: 13 }]; // a triangle: the top-left half
+    const hit = pointsInside(grid, lasso);
+    expect(hit).toContain(0);
+    expect(hit).not.toContain(11); // (18, 12) is outside
+    expect(pointsInside(grid, [{ x: 0, z: 0 }])).toEqual([]);
   });
 });

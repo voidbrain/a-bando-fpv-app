@@ -1,5 +1,6 @@
 import { cutRect, edgesOf, slabs } from '../core/footprint';
 import { buildStructure } from './structures';
+import { fenceDef, postsAlong } from '../core/fences';
 import * as THREE from 'three';
 import { type BuildingSpec, type LevelSpec, type SiteSpec, type TreeSpec, createRandom } from '../core/site-spec';
 import { SiteCollider, type SolidBox, type TreeCylinder } from '../core/sim/collider';
@@ -564,13 +565,28 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     // on a slope the wall starts at the lowest ground along it and keeps its height above the highest
     const ys = [0, 0.25, 0.5, 0.75, 1].map((t) => ground.at(w.a.x + dx * t, w.a.z + dz * t));
     const y0 = Math.min(...ys), wh = w.height + Math.max(...ys) - y0;
-    const m = new THREE.Mesh(new THREE.BoxGeometry(len, wh, w.thick), material(w.color ?? '#b9b2a2'));
+    const def = fenceDef(w.material);
+    const pick = { kind: 'fence', i: spec.walls?.indexOf(w) ?? 0 };
+    const panel = def.mesh ? new THREE.MeshStandardMaterial({ color: w.color ?? def.color, transparent: true, opacity: 0.35, roughness: 0.6, metalness: 0.4, depthWrite: false }) : material(w.color ?? def.color);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(len, wh, w.thick), panel);
     m.position.set((w.a.x + w.b.x) / 2, y0 + wh / 2, (w.a.z + w.b.z) / 2);
     m.rotation.y = -Math.atan2(dz, dx);
-    m.castShadow = true;
+    m.castShadow = !def.mesh;
     m.receiveShadow = true;
-    m.userData['pick'] = { kind: 'fence', i: spec.walls?.indexOf(w) ?? 0 };
+    m.userData['pick'] = pick;
     group.add(m);
+    // posts (concrete, wood, metal, chain-link): a little thicker than the panel, in a darker shade of it
+    const postMat = material(def.mesh ? '#6f787a' : (w.color ?? def.color));
+    for (const t of postsAlong(len, w.material)) {
+      // each post stands on the ground under it and reaches the top of the panel
+      const py = ground.at(w.a.x + dx * t, w.a.z + dz * t), ph = y0 + wh + 0.1 - py;
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, ph, Math.max(0.12, w.thick + 0.06)), postMat);
+      post.position.set(w.a.x + dx * t, py + ph / 2, w.a.z + dz * t);
+      post.rotation.y = m.rotation.y;
+      post.castShadow = true;
+      post.userData['pick'] = pick;
+      group.add(post);
+    }
     // collision: a staircase of small boxes along the wall (the collider only knows axis-aligned boxes)
     const n = Math.max(1, Math.ceil(len / 1.0));
     const seg = len / n, ca = Math.abs(dx / len), sa = Math.abs(dz / len);

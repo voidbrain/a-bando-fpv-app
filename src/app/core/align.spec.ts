@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoAlign, snapBeside } from './align';
+import { autoAlign, magnetAngle, snapBeside } from './align';
 import { buildingsOverlap } from './building-ops';
 import type { BuildingSpec } from './site-spec';
 
@@ -37,5 +37,18 @@ describe('align', () => {
     const a = bld('a', 0, 0, 20, 10), b = bld('b', 25, 0, 10, 10), n = bld('n', 14, 0.4, 8, 10);
     expect(autoAlign(n, [a, b])).toBeGreaterThan(0);
     expect(buildingsOverlap(n, a)).toBe(false);
+  });
+});
+
+describe('magnetAngle', () => {
+  it('sticks to the map axes and to a neighbour within the tolerance, and leaves other angles alone', () => {
+    expect(magnetAngle(2, [])).toBe(0);
+    expect(magnetAngle(358.5, [])).toBe(0);
+    expect(magnetAngle(88, [])).toBe(90);
+    expect(magnetAngle(33, [])).toBe(33);
+    const n = bld('n', 0, 0, 10, 10, 30);
+    expect(magnetAngle(32, [n])).toBe(30);
+    expect(magnetAngle(122, [n])).toBe(120);
+    expect(magnetAngle(40, [n])).toBe(40);
   });
 });

@@ -1,5 +1,6 @@
 import { Service, computed, inject, signal } from '@angular/core';
 import type { SiteSpec } from '../core/site-spec';
+import { boundingZone, sameArea } from '../core/areas';
 import { MAX_HALF_EXTENT, SiteService } from './site.service';
 import { ToastService } from './toast.service';
 
@@ -37,6 +38,26 @@ export class StudioService {
   readonly start = signal<MapStart>(DEFAULT_START);
   /** Written by the map on every pan / zoom / resize. */
   readonly zone = signal<Zone | null>(null);
+  /** Extra areas pinned on the map ("Add area"): generated together with the framed one. */
+  readonly areas = signal<Zone[]>([]);
+  /** Several areas: keep what lies between them too (one merged bando), or only what is inside each. */
+  readonly fillGaps = signal(true);
+
+  /** Pin the framed area and keep framing (the next one). */
+  addArea(): void {
+    const z = this.zone();
+    if (!z) return;
+    if (this.areas().some((a) => sameArea(a, z))) {
+      this.toast.show('That area is already added: move the map to frame another one.');
+      return;
+    }
+    this.areas.update((a) => [...a, { ...z }]);
+    this.toast.show(`Area ${this.areas().length} added. Frame the next one, or Generate.`);
+  }
+
+  removeArea(i: number): void {
+    this.areas.update((a) => a.filter((_, k) => k !== i));
+  }
   readonly basemap = signal<'street' | 'sat' | 'off'>('street');
   /** Opacity of the map under the model (0.2 – 1). */
   readonly mapOpacity = signal(1);
@@ -61,6 +82,8 @@ export class StudioService {
     this.startHalf.set(null);
     this.initialMode.set('area');
     this.zone.set(null);
+    this.areas.set([]);
+    this.fillGaps.set(true);
     this.view.set('zone');
   }
 
@@ -75,6 +98,8 @@ export class StudioService {
     this.startHalf.set(spec.zone ? { e: spec.zone.halfE, n: spec.zone.halfN, rot: spec.zone.rotDeg ?? 0 } : null);
     this.initialMode.set(spec.buildings.length > 0 && spec.bearingDeg === 0 ? 'model' : 'area');
     this.zone.set(null);
+    this.areas.set(spec.areas?.map((a) => ({ ...a })) ?? []);
+    this.fillGaps.set(spec.fillGaps ?? true);
     this.view.set('zone');
   }
 
@@ -99,9 +124,20 @@ export class StudioService {
     const existing = id ? this.site.peek(id) : null;
     if (existing && existing.buildings.length > 0 && !confirm('Regenerating replaces this bando\'s model, including your manual edits. Continue?')) return;
     const label = this.name().trim() || 'New bando';
+    // several areas: one request for the rectangle around them all, then (without fill) only what is inside each
+    const all = this.areas().some((a) => sameArea(a, z)) ? this.areas() : [...this.areas(), z];
+    const box = all.length > 1 ? boundingZone(all) : z;
+    if (box.halfE > MAX_HALF_EXTENT || box.halfN > MAX_HALF_EXTENT) {
+      this.toast.show(`The areas are too far apart: together they may span at most ${MAX_HALF_EXTENT * 2} m.`);
+      return;
+    }
     const spec = await this.site.generate(
-      { label, lat: z.lat, lon: z.lon },
-      { area: { halfE: z.halfE, halfN: z.halfN, rotDeg: z.rotDeg ?? 0 }, keep: existing ? { id: existing.id, name: label, createdAt: existing.createdAt } : { name: label } },
+      { label, lat: box.lat, lon: box.lon },
+      {
+        area: { halfE: box.halfE, halfN: box.halfN, rotDeg: box.rotDeg ?? 0 },
+        keep: existing ? { id: existing.id, name: label, createdAt: existing.createdAt } : { name: label },
+        ...(all.length > 1 ? { areas: all, fillGaps: this.fillGaps() } : {}),
+      },
     );
     if (spec) this.editingId.set(spec.id);
   }
