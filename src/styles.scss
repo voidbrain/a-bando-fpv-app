@@ -36,6 +36,12 @@ select {
   font: inherit;
   color: inherit;
 }
+/* text fields stay selectable inside areas that turn selection off (the editor's plan) */
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
 
 .btn {
   background: #27352c;

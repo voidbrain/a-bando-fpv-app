@@ -32,6 +32,27 @@ export const TOOL_ICONS: Readonly<Record<string, readonly Stroke[]>> = {
   stairs: [{ p: 'M3 20 H8 V15 H13 V10 H18 V5 H21' }, { p: 'M3 20 V21 H21 V5', d: true }],
   pinStart: [{ p: 'M6 21 V4' }, { p: 'M6 4 H18 L15 8 L18 12 H6', f: true }],
   pinEnd: [{ p: 'M6 21 V4' }, { p: 'M6 4 H18 L15 8 L18 12 H6' }],
+  // ---- option pictures (structure kinds, tree kinds, fence materials, shapes) ----
+  chimney: [{ p: 'M9 21 L10 4 H14 L15 21 Z' }, { p: 'M10 8 H14' }],
+  silo: [{ p: 'M7 21 V8 a5 4 0 0 1 10 0 V21 Z' }, { p: 'M7 13 H17' }],
+  tank: [{ p: 'M4 10 a8 3 0 0 1 16 0 V18 a8 3 0 0 1 -16 0 Z' }, { p: 'M4 10 a8 3 0 0 0 16 0' }],
+  waterTower: [{ p: 'M7 4 H17 V11 H7 Z' }, { p: 'M8 11 L6 21 M16 11 L18 21 M7 16 H17' }],
+  lattice: [{ p: 'M8 21 L12 3 L16 21' }, { p: 'M9 16 H15 M10 11 H14 M9 16 L14 11 M15 16 L10 11' }],
+  crane: [{ p: 'M8 21 V4 M3 5 H21 M8 4 L12 5 M18 5 V12' }, { p: 'M16.5 12 H19.5 V14 H16.5 Z', f: true }],
+  bridge: [{ p: 'M2 10 H22 M2 13 H22' }, { p: 'M5 13 V20 M12 13 V20 M19 13 V20' }],
+  ramp: [{ p: 'M3 20 L21 8 V20 Z' }],
+  container: [{ p: 'M3 8 H21 V18 H3 Z' }, { p: 'M7 8 V18 M11 8 V18 M15 8 V18' }],
+  car: [{ p: 'M3 16 V12 L6 8 H15 L19 12 H21 V16 Z' }, dot(7, 17, 1.8), dot(17, 17, 1.8)],
+  truck: [{ p: 'M2 16 V7 H14 V16 Z M14 10 H18 L21 13 V16 H14' }, dot(6, 17, 1.8), dot(17, 17, 1.8)],
+  excavator: [{ p: 'M3 18 H13 a2 2 0 0 0 0 -4 H3 a2 2 0 0 0 0 4 Z M5 14 V9 H10 V14 M10 10 L16 5 L20 10' }, { p: 'M20 10 L21.5 13 L18 13 Z', f: true }],
+  conifer: [{ p: 'M12 3 L18 15 H6 Z' }, { p: 'M12 15 V21' }],
+  mixedTrees: [{ p: 'M3 10 a4 4 0 1 1 8 0 a4 4 0 0 1 -8 0 M7 14 V20' }, { p: 'M17 5 L21 15 H13 Z M17 15 V20' }],
+  brick: [{ p: 'M3 6 H21 V20 H3 Z M3 10.5 H21 M3 15 H21' }, { p: 'M9 6 V10.5 M15 6 V10.5 M6 10.5 V15 M12 10.5 V15 M18 10.5 V15 M9 15 V20 M15 15 V20' }],
+  concrete: [{ p: 'M3 5 H11 V20 H3 Z M13 5 H21 V20 H13 Z' }],
+  metalSheet: [{ p: 'M3 5 H21 V20 H3 Z' }, { p: 'M6 5 V20 M9 5 V20 M12 5 V20 M15 5 V20 M18 5 V20', d: true }],
+  chainlink: [{ p: 'M3 21 V4 M21 21 V4' }, { p: 'M3 6 L18 21 M3 13 L11 21 M10 4 L21 15 M17 4 L21 8 M21 6 L6 21 M21 13 L13 21 M14 4 L3 15 M7 4 L3 8', d: true }],
+  greenhouse: [{ p: 'M3 20 V12 a9 9 0 0 1 18 0 V20 Z' }, { p: 'M12 3 V20 M7.5 5 V20 M16.5 5 V20', d: true }],
+  colSquare: [{ p: 'M7 7 H17 V17 H7 Z' }, dot(12, 12, 1.6)],
 };
 
 /** A tool's icon as a small inline SVG. */

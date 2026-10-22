@@ -5,8 +5,12 @@ OptionsBar is the chip bar beside the palette holding the active tool's options.
 ## Use
 
 - One `.opts` box on `panel-solid`, `radius-menu`; options grouped in `.grp` with a 4px gap, groups 10px apart.
-- Small numeric fields use `input.mini` (54px); choices use a `.seg`.
-- Show only the active tool's options; hide the bar when the tool has none.
+- Small numeric fields use `input.mini` (54px); two or three short choices use a `.seg`; a choice between kinds of
+  things (structure kinds, tree species, fence materials, brush shapes) uses a PickMenu with a picture per option.
+- Show only the active tool's options. Select has its own (box / lasso, magnet).
+- It opens beside the active tool's button, on the side of the palette with more room (right by default), at the same
+  height. Its grip drags it elsewhere (remembered as `abando-float-opts`); double-click the grip to put it back beside
+  the tool. Same layer as the palette, above the float boxes.
 
 ## Consumer provides
 

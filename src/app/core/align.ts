@@ -51,3 +51,24 @@ export function autoAlign(b: BuildingSpec, others: readonly BuildingSpec[], maxG
   for (const o of near.slice(0, 4)) if (snapBeside(o, b, maxGap) !== null) n++;
   return n;
 }
+
+/**
+ * Magnet for a rotation being dragged: within `tol` degrees of the map axes or of a nearby building's axes (every 90°),
+ * the angle sticks to it. `near` = the buildings worth lining up with (the caller picks the neighbourhood).
+ */
+export function magnetAngle(rotDeg: number, near: readonly BuildingSpec[], tol = 4): number {
+  const norm = (v: number): number => ((v % 360) + 360) % 360;
+  const targets = [0, ...near.map((o) => o.rotDeg)];
+  let best = rotDeg, bestD = tol;
+  for (const t of targets) {
+    for (let k = 0; k < 4; k++) {
+      const c = norm(t + k * 90);
+      const d = Math.abs(((norm(rotDeg) - c + 540) % 360) - 180);
+      if (d < bestD) {
+        bestD = d;
+        best = c;
+      }
+    }
+  }
+  return norm(best);
+}

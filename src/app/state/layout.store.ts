@@ -1,6 +1,10 @@
 import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
 import { PANELS, PANEL_BY_ID, type PanelId } from '../ui/panel-defs';
+import { signal } from '@angular/core';
 import { persistState, savedState } from './persist';
+
+/** Bumped by "Reset UI": components that remember their own place (the editor's toolbars) go back to the default. */
+export const uiResets = signal(0);
 
 export interface PanelState {
   visible: boolean;
@@ -90,7 +94,16 @@ export const LayoutStore = signalStore(
       resizeTo: (id: PanelId, w: number, h: number) => update(id, () => ({ w, h })),
       setWidth: (id: PanelId, w: number) => update(id, () => ({ w })),
       raise,
-      reset: () => patchState(store, defaults()),
+      reset: () => {
+        patchState(store, defaults());
+        // the float boxes and the editor's toolbars remember their place on their own
+        try {
+          for (const k of Object.keys(localStorage)) if (k.startsWith('abando-float-')) localStorage.removeItem(k);
+        } catch {
+          /* no storage */
+        }
+        uiResets.update((n) => n + 1);
+      },
     };
   }),
   withHooks((store) => {

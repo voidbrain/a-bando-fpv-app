@@ -4,7 +4,8 @@ import type { Calibration, GeoPoint } from '../core/models';
 import { setSiteOrigin } from '../core/constants';
 import { solveCalibration, toGeo } from '../core/geo';
 import { bounds, edgesOf, recentre, rectilinear, type Pt } from '../core/footprint';
-import type { BuildingSpec, LocationInfo, PadSpec, SiteSpec, StructureSpec, TreeSpec, Vec2, WallOpening } from '../core/site-spec';
+import type { BuildingSpec, LocationInfo, PadSpec, SiteSpec, StructureSpec, TreeSpec, Vec2, WallOpening, ZoneSpec } from '../core/site-spec';
+import { keepInsideAreas } from '../core/areas';
 import { emptySpec, uid } from '../core/site-spec';
 import { setTakeoff } from '../core/takeoff';
 import type { Footprint } from './geo.service';
@@ -31,6 +32,9 @@ export interface GenerateOptions {
   area?: { halfE: number; halfN: number; rotDeg?: number };
   /** Regenerate an existing bando in place: keep its id / name / creation date. */
   keep?: { id?: string; name: string; createdAt?: number };
+  /** Several map areas in one bando (`area` must cover them all): without `fillGaps` only what is inside one of them is kept. */
+  areas?: ZoneSpec[];
+  fillGaps?: boolean;
 }
 
 /**
@@ -143,6 +147,11 @@ export class SiteService {
       if (data.partial) this.toast.show('Trees and roads could not be loaded (servers busy): buildings only. Regenerate later to add them.');
       const spec = this.specFromZone(info, data.footprints, data.trees, data.roads, data.structures, area, seed);
       spec.zone = { lat: info.lat, lon: info.lon, halfE: area.halfE, halfN: area.halfN, ...(area.rotDeg ? { rotDeg: area.rotDeg } : {}) };
+      if (opts.areas && opts.areas.length > 1) {
+        spec.areas = opts.areas.map((a) => ({ ...a }));
+        spec.fillGaps = !!opts.fillGaps;
+        if (!opts.fillGaps) keepInsideAreas(spec, opts.areas);
+      }
       // regenerating an existing bando keeps its identity
       if (opts.keep) {
         if (opts.keep.id) spec.id = opts.keep.id;

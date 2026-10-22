@@ -72,7 +72,7 @@ There is no logo in the codebase: set the name "A Bando" in the `sans` family at
 ## Components
 
 Guidelines per component in `components/`: Button, SegmentedControl, FormControls, InspectorSection, Panel, FloatBox,
-ToolPalette, OptionsBar, ContextMenu, Readout, Notice, Toast, Spinner, ElementsList, VersionBadge. Reuse these (the global
+ToolPalette, OptionsBar, PickMenu, ContextMenu, Readout, Notice, Toast, Spinner, ElementsList, VersionBadge. Reuse these (the global
 classes in `src/styles.scss`, `app-panel`, `app-float-box`) before inventing a new control. In the app the elements-list row
 is `.row` scoped to `ElementsBox`; the guideline calls it `.el-row` to keep it apart from the global `.row`.
 

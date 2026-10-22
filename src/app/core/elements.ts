@@ -133,3 +133,30 @@ export function stairsIn(spec: SiteSpec, b: BuildingSpec): { i: number; s: Struc
   });
   return out;
 }
+
+/**
+ * The columns standing in line with column `i` on its floor: `x` = the row running east–west (same z), `z` = the line
+ * running north–south (same x), `grid` = every column of the same size and shape (the module it was repeated from).
+ */
+export function columnsInLine(cols: readonly ColumnSpec[], i: number, along: 'x' | 'z' | 'grid', tol = 0.6): number[] {
+  const c = cols[i];
+  if (!c) return [];
+  const out: number[] = [];
+  cols.forEach((o, k) => {
+    const hit =
+      along === 'x' ? Math.abs(o.z - c.z) <= tol : along === 'z' ? Math.abs(o.x - c.x) <= tol : Math.abs(o.size - c.size) < 0.01 && !!o.round === !!c.round;
+    if (hit) out.push(k);
+  });
+  return out;
+}
+
+/** Indices of the points inside a selection outline (a box's four corners or a hand-drawn lasso). */
+export function pointsInside<T extends { x: number; z: number }>(pts: readonly T[], outline: readonly { x: number; z: number }[]): number[] {
+  if (outline.length < 3) return [];
+  const poly = outline.map((p) => ({ x: p.x, z: p.z }));
+  const out: number[] = [];
+  pts.forEach((p, i) => {
+    if (contains(poly, p.x, p.z)) out.push(i);
+  });
+  return out;
+}

@@ -91,6 +91,8 @@ export interface WallSpec {
   height: number;
   thick: number;
   color?: string;
+  /** What it is made of (see core/fences.ts); absent = a masonry wall. */
+  material?: 'masonry' | 'concrete' | 'brick' | 'wood' | 'metal' | 'chainlink';
 }
 
 export interface LevelSpec {
@@ -192,6 +194,9 @@ export interface SiteSpec {
   bearingDeg: number;
   /** The map zone the model was generated from (centre + half extents in metres, east/north), so it can be re-edited. */
   zone?: ZoneSpec;
+  /** When several map areas were combined: each of them (`zone` then covers them all); `fillGaps` kept what lies between. */
+  areas?: ZoneSpec[];
+  fillGaps?: boolean;
   /** Overall multiplier applied to every dimension when generating (kept so regeneration is reproducible). */
   genScale: number;
   groundColor: string;
@@ -331,6 +336,13 @@ export function sanitizeSpec(raw: unknown): SiteSpec | null {
       s.zone && [s.zone.lat, s.zone.lon, s.zone.halfE, s.zone.halfN].every((v) => typeof v === 'number' && isFinite(v))
         ? { lat: s.zone.lat, lon: s.zone.lon, halfE: s.zone.halfE, halfN: s.zone.halfN, ...(typeof s.zone.rotDeg === 'number' && isFinite(s.zone.rotDeg) && s.zone.rotDeg ? { rotDeg: s.zone.rotDeg } : {}) }
         : undefined,
+    areas: Array.isArray(s.areas)
+      ? s.areas
+          .filter((a) => a && [a.lat, a.lon, a.halfE, a.halfN].every((v) => typeof v === 'number' && isFinite(v)))
+          .slice(0, 12)
+          .map((a) => ({ lat: a.lat, lon: a.lon, halfE: a.halfE, halfN: a.halfN, ...(typeof a.rotDeg === 'number' && isFinite(a.rotDeg) && a.rotDeg ? { rotDeg: a.rotDeg } : {}) }))
+      : undefined,
+    fillGaps: typeof s.fillGaps === 'boolean' ? s.fillGaps : undefined,
     bearingDeg: typeof s.bearingDeg === 'number' ? s.bearingDeg : 0,
     genScale: typeof s.genScale === 'number' ? s.genScale : 1,
     groundColor: typeof s.groundColor === 'string' ? s.groundColor : '#789b52',
