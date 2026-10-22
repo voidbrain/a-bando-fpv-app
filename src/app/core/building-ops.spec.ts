@@ -72,9 +72,27 @@ describe('repeating and converting', () => {
     const g = room();
     g.levels[0]!.columns = [{ x: 2, z: 2, size: 0.5 }];
     g.levels[0]!.voids = [{ x0: 8, z0: 3, x1: 12, z1: 7 }];
-    const n = columnGrid(g, 0, 0, 4, 4, 2);
+    const n = columnGrid(g, 0, 0, 4, 4, 0.8);
     expect(n).toBeGreaterThan(3);
     for (const c of g.levels[0]!.columns!) expect(c.x > 8 && c.x < 12 && c.z > 3 && c.z < 7).toBe(false);
+  });
+
+  it('fills a floor evenly with the same clear space from the wall on both sides, and no column touches a wall', () => {
+    const b = room(); // 20 x 10
+    b.levels[0]!.columns = [{ x: 9, z: 5, size: 0.6 }];
+    const n = columnGrid(b, 0, 0, 5, 4, 0.8);
+    const cols = b.levels[0]!.columns!;
+    expect(cols.length).toBe(n);
+    const xs = [...new Set(cols.map((c) => c.x))].sort((p, q) => p - q), zs = [...new Set(cols.map((c) => c.z))].sort((p, q) => p - q);
+    // symmetric: the first and last rows are the same distance from their walls
+    expect(xs[0]!).toBeCloseTo(20 - xs[xs.length - 1]!, 2);
+    expect(zs[0]!).toBeCloseTo(10 - zs[zs.length - 1]!, 2);
+    // clear gap of at least 0.8 m between a column's edge and the wall's inner face (wall half thickness 0.25)
+    const edge = Math.min(xs[0]!, zs[0]!) - 0.3 - 0.25;
+    expect(edge).toBeGreaterThanOrEqual(0.8 - 1e-6);
+    // the spacing is the one asked for
+    expect(xs[1]! - xs[0]!).toBeCloseTo(5, 2);
+    expect(zs[1]! - zs[0]!).toBeCloseTo(4, 2);
   });
 
   it('repeats a window along its wall without overlapping or leaving the wall', () => {

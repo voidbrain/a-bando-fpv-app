@@ -189,19 +189,35 @@ export function columnRow(b: BuildingSpec, li: number, i: number, count: number,
   return added;
 }
 
-/** Fill the floor with columns like column `i`, on a grid `sx` × `sz` metres, at least `margin` from the walls. Returns how many were added. */
-export function columnGrid(b: BuildingSpec, li: number, i: number, sx: number, sz: number, margin = 1): number {
+/**
+ * Fill the floor with columns like column `i` (which is replaced by the grid): `sx` × `sz` metres apart, spread evenly so
+ * the outer rows are the same distance from the walls on both sides, and never closer than `gap` metres (clear space
+ * between the wall's inner face and the column's edge). Columns inside voids or outside the outline are skipped, and
+ * existing columns are kept. Returns how many were added.
+ */
+export function columnGrid(b: BuildingSpec, li: number, i: number, sx: number, sz: number, gap = 0.8): number {
   const l = b.levels[li];
   const c = l?.columns?.[i];
   if (!l || !c || sx < 0.8 || sz < 0.8) return 0;
+  const tpl = { ...c };
+  l.columns!.splice(i, 1);
+  const inset = gap + 0.25 + tpl.size / 2; // 0.25 = half the wall thickness
+  const axis = (len: number, step: number): number[] => {
+    const span = len - 2 * inset;
+    if (span < 0) return [];
+    const n = Math.floor(span / step + 1e-6) + 1;
+    const start = inset + (span - (n - 1) * step) / 2; // centred: equal clearance at both ends
+    return Array.from({ length: n }, (_, k) => Math.round((start + k * step) * 100) / 100);
+  };
   let added = 0;
-  for (let x = margin; x <= b.length - margin + 1e-6 && added < 400; x += sx) {
-    for (let z = margin; z <= b.width - margin + 1e-6 && added < 400; z += sz) {
-      const gx = Math.round(x * 10) / 10, gz = Math.round(z * 10) / 10;
-      const h = c.size / 2 + 0.3; // keep clear of walls and voids: all four corners must be usable
-      if (![[h, h], [-h, h], [h, -h], [-h, -h]].every(([ox, oz]) => usable(b, li, gx + ox!, gz + oz!))) continue;
-      if (near(l.columns!, gx, gz)) continue;
-      l.columns!.push({ ...c, x: gx, z: gz });
+  const h = tpl.size / 2 + 0.25 + 0.3;
+  for (const x of axis(b.length, sx)) {
+    for (const z of axis(b.width, sz)) {
+      if (added >= 400) return added;
+      // clear of the walls and voids on all four corners (also for shaped buildings)
+      if (![[h, h], [-h, h], [h, -h], [-h, -h]].every(([ox, oz]) => usable(b, li, x + ox!, z + oz!))) continue;
+      if (near(l.columns!, x, z)) continue;
+      l.columns!.push({ ...tpl, x, z });
       added++;
     }
   }

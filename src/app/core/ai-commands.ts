@@ -397,8 +397,8 @@ export function runCommands(spec: SiteSpec, cmds: AiCommand[], selectedId: strin
         lev.columns.push({ x: pattern === 'grid' ? margin + 0.5 : margin + 1, z: pattern === 'grid' ? margin + 0.5 : b.width / 2, size });
         const axis = (c.axis ?? (b.length >= b.width ? 'length' : 'width')) === 'length' ? 'x' : 'z';
         if (axis === 'z' && pattern === 'row') lev.columns[seed] = { x: b.length / 2, z: margin + 1, size };
-        const added = pattern === 'grid' ? columnGrid(b, li, seed, spacing, spacing, margin) : columnRow(b, li, seed, c.count ?? 4, spacing, axis);
-        ok(`${added + 1} column(s) on floor ${li + 1} of ${label}`);
+        const added = pattern === 'grid' ? columnGrid(b, li, seed, spacing, spacing, 0.8) : columnRow(b, li, seed, c.count ?? 4, spacing, axis) + 1;
+        ok(`${added} column(s) on floor ${li + 1} of ${label}`);
         break;
       }
       case 'convert':

@@ -96,13 +96,19 @@ function vault(len: number, r: number, k: number, mat: THREE.Material, seg = 8):
 }
 
 /** Three-prism gable roof spanning `w` along X, `d` deep, ridge over the long axis. */
+/**
+ * A gable roof: a triangular prism whose ridge runs along local x (length `w`), spanning `d` across z. Its base is at
+ * y = 0 (the top of the walls, 30 cm overhang each side) and its apex at y = `rise`, so place it at the wall top.
+ */
 function gable(w: number, d: number, rise: number, mat: THREE.Material): THREE.Mesh {
-  const R = d * 0.577;
-  const g = new THREE.CylinderGeometry(R, R, w + 0.8, 3);
-  g.rotateX(Math.PI / 2);
-  g.rotateZ(Math.PI);
-  g.rotateY(Math.PI / 2);
-  g.scale(1, (rise * 2) / (1.5 * R), 1);
+  const shape = new THREE.Shape();
+  shape.moveTo(-d / 2 - 0.3, 0);
+  shape.lineTo(d / 2 + 0.3, 0);
+  shape.lineTo(0, rise);
+  shape.closePath();
+  const g = new THREE.ExtrudeGeometry(shape, { depth: w + 0.8, bevelEnabled: false });
+  g.translate(0, 0, -(w + 0.8) / 2); // centred along the ridge
+  g.rotateY(Math.PI / 2); // the extrusion (z) becomes the ridge direction (x)
   const m = new THREE.Mesh(g, mat);
   m.castShadow = true;
   m.receiveShadow = true;
@@ -221,8 +227,8 @@ function buildRoof(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.Object
       const c = -across / 2 + span / 2 + i * span;
       if (turn) {
         m.rotation.y = Math.PI / 2;
-        ctx.addMesh(target, m, c, top + rise * 0.45, 0);
-      } else ctx.addMesh(target, m, 0, top + rise * 0.45, c);
+        ctx.addMesh(target, m, c, top, 0);
+      } else ctx.addMesh(target, m, 0, top, c);
     }
     ctx.solids.push(rotBoxLocal(ctx.at[0], ctx.at[1], b.length, b.width, ctx.rot, top, top + rise, true));
     return;
@@ -398,10 +404,12 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
   // ---- buildings
   for (const b of spec.buildings) {
     const inner = new THREE.Group();
+    inner.userData['pick'] = { kind: 'building', id: b.id }; // what a click on it in the 3D editor selects
     inner.position.set(b.pos.x, 0, b.pos.z);
     inner.rotation.y = (-b.rotDeg * Math.PI) / 180;
     group.add(inner);
     const localRoof = new THREE.Group();
+    localRoof.userData['pick'] = { kind: 'building', id: b.id };
     inner.add(localRoof);
     ctx.at = [b.pos.x, b.pos.z];
     ctx.rot = b.rotDeg;
@@ -428,6 +436,7 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     m.rotation.y = -Math.atan2(dz, dx);
     m.castShadow = true;
     m.receiveShadow = true;
+    m.userData['pick'] = { kind: 'fence', i: spec.walls?.indexOf(w) ?? 0 };
     group.add(m);
     // collision: a staircase of small boxes along the wall (the collider only knows axis-aligned boxes)
     const n = Math.max(1, Math.ceil(len / 1.0));
@@ -443,6 +452,7 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
   // ---- towers and bridges
   for (const st of spec.structures ?? []) {
     const built = buildStructure(st);
+    built.object.userData['pick'] = { kind: 'structure', id: st.id };
     group.add(built.object);
     solids.push(...built.solids);
     treeSolids.push(...built.cylinders);

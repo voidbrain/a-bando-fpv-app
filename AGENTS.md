@@ -106,3 +106,7 @@ npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
   (the scene builders are testable without a renderer).
 - Overpass answers 429 / 500 without CORS headers: do not treat the browser's "access control" error as a code bug.
 - Never claim an AI edit worked from the model's own words.
+- `SiteService.applySpec` re-applies the calibration every time (Save, every edit). The pilot's own alignment (pins, compass)
+  therefore lives in `SiteSpec.calibration`; an effect in `SiteService` copies live changes into the spec. Do not set the
+  calibration anywhere without going through the store, or it will be undone on the next edit.
+- Meshes that can be clicked in the 3D editor carry `userData.pick` (`{ kind, id | i }`); keep it when adding a new builder.

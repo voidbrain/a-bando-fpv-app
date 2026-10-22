@@ -1,10 +1,16 @@
 import * as THREE from 'three';
+import type { Flight } from '../core/models';
 import type { SiteSpec } from '../core/site-spec';
+import { PathRenderer } from './path-renderer';
 import { buildSiteFromSpec, type SiteModel } from './site-model';
+
+/** What a click on the 3D model selects. */
+export type SitePick = { kind: 'building'; id: string } | { kind: 'structure'; id: string } | { kind: 'fence'; i: number } | { kind: 'tree'; i: number };
 
 /**
  * The whole bando in 3D inside the editor: the same model the main view builds, with a mouse-orbit camera.
- * Drag = orbit, right-drag / Shift-drag = pan, wheel = zoom. Rebuild with {@link show} whenever the spec changes.
+ * Drag = orbit, right-drag / Shift-drag = pan, wheel = zoom, click = select. With a drawing tool active, left-drag
+ * works on the ground instead (see {@link mode}). Rebuild with {@link show} whenever the spec changes.
  */
 export class SiteViewRenderer {
   private readonly renderer: THREE.WebGLRenderer;
@@ -19,6 +25,16 @@ export class SiteViewRenderer {
   private raf = 0;
   private framed = '';
   private readonly off: (() => void)[] = [];
+  private spec: SiteSpec | null = null;
+  private selection: SitePick | null = null;
+  private box: THREE.Box3Helper | null = null;
+  private readonly paths: PathRenderer;
+  private readonly ray = new THREE.Raycaster();
+  /** 'select': drag orbits and a click selects. 'draw': left-drag reports ground points instead (right-drag / Shift still orbit). */
+  mode: 'select' | 'draw' = 'select';
+  onPick: (p: SitePick | null) => void = () => undefined;
+  onGround: (phase: 'down' | 'move' | 'up', x: number, z: number) => void = () => undefined;
+  private press: { x: number; y: number; moved: boolean; ground: boolean } | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -31,15 +47,27 @@ export class SiteViewRenderer {
     sun.shadow.mapSize.set(2048, 2048);
     Object.assign(sun.shadow.camera, { left: -200, right: 200, top: 200, bottom: -200, near: 10, far: 700 });
     this.scene.add(sun);
+    this.paths = new PathRenderer(this.scene);
     const on = <K extends keyof HTMLElementEventMap>(t: K, f: (e: HTMLElementEventMap[K]) => void, o?: AddEventListenerOptions): void => {
       canvas.addEventListener(t, f as EventListener, o);
       this.off.push(() => canvas.removeEventListener(t, f as EventListener));
     };
     on('pointerdown', (e) => {
-      this.drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey };
+      const ground = this.mode === 'draw' && e.button === 0 && !e.shiftKey;
+      this.press = { x: e.clientX, y: e.clientY, moved: false, ground };
       canvas.setPointerCapture(e.pointerId);
+      if (ground) {
+        const g = this.groundPoint(e);
+        if (g) this.onGround('down', g.x, g.z);
+      } else this.drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey };
     });
     on('pointermove', (e) => {
+      if (this.press && Math.hypot(e.clientX - this.press.x, e.clientY - this.press.y) > 4) this.press.moved = true;
+      if (this.press?.ground) {
+        const g = this.groundPoint(e);
+        if (g) this.onGround('move', g.x, g.z);
+        return;
+      }
       const d = this.drag;
       if (!d) return;
       const dx = e.clientX - d.x, dy = e.clientY - d.y;
@@ -54,8 +82,19 @@ export class SiteViewRenderer {
       }
       this.drag = { ...d, x: e.clientX, y: e.clientY };
     });
-    on('pointerup', () => (this.drag = null));
-    on('pointercancel', () => (this.drag = null));
+    const release = (e: PointerEvent): void => {
+      const p = this.press;
+      this.press = null;
+      this.drag = null;
+      if (!p) return;
+      if (p.ground) {
+        const g = this.groundPoint(e);
+        if (g) this.onGround('up', g.x, g.z);
+        else this.onGround('up', Number.NaN, Number.NaN);
+      } else if (!p.moved && e.type === 'pointerup' && this.mode === 'select' && e.button === 0) this.onPick(this.pickAt(e));
+    };
+    on('pointerup', release);
+    on('pointercancel', release);
     on('contextmenu', (e) => e.preventDefault());
     on('wheel', (e) => {
       e.preventDefault();
@@ -70,14 +109,81 @@ export class SiteViewRenderer {
       this.scene.remove(this.model.group);
       dispose(this.model.group);
     }
+    this.spec = spec;
     this.model = buildSiteFromSpec(spec);
     this.model.setRoofHidden?.(roofHidden);
     this.scene.add(this.model.group);
+    this.refreshSelection();
     if (frameKey !== this.framed) {
       this.framed = frameKey;
       this.target.set(0, 0, 0);
       this.dist = Math.max(60, Math.min(900, spec.extent * 0.9));
     }
+  }
+
+  /** The point on the ground (y = 0) under the pointer, in site coordinates. */
+  private groundPoint(e: { clientX: number; clientY: number }): { x: number; z: number } | null {
+    const r = this.canvas.getBoundingClientRect();
+    this.ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), this.camera);
+    const p = new THREE.Vector3();
+    return this.ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), p) ? { x: p.x, z: p.z } : null;
+  }
+
+  /** What is under the pointer: a building / structure / fence by the tag on its meshes, a tree by distance on the ground. */
+  private pickAt(e: { clientX: number; clientY: number }): SitePick | null {
+    if (!this.model || !this.spec) return null;
+    const r = this.canvas.getBoundingClientRect();
+    this.ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), this.camera);
+    for (const hit of this.ray.intersectObject(this.model.group, true)) {
+      for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) {
+        const p = o.userData['pick'] as SitePick | undefined;
+        if (p) return p;
+      }
+    }
+    const g = this.groundPoint(e);
+    if (g) {
+      let best = -1, bd = Infinity;
+      this.spec.trees.forEach((t, i) => {
+        const d = Math.hypot(t.x - g.x, t.z - g.z) - t.r;
+        if (d < 1.5 && d < bd) { bd = d; best = i; }
+      });
+      if (best >= 0) return { kind: 'tree', i: best };
+    }
+    return null;
+  }
+
+  setSelection(sel: SitePick | null): void {
+    this.selection = sel;
+    this.refreshSelection();
+  }
+
+  /** A yellow box around the selected thing. */
+  private refreshSelection(): void {
+    if (this.box) {
+      this.scene.remove(this.box);
+      this.box.geometry.dispose();
+      this.box = null;
+    }
+    const sel = this.selection;
+    if (!sel || !this.model || !this.spec) return;
+    const b = new THREE.Box3();
+    if (sel.kind === 'tree') {
+      const t = this.spec.trees[sel.i];
+      if (!t) return;
+      b.set(new THREE.Vector3(t.x - t.r, 0, t.z - t.r), new THREE.Vector3(t.x + t.r, t.h, t.z + t.r));
+    } else {
+      this.model.group.traverse((o) => {
+        const p = o.userData['pick'] as SitePick | undefined;
+        if (p && p.kind === sel.kind && (('id' in p && 'id' in sel && p.id === sel.id) || ('i' in p && 'i' in sel && p.i === sel.i))) b.expandByObject(o);
+      });
+    }
+    if (b.isEmpty()) return;
+    this.box = new THREE.Box3Helper(b, 0xffd166);
+    this.scene.add(this.box);
+  }
+
+  setPaths(flights: Flight[], speedMax: number): void {
+    this.paths.rebuild(flights, speedMax);
   }
 
   private readonly tick = (): void => {
@@ -95,6 +201,7 @@ export class SiteViewRenderer {
     const cp = Math.cos(this.pitch);
     this.camera.position.set(this.target.x + this.dist * cp * Math.sin(this.yaw), this.target.y + this.dist * Math.sin(this.pitch), this.target.z + this.dist * cp * Math.cos(this.yaw));
     this.camera.lookAt(this.target);
+    this.paths.setProgress();
     this.renderer.render(this.scene, this.camera);
   };
 

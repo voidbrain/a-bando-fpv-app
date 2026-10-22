@@ -1,6 +1,7 @@
-import { Component, DestroyRef, ElementRef, afterNextRender, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, afterNextRender, effect, inject, input, output, signal, untracked, viewChild } from '@angular/core';
+import type { Flight } from '../../core/models';
 import type { SiteSpec } from '../../core/site-spec';
-import { SiteViewRenderer } from '../../three/site-view';
+import { SiteViewRenderer, type SitePick } from '../../three/site-view';
 
 /** The editor's 3D mode: the whole bando, orbit with the mouse. Editing happens in 2D; this is for looking. */
 @Component({
@@ -10,7 +11,7 @@ import { SiteViewRenderer } from '../../three/site-view';
     @if (failed()) {
       <div class="fail dim">3D view unavailable (WebGL could not start).</div>
     } @else {
-      <div class="cap dim small">drag: orbit · right-drag or Shift-drag: pan · wheel: zoom · switch to 2D to edit</div>
+      <div class="cap dim small">{{ mode() === 'select' ? 'click: select · drag: orbit · right-drag / Shift-drag: pan · wheel: zoom' : 'drag / click on the ground to draw or place · right-drag or Shift-drag: orbit · wheel: zoom' }}</div>
     }
   `,
   styles: `
@@ -48,6 +49,13 @@ export class SiteView {
   readonly spec = input.required<SiteSpec>();
   readonly roofHidden = input(false);
   readonly frameKey = input('');
+  /** 'select': a click selects what is under it. 'draw': left-drag on the ground reports points for the active tool. */
+  readonly mode = input<'select' | 'draw'>('select');
+  readonly selection = input<SitePick | null>(null);
+  readonly flights = input<Flight[]>([]);
+  readonly speedMax = input(10);
+  readonly picked = output<SitePick | null>();
+  readonly ground = output<{ phase: 'down' | 'move' | 'up'; x: number; z: number }>();
   protected readonly failed = signal(false);
   private readonly cv = viewChild.required<ElementRef<HTMLCanvasElement>>('cv');
   private r: SiteViewRenderer | null = null;
@@ -61,7 +69,23 @@ export class SiteView {
         this.failed.set(true);
         return;
       }
+      this.r.mode = this.mode();
+      this.r.onPick = (p) => this.picked.emit(p);
+      this.r.onGround = (phase, x, z) => this.ground.emit({ phase, x, z });
       this.schedule(0);
+    });
+    effect(() => {
+      const m = this.mode();
+      if (this.r) this.r.mode = m;
+    });
+    effect(() => {
+      const sel = this.selection();
+      this.spec(); // a rebuild invalidates the box: redraw it after
+      untracked(() => this.r?.setSelection(sel));
+    });
+    effect(() => {
+      const f = this.flights(), m = this.speedMax();
+      untracked(() => this.r?.setPaths(f, m));
     });
     effect(() => {
       this.spec();
@@ -81,6 +105,8 @@ export class SiteView {
     this.timer = setTimeout(() => {
       try {
         this.r?.show(this.spec(), this.roofHidden(), this.frameKey());
+        this.r?.setSelection(this.selection());
+        this.r?.setPaths(this.flights(), this.speedMax());
       } catch {
         this.failed.set(true);
       }

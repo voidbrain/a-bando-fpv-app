@@ -174,6 +174,8 @@ export interface ZoneSpec {
 }
 
 export interface SiteSpec {
+  /** How the pilot aligned the logged paths with this site (pins, compass): kept with the bando so Save / edits do not undo it. */
+  calibration?: { rot: number; dx: number; dz: number };
   /** Free-standing walls / fences. */
   walls?: WallSpec[];
   /** Towers and bridges. */
@@ -319,6 +321,10 @@ export function sanitizeSpec(raw: unknown): SiteSpec | null {
     name: typeof s.name === 'string' ? s.name : 'Site',
     createdAt: typeof s.createdAt === 'number' ? s.createdAt : Date.now(),
     origin: { lat: s.origin.lat, lon: typeof s.origin.lon === 'number' ? s.origin.lon : 0 },
+    calibration:
+      s.calibration && [s.calibration.rot, s.calibration.dx, s.calibration.dz].every((v) => typeof v === 'number' && isFinite(v))
+        ? { rot: s.calibration.rot, dx: s.calibration.dx, dz: s.calibration.dz }
+        : undefined,
     zone:
       s.zone && [s.zone.lat, s.zone.lon, s.zone.halfE, s.zone.halfN].every((v) => typeof v === 'number' && isFinite(v))
         ? { lat: s.zone.lat, lon: s.zone.lon, halfE: s.zone.halfE, halfN: s.zone.halfN }

@@ -112,3 +112,33 @@ describe('outer walls', () => {
     expect(covered('z', -15)).toBeGreaterThan(9.5); // west: whole width minus the door
   });
 });
+
+describe('roofs sit on top of the walls', () => {
+  it('a gable starts at the wall top and its apex is `rise` above it; a vault and a flat roof too', async () => {
+    const THREE = await import('three');
+    const { buildSiteFromSpec } = await import('./site-model');
+    const { emptySpec } = await import('../core/site-spec');
+    for (const [roof, up] of [['gable', 3], ['vault', 5.8], ['flat', 0.3]] as const) {
+      const s = emptySpec({ lat: 0, lon: 0 }, 't');
+      s.buildings = [{ id: 'b', name: 'B', pos: { x: 0, z: 0 }, rotDeg: 0, length: 20, width: 10, levels: [{ baseY: 0, height: 4, sides: { n: true, s: true, e: true, w: true }, roof, roofRise: 3, partitions: [], doors: {} }] }];
+      const box = new THREE.Box3().setFromObject(buildSiteFromSpec(s, { bare: true }).roof);
+      expect(box.min.y, `${roof} starts at the wall top`).toBeCloseTo(4, 1);
+      expect(box.max.y - 4, `${roof} height above the walls`).toBeCloseTo(up, 1);
+    }
+  });
+
+  it('every building, roof and structure carries a pick tag for the 3D editor', async () => {
+    const { buildSiteFromSpec } = await import('./site-model');
+    const { emptySpec } = await import('../core/site-spec');
+    const s = emptySpec({ lat: 0, lon: 0 }, 't');
+    s.buildings = [{ id: 'b', name: 'B', pos: { x: 0, z: 0 }, rotDeg: 0, length: 10, width: 8, levels: [{ baseY: 0, height: 3, sides: { n: true, s: true, e: true, w: true }, roof: 'gable', roofRise: 2, partitions: [], doors: {} }] }];
+    s.structures = [{ id: 'st1', kind: 'chimney', name: 'C', x: 20, z: 0, rotDeg: 0, height: 20, size: 1.5 }];
+    s.walls = [{ a: { x: -20, z: 0 }, b: { x: -10, z: 0 }, height: 2, thick: 0.3 }];
+    const picks: string[] = [];
+    buildSiteFromSpec(s, { bare: true }).group.traverse((o) => {
+      const p = o.userData['pick'] as { kind: string } | undefined;
+      if (p) picks.push(p.kind);
+    });
+    expect(picks.sort()).toEqual(['building', 'building', 'fence', 'structure']); // the walls group, the roof group, the fence, the chimney
+  });
+});

@@ -1,4 +1,4 @@
-import { Injectable, computed, inject, signal, untracked, type WritableSignal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal, untracked, type WritableSignal } from '@angular/core';
 import * as THREE from 'three';
 import type { Calibration, GeoPoint } from '../core/models';
 import { setSiteOrigin } from '../core/constants';
@@ -64,11 +64,29 @@ export class SiteService {
   /** The last geocoded search ("Show on map" points the OSM embed here without generating anything). */
 
   constructor() {
+    // A pin / compass / shift changes the live calibration: remember it in the bando, otherwise the next Save or edit
+    // (which re-applies the spec) would silently put the path back.
+    effect(() => {
+      const c = this.calibration.calibration();
+      untracked(() => this.keepCalibration(c));
+    });
     // start where the user left off: the stored active spec, otherwise the blank canvas
     const savedId = readStoredId();
     const restored = savedId ? this.library.load(savedId) : null;
     if (restored) untracked(() => this.applySpec(restored, false));
     else this.editor.load(this.active());
+  }
+
+  private keepCalibration(c: Calibration): void {
+    const a = this.active();
+    if (!a.id) return;
+    const wanted = a.calibration ?? calibrationForSpec(a);
+    if (Math.abs(wanted.rot - c.rot) < 1e-9 && Math.abs(wanted.dx - c.dx) < 1e-9 && Math.abs(wanted.dz - c.dz) < 1e-9) return;
+    a.calibration = { ...c };
+    this.editor.live((s) => {
+      s.calibration = { ...c };
+    });
+    if (this.library.load(a.id)) this.library.save(this.editor.snapshot());
   }
 
   /** Wipe the scene back to the blank canvas (no buildings), keeping the current location. */
@@ -405,7 +423,7 @@ export class SiteService {
     writeStoredId(spec.id);
     setSiteOrigin(spec.origin);
     setTakeoff(spec.droneStart);
-    this.calibration.apply(calibrationForSpec(spec));
+    this.calibration.apply(spec.calibration ?? calibrationForSpec(spec)); // the pilot's own alignment wins over the solved one
     if (resetView) this.scene.resetCamera();
     if (this.scene.host) {
       const site = this.scene.host.setSite(spec);

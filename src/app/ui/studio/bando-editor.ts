@@ -9,16 +9,19 @@ import { placeColumn, type Placement } from '../../core/placement';
 import { RECT_KINDS, STRUCTURE_DEFAULTS } from '../../three/structures';
 import { AiService } from '../../services/ai.service';
 import { FlightService } from '../../services/flight.service';
+import { FlightStore } from '../../state/flight.store';
 import { GeoService } from '../../services/geo.service';
 import { SceneService } from '../../services/scene.service';
 import { MAX_HALF_EXTENT, SiteService } from '../../services/site.service';
 import { StudioService } from '../../services/studio.service';
 import { ToastService } from '../../services/toast.service';
 import { ViewStore } from '../../state/view.store';
+import { speedHsl } from '../../core/math';
 import { checkedFrom, numberFrom, selectedFrom, textFrom } from '../dom';
 import { FloatBox } from '../float-box';
 import { AssistantBox } from './assistant-box';
 import { ElementPreview } from './element-preview';
+import type { SitePick } from '../../three/site-view';
 import { SiteView } from './site-view';
 import type { PreviewTarget } from '../../three/element-preview';
 
@@ -79,6 +82,9 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
           <button [class.on]="!view3d()" (click)="view3d.set(false)">2D</button>
           <button [class.on]="view3d()" (click)="setView3d()">3D</button>
         </div>
+        @if (view3d()) {
+          <label class="lay" title="Show the roofs in the 3D view"><input type="checkbox" [checked]="roofs3d()" (change)="roofs3d.set(checked($event))" /> roofs</label>
+        }
         @if (!view3d()) {
           <button class="btn" [class.on]="indoor()" [disabled]="!b() || !!b()!.frame" (click)="toggleIndoor()" title="Take the roof off and edit one floor of the selected building: walls, doors, windows, voids, columns, stairs">{{ indoor() ? '✓ Editing floors' : 'Edit indoors' }}</button>
           @if (indoor() && b(); as ib) {
@@ -108,7 +114,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
       </label>
       <label class="lay" title="Map opacity"><input type="range" min="0.2" max="1" step="0.05" [value]="studio.mapOpacity()" (input)="setOpacity($event)" /></label>
     </div>
-    @if (mode() === 'model' && !view3d()) {
+    @if (mode() === 'model') {
       <div class="bar tools">
         @for (t of visibleTools(); track t.id) {
           <span class="grp">
@@ -148,7 +154,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
             }
           </span>
         }
-        @if (!indoor() && hasPath()) {
+        @if (!indoor() && hasPath() && !view3d()) {
           <span class="grp">
             <button class="btn" [class.on]="pinMode() === 's'" (click)="armPin('s')" title="Click where the loaded flight started">Pin start</button>
             <button class="btn" [class.on]="pinMode() === 'e'" (click)="armPin('e')" title="Click where the loaded flight ended">Pin end</button>
@@ -178,6 +184,19 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
         >
           @for (p of ed.draft().pads; track $index) {
             <rect [attr.x]="p.x - p.w / 2" [attr.y]="p.z - p.d / 2" [attr.width]="p.w" [attr.height]="p.d" [attr.transform]="'rotate(' + (p.rotDeg ?? 0) + ' ' + p.x + ' ' + p.z + ')'" [attr.fill]="p.color ?? '#888'" opacity="0.55" />
+          }
+          @for (f of pathView(); track f.id) {
+            @for (sg of f.segs; track $index) {
+              <polyline [attr.points]="sg.pts" fill="none" [attr.stroke]="sg.color" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" pointer-events="none" />
+            }
+            @if (f.start; as s0) {
+              <circle [attr.cx]="s0.x" [attr.cy]="s0.z" [attr.r]="7 / ppm()" fill="#3ddc84" stroke="#0b2a17" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none" />
+              <text [attr.x]="s0.x" [attr.y]="s0.z" text-anchor="middle" dominant-baseline="central" [attr.font-size]="9 / ppm()" font-weight="700" fill="#0b2a17" pointer-events="none">S</text>
+            }
+            @if (f.end; as e0) {
+              <circle [attr.cx]="e0.x" [attr.cy]="e0.z" [attr.r]="7 / ppm()" fill="#ff6b6b" stroke="#3a0b0b" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none" />
+              <text [attr.x]="e0.x" [attr.y]="e0.z" text-anchor="middle" dominant-baseline="central" [attr.font-size]="9 / ppm()" font-weight="700" fill="#3a0b0b" pointer-events="none">E</text>
+            }
           }
           @if (zoneRect(); as zr) {
             <rect [attr.x]="zr.x" [attr.y]="zr.z" [attr.width]="zr.w" [attr.height]="zr.d" fill="none" stroke="#ffd166" stroke-width="2" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" />
@@ -349,7 +368,17 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
       }
 
       @if (overlayOn() && view3d()) {
-        <app-site-view [spec]="ed.draft()" [roofHidden]="view.roofHidden()" [frameKey]="ed.draft().id" />
+        <app-site-view
+          [spec]="ed.draft()"
+          [roofHidden]="!roofs3d()"
+          [frameKey]="ed.draft().id"
+          [mode]="tool() === 'select' ? 'select' : 'draw'"
+          [selection]="sel3d()"
+          [flights]="flightList()"
+          [speedMax]="flights.speedMax"
+          (picked)="onPick3d($event)"
+          (ground)="onGround3d($event)"
+        />
       }
       @if (!(overlayOn() && view3d())) {
         <svg class="compass" viewBox="-30 -30 60 60" aria-label="North is up">
@@ -768,7 +797,8 @@ export class BandoEditor {
   protected readonly ai = inject(AiService);
   protected readonly site = inject(SiteService);
   private readonly scene = inject(SceneService);
-  private readonly flights = inject(FlightService);
+  protected readonly flights = inject(FlightService);
+  private readonly flightStore = inject(FlightStore);
   private readonly toast = inject(ToastService);
   protected readonly view = inject(ViewStore);
   protected readonly ed = this.site.editor;
@@ -807,6 +837,10 @@ export class BandoEditor {
   protected readonly mode = signal<'area' | 'model'>('area');
   /** 2D edits the plan on the map; 3D shows the whole bando in an orbit view. */
   protected readonly view3d = signal(false);
+  /** Roofs in the 3D view (its own switch: it does not follow the Hide roof button of the main view). */
+  protected readonly roofs3d = signal(true);
+  /** While a 3D pointer event is replayed through the 2D tool code: the ground point it hit. */
+  private world3d: Pt | null = null;
   protected readonly repN = signal(4);
   protected readonly repS = signal(3);
   protected readonly colN = signal(4);
@@ -986,7 +1020,12 @@ export class BandoEditor {
     return 'drag to rotate · wheel to zoom';
   });
   protected readonly visibleTools = computed(() =>
-    this.tools.filter((t) => (t.where === 'both' || (t.where === 'in') === this.indoor()) && (!t.needsBuilding || (!!this.b() && !this.b()!.frame))),
+    this.tools.filter(
+      (t) =>
+        (t.where === 'both' || (t.where === 'in') === this.indoor()) &&
+        (!t.needsBuilding || (!!this.b() && !this.b()!.frame)) &&
+        (!this.view3d() || ['select', 'building', 'structure', 'tree', 'fence'].includes(t.id)), // on the ground in 3D: what a click can place
+    ),
   );
   protected readonly placing = computed(() => PLACE.includes(this.tool()));
 
@@ -1024,6 +1063,38 @@ export class BandoEditor {
     return null;
   });
   protected readonly pv = computed<Placement | null>(() => this.dragPlacement() ?? this.ghost());
+  /** What is selected, as the 3D view needs it (for the yellow box). */
+  protected readonly sel3d = computed<SitePick | null>(() => {
+    const p = this.pick();
+    if (p?.t === 'tree') return { kind: 'tree', i: p.i };
+    if (p?.t === 'fence') return { kind: 'fence', i: p.i };
+    if (p?.t === 'structure') {
+      const st = this.ed.draft().structures?.[p.i];
+      return st ? { kind: 'structure', id: st.id } : null;
+    }
+    const id = this.ed.selectedId();
+    return id ? { kind: 'building', id } : null;
+  });
+
+  /** Flight paths for the 2D overlay: coloured by speed, thinned to a few hundred points, with start / end markers. */
+  protected readonly flightList = computed(() => {
+    this.flightStore.revision(); // bumped whenever the flights are re-projected (a pin, the compass ...)
+    return this.flights.all;
+  });
+  protected readonly pathView = computed(() =>
+    this.flightList().map((f) => {
+      const step = Math.max(1, Math.floor(f.loc.length / 300));
+      const segs: { pts: string; color: string }[] = [];
+      for (let i = 0; i + step < f.loc.length + step; i += step * 4) {
+        const part = f.loc.slice(i, Math.min(f.loc.length, i + step * 4 + 1)).filter((_, k) => k % step === 0 || i + k === f.loc.length - 1);
+        if (part.length < 2) continue;
+        const sp = f.spd[Math.min(f.spd.length - 1, i + step * 2)] ?? 0;
+        segs.push({ pts: part.map((p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`).join(' '), color: speedHsl(Math.min(1, sp / Math.max(1, this.flights.speedMax))) });
+      }
+      const a = f.loc[0], z = f.loc[f.loc.length - 1];
+      return { id: f.id, segs, start: a ? { x: a.x, z: a.z } : null, end: z ? { x: z.x, z: z.z } : null };
+    }),
+  );
   protected readonly topLevel = computed<LevelSpec | null>(() => {
     const bd = this.b();
     return bd ? (bd.levels[bd.levels.length - 1] ?? null) : null;
@@ -1232,6 +1303,7 @@ export class BandoEditor {
   }
 
   private toWorld(e: { clientX: number; clientY: number }): Pt {
+    if (this.world3d) return this.world3d; // a 3D ground event being replayed through the tool code
     const host = this.wrapEl().nativeElement.getBoundingClientRect();
     const k = this.ppm(), c = this.siteC();
     return { x: c.x + (e.clientX - host.left - host.width / 2) / k, z: c.z + (e.clientY - host.top - host.height / 2) / k };
@@ -1529,6 +1601,42 @@ export class BandoEditor {
 
   protected axisOf = (e: Event): 'x' | 'z' => ((e.target as HTMLSelectElement).value === 'z' ? 'z' : 'x');
 
+  /** A click on the 3D model: select what it hit (or nothing). */
+  protected onPick3d(p: SitePick | null): void {
+    if (!p) {
+      this.pick.set(null);
+      this.ed.select('');
+      return;
+    }
+    if (p.kind === 'building') {
+      this.ed.select(p.id);
+      this.level.set(0);
+      this.pick.set({ t: 'building' });
+    } else if (p.kind === 'structure') {
+      const i = (this.ed.draft().structures ?? []).findIndex((x) => x.id === p.id);
+      if (i >= 0) this.pick.set({ t: 'structure', i });
+    } else if (p.kind === 'fence') this.pick.set({ t: 'fence', i: p.i });
+    else this.pick.set({ t: 'tree', i: p.i });
+  }
+
+  /** A drag / click on the ground in 3D with a tool active: the same code path as in 2D, with the ground point as the pointer. */
+  protected onGround3d(g: { phase: 'down' | 'move' | 'up'; x: number; z: number }): void {
+    const fake = { clientX: 0, clientY: 0, pointerId: 1, shiftKey: false, button: 0, currentTarget: null, stopPropagation: () => undefined, preventDefault: () => undefined } as unknown as PointerEvent;
+    if (Number.isNaN(g.x) && g.phase === 'up') {
+      this.world3d = null;
+      this.up(fake);
+      return;
+    }
+    this.world3d = { x: g.x, z: g.z };
+    try {
+      if (g.phase === 'down') this.bgDown(fake);
+      else if (g.phase === 'move') this.move(fake);
+      else this.up(fake);
+    } finally {
+      this.world3d = null;
+    }
+  }
+
   protected setView3d(): void {
     this.view3d.set(true);
     this.measHover.set(null);
@@ -1575,9 +1683,10 @@ export class BandoEditor {
     const i = this.colI();
     let n = 0;
     this.mutate((b) => {
-      n = columnGrid(b, Math.min(this.level(), b.levels.length - 1), i, this.colS(), this.colS(), 1);
+      n = columnGrid(b, Math.min(this.level(), b.levels.length - 1), i, this.colS(), this.colS(), 0.8);
     }, 0);
-    this.toast.show(n ? `${n} columns added.` : 'No room for more columns with that spacing.');
+    this.pick.set(null);
+    this.toast.show(n ? `Floor filled with ${n} columns, evenly spread and clear of the walls.` : 'No room for columns with that spacing.');
   }
 
   protected convertTo(to: 'greenhouse' | 'building'): void {

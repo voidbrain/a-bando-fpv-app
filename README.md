@@ -19,7 +19,7 @@ Everything runs in the browser (Angular 22, Three.js, signals). There is no back
      voids (water on the ground floor), columns (duplicate, row, fill the floor), stairs and ramps (with the stairwell cut in the
      floor above). While placing, a ghost shows where the thing will go, on a grid in the building's own axes, with guides to
      other columns (same line, equal spacing, rhythm) and distances to walls and neighbours. Only the tools that make sense
-     are shown: outdoor tools while outdoors, floor tools while editing a floor. 2D / 3D switch, compass, measure tool,
+     are shown: outdoor tools while outdoors, floor tools while editing a floor. 2D / 3D switch (3D: click to select, draw and place on the ground, roofs on / off), compass, measure tool, the flight path with start / end markers,
      flight-path start / end pins, floating inspector with a 3D preview of the selection.
 - **AI assistant** (optional): a chat that turns sentences like "3 rooms with doors, close the north windows, add a crane"
   into editor commands. See *AI assistant* below.
