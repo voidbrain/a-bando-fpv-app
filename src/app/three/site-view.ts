@@ -5,7 +5,7 @@ import { PathRenderer } from './path-renderer';
 import { buildSiteFromSpec, type SiteModel } from './site-model';
 
 /** What a click on the 3D model selects. */
-export type SitePick = { kind: 'building'; id: string } | { kind: 'structure'; id: string } | { kind: 'fence'; i: number } | { kind: 'tree'; i: number };
+export type SitePick = { kind: 'building'; id: string } | { kind: 'column'; id: string; li: number; i: number } | { kind: 'wall'; id: string; li: number; i: number } | { kind: 'structure'; id: string } | { kind: 'fence'; i: number } | { kind: 'tree'; i: number };
 
 /**
  * The whole bando in 3D inside the editor: the same model the main view builds, with a mouse-orbit camera.

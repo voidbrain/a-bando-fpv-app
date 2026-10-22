@@ -3,11 +3,11 @@ import { FormsModule } from '@angular/forms';
 import * as L from 'leaflet';
 import { contains, edgesOf, type Pt, type Rect } from '../../core/footprint';
 import { buildingsOverlap, stairsFor, columnGrid, columnRow, convertBuilding, duplicateColumn, duplicateColumns, fillModule, mergeBuildings, overlapsOthers, repeatOpening } from '../../core/building-ops';
-import { addOpening, insideBuilding, listOpenings, moveOpening, outlineOf, previewOpening, patchOpening, removeOpening, reshapeBuilding, resetToRect, resizeOpening, type OpenSeg } from '../../core/openings';
+import { addOpening, insideBuilding, listOpenings, moveOpening, outlineOf, wallsOf, previewOpening, patchOpening, removeOpening, reshapeBuilding, resetToRect, resizeOpening, type OpenSeg } from '../../core/openings';
 import { cloneSpec, uid, type BuildingSpec, type LevelSpec, type LocationInfo, type SiteSpec, type StructureKind, type StructureSpec } from '../../core/site-spec';
 import { autoAlign } from '../../core/align';
 import { anglesAt, fmtLength, lengthOf, nearestSnap, orthoSnap, snapTargets, type Seg } from '../../core/measure';
-import { applyStore } from '../../core/modules';
+import { applyStore, setColumnRows, setFacade, type FacadePattern } from '../../core/modules';
 import { areaOf, nearBuilding, scatterTrees, type ScatterMode } from '../../core/scatter';
 import { placeColumn, type Placement } from '../../core/placement';
 import { RECT_KINDS, STRUCTURE_DEFAULTS } from '../../three/structures';
@@ -30,7 +30,7 @@ import type { SitePick } from '../../three/site-view';
 import { SiteView } from './site-view';
 import type { PreviewTarget } from '../../three/element-preview';
 
-type Tool = 'select' | 'building' | 'structure' | 'stairs' | 'merge' | 'cut' | 'wing' | 'tree' | 'scatter' | 'fence' | 'door' | 'window' | 'wall' | 'void' | 'column' | 'colbox' | 'measure';
+type Tool = 'select' | 'building' | 'structure' | 'stairs' | 'merge' | 'cut' | 'wing' | 'tree' | 'scatter' | 'fence' | 'door' | 'window' | 'wall' | 'void' | 'column' | 'measure';
 type Pick = { t: 'building' } | { t: 'tree'; i: number } | { t: 'opening'; id: string } | { t: 'wall'; i: number } | { t: 'fence'; i: number } | { t: 'void'; i: number } | { t: 'column'; i: number } | { t: 'structure'; i: number } | null;
 type Handle = 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se';
 type Drag =
@@ -53,11 +53,12 @@ type Drag =
   | { t: 'voidDraw'; a: Pt; b: Pt }
   | { t: 'column'; i: number; dx: number; dz: number }
   | { t: 'colBox'; a: Pt; b: Pt }
+  | { t: 'pan'; x: number; y: number }
   | { t: 'frame'; h: Handle }
   | { t: 'frameRot' };
 
 /** Tools that place something on the selected building: while one is active, a click puts the thing where the ghost is. */
-const PLACE: readonly Tool[] = ['door', 'window', 'wall', 'void', 'column', 'colbox', 'stairs', 'cut', 'wing'];
+const PLACE: readonly Tool[] = ['door', 'window', 'wall', 'void', 'column', 'stairs', 'cut', 'wing'];
 const MIN_HALF = 20;
 const M_LAT = 111132;
 const snap = (v: number, step: number): number => Math.round(v / step) * step;
@@ -81,6 +82,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
   host: { class: 'be' },
   template: `
     <div class="bar">
+      <ng-content />
       <div class="seg">
         <button [class.on]="mode() === 'area'" (click)="setMode('area')">1 · Area</button>
         <button [class.on]="mode() === 'model'" [disabled]="!hasModel()" (click)="setMode('model')" [title]="hasModel() ? '' : 'Generate the model first'">2 · Model</button>
@@ -94,7 +96,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
           <label class="lay" title="Show the roofs in the 3D view"><input type="checkbox" [checked]="roofs3d()" (change)="roofs3d.set(checked($event))" /> roofs</label>
         }
         @if (!view3d()) {
-          <button class="btn" [class.on]="indoor()" [disabled]="!b() || !!b()!.frame" (click)="toggleIndoor()" title="Take the roof off and edit one floor of the selected building: walls, doors, windows, voids, columns, stairs">{{ indoor() ? '✓ Editing floors' : 'Edit indoors' }}</button>
+          <button class="btn" [class.on]="indoor()" [disabled]="!b() || !!b()!.frame" (click)="toggleIndoor()" title="Take the roof off and edit one floor of the selected building: walls, doors, windows, voids, columns, stairs">{{ indoor() ? '✓ Indoors' : 'Indoors' }}</button>
           @if (indoor() && b(); as ib) {
             <span class="grp">
               @for (l of ib.levels; track $index) {
@@ -110,11 +112,11 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
       @if (mode() === 'model') {
         <button class="btn" [disabled]="!ed.canUndo()" (click)="undo()" title="Undo (Ctrl+Z)">↶</button>
         <button class="btn" [disabled]="!ed.canRedo()" (click)="redo()" title="Redo">↷</button>
-        <button class="btn" [class.on]="elementsOpen()" (click)="elementsOpen.set(!elementsOpen())" title="List of all buildings, structures, walls and trees (grouped by area), with thumbnails and links">☰ Elements</button>
+        <button class="btn" [class.on]="elementsOpen()" (click)="elementsOpen.set(!elementsOpen())" title="Elements: list of all buildings, structures, walls and trees (grouped by area), with thumbnails and links">☰</button>
         <button class="btn" [class.on]="ai.open()" (click)="ai.open.set(!ai.open())" title="Chat with the AI assistant to edit buildings and interiors">💬 AI @if (ai.busy()) { <i class="spin"></i> }</button>
         <button class="btn primary" (click)="save()">Save</button>
       }
-      <label class="lay" title="Map under the model">map
+      <label class="lay" title="Map under the model">🗺
         <select [value]="studio.basemap()" (change)="setBase($event)">
           <option value="street">Street</option>
           <option value="sat">Satellite</option>
@@ -123,71 +125,6 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
       </label>
       <label class="lay" title="Map opacity"><input type="range" min="0.2" max="1" step="0.05" [value]="studio.mapOpacity()" (input)="setOpacity($event)" /></label>
     </div>
-    @if (mode() === 'model') {
-      <div class="bar tools">
-        @for (t of visibleTools(); track t.id) {
-          <span class="grp">
-            <button class="btn" [class.on]="tool() === t.id" (click)="setTool(t.id)" [title]="t.hint">{{ t.label }}</button>
-            @if (tool() === t.id) {
-              @switch (t.id) {
-                @case ('structure') {
-                  <select class="mini" [value]="structKind()" (change)="structKind.set(structKindOf($event))" title="What to place">
-                    @for (k of structKinds; track k.id) {
-                      <option [value]="k.id" [selected]="k.id === structKind()">{{ k.label }}</option>
-                    }
-                  </select>
-                }
-                @case ('measure') {
-                  <button class="btn" [disabled]="!meas().segs.length" (click)="meas.set({ segs: [], a: null })" title="Remove all measures">Clear</button>
-                }
-                @case ('scatter') {
-                  <select class="mini" [value]="scatterMode()" (change)="scatterMode.set(scatterModeOf($event))" title="Brush shape">
-                    <option value="pen" [selected]="scatterMode() === 'pen'">Pen (stroke)</option>
-                    <option value="rect" [selected]="scatterMode() === 'rect'">Square</option>
-                    <option value="circle" [selected]="scatterMode() === 'circle'">Circle</option>
-                    <option value="lasso" [selected]="scatterMode() === 'lasso'">Lasso</option>
-                  </select>
-                  <label class="lay" title="Average distance between trees">every <input class="mini" type="number" min="2" max="30" step="0.5" [value]="scatterSpacing()" (change)="scatterSpacing.set(num($event))" /> m</label>
-                  @if (scatterMode() === 'pen') {
-                    <label class="lay" title="Width of the pen stroke">width <input class="mini" type="number" min="2" max="60" step="1" [value]="scatterWidth()" (change)="scatterWidth.set(num($event))" /> m</label>
-                  }
-                }
-                @case ('building') {
-                  <label class="lay" title="Snap the new building flush against close neighbours (closes small gaps, straightens small angles)"><input type="checkbox" [checked]="autoAlign()" (change)="autoAlign.set(checked($event))" /> auto-align</label>
-                  <select class="mini" [value]="buildKind()" (change)="buildKind.set(buildKindOf($event))" title="What to draw">
-                    <option value="building" [selected]="buildKind() === 'building'">Building</option>
-                    <option value="greenhouse" [selected]="buildKind() === 'greenhouse'">Greenhouse (arched steel frame)</option>
-                  </select>
-                }
-                @case ('column') {
-                  <select class="mini" [value]="colShape()" (change)="colShape.set(shapeOf($event))" title="Shape of new columns">
-                    <option value="square" [selected]="colShape() === 'square'">square</option>
-                    <option value="round" [selected]="colShape() === 'round'">round</option>
-                  </select>
-                  <label class="lay" title="Column size (side or diameter), metres">⌀ <input type="number" class="mini" min="0.15" step="0.05" [value]="colSize()" (change)="colSize.set(Math.max(0.15, num($event)))" /> m</label>
-                }
-                @case ('stairs') {
-                  <select class="mini" [value]="stairsKind()" (change)="stairsKind.set(stairsKindOf($event))" title="Stairs or a ramp">
-                    <option value="stairs" [selected]="stairsKind() === 'stairs'">stairs</option>
-                    <option value="ramp" [selected]="stairsKind() === 'ramp'">ramp</option>
-                  </select>
-                  @if (level() < (b()?.levels.length ?? 1) - 1) {
-                    <label class="lay" title="Cut a hole in the floor above where the stairs arrive"><input type="checkbox" [checked]="stairwell()" (change)="stairwell.set(checked($event))" /> open floor above</label>
-                  }
-                }
-              }
-            }
-          </span>
-        }
-        @if (!indoor() && hasPath() && !view3d()) {
-          <span class="grp">
-            <button class="btn" [class.on]="pinMode() === 's'" (click)="armPin('s')" title="Click where the loaded flight started">Pin start</button>
-            <button class="btn" [class.on]="pinMode() === 'e'" (click)="armPin('e')" title="Click where the loaded flight ended">Pin end</button>
-          </span>
-        }
-      </div>
-    }
-
     <div class="wrap" #wrap tabindex="0" [class.v3]="view3d() && overlayOn()" (keydown)="key($event)">
       <div class="map" #el></div>
 
@@ -196,6 +133,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
           #svg
           class="ov"
           [class.cap]="captures()"
+          [class.sel]="tool() === 'select'"
           [class.placing]="placing()"
           [class.indoor]="indoor()"
           [attr.viewBox]="vb()"
@@ -295,7 +233,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
                   <line class="hit" [attr.x1]="pt[0].x - bd.length / 2" [attr.y1]="pt[0].z - bd.width / 2" [attr.x2]="pt[1].x - bd.length / 2" [attr.y2]="pt[1].z - bd.width / 2" [attr.stroke]="wallI() === $index ? '#ffd166' : '#f1f4f2'" stroke-width="5" stroke-linecap="round" vector-effect="non-scaling-stroke" (pointerdown)="wallDown($event, $index)" />
                 }
                 @if (drag()?.t === 'wallDraw') {
-                  <line [attr.x1]="wd().a.x - bd.length / 2" [attr.y1]="wd().a.z - bd.width / 2" [attr.x2]="wd().b.x - bd.length / 2" [attr.y2]="wd().b.z - bd.width / 2" stroke="#ffd166" stroke-width="4" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+                  <line [attr.x1]="wd().a.x - bd.length / 2" [attr.y1]="wd().a.z - bd.width / 2" [attr.x2]="wd().b.x - bd.length / 2" [attr.y2]="wd().b.z - bd.width / 2" [attr.stroke]="tc('wall')" stroke-width="4" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
                 }
               }
               @if (indoor() && placing()) {
@@ -307,7 +245,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
                   <rect class="hit" [attr.x]="v.x0 - bd.length / 2" [attr.y]="v.z0 - bd.width / 2" [attr.width]="v.x1 - v.x0" [attr.height]="v.z1 - v.z0" [attr.fill]="v.water ? '#3d86b6' : '#0b0e0c'" fill-opacity="0.65" [attr.stroke]="voidI() === $index ? '#ffd166' : '#8fb7d1'" stroke-width="2" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" (pointerdown)="voidDown($event, $index)" />
                 }
                 @if (colBoxRect(); as cb) {
-                  <rect [attr.x]="cb.x" [attr.y]="cb.z" [attr.width]="cb.w" [attr.height]="cb.d" fill="#ffd166" fill-opacity="0.15" stroke="#ffd166" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" pointer-events="none" />
+                  <rect [attr.x]="cb.x" [attr.y]="cb.z" [attr.width]="cb.w" [attr.height]="cb.d" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" pointer-events="none" />
                 }
                 @for (c of lvl()?.columns ?? []; track $index) {
                   @if (c.round) {
@@ -337,7 +275,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
                   }
                 }
                 @if (drag()?.t === 'voidDraw') {
-                  <rect [attr.x]="vd().x - bd.length / 2" [attr.y]="vd().z - bd.width / 2" [attr.width]="vd().w" [attr.height]="vd().d" fill="#3d86b6" fill-opacity="0.4" stroke="#8fb7d1" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+                  <rect [attr.x]="vd().x - bd.length / 2" [attr.y]="vd().z - bd.width / 2" [attr.width]="vd().w" [attr.height]="vd().d" [attr.fill]="tc('void')" fill-opacity="0.4" [attr.stroke]="tc('void')" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
                 }
               }
               @for (o of openings(); track o.id) {
@@ -361,18 +299,18 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
                 <circle class="hit" [attr.cx]="0" [attr.cy]="-bd.width / 2 - 28 / ppm()" [attr.r]="hr()" fill="#ffd166" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="rotDown($event)" />
               }
               @if (drag()?.t === 'shape') {
-                <rect [attr.x]="sh().x" [attr.y]="sh().z" [attr.width]="sh().w" [attr.height]="sh().d" [attr.fill]="sh().op === 'cut' ? '#ff6b6b' : '#b7ed83'" fill-opacity="0.35" [attr.stroke]="sh().op === 'cut' ? '#ff6b6b' : '#b7ed83'" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+                <rect [attr.x]="sh().x" [attr.y]="sh().z" [attr.width]="sh().w" [attr.height]="sh().d" [attr.fill]="sh().op === 'cut' ? tc('cut') : tc('wing')" fill-opacity="0.35" [attr.stroke]="sh().op === 'cut' ? tc('cut') : tc('wing')" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
               }
             </g>
           }
           @if (drag()?.t === 'bridgeDraw') {
-            <line [attr.x1]="bdw().a.x" [attr.y1]="bdw().a.z" [attr.x2]="bdw().b.x" [attr.y2]="bdw().b.z" stroke="#ffd166" [attr.stroke-width]="7" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" pointer-events="none" />
+            <line [attr.x1]="bdw().a.x" [attr.y1]="bdw().a.z" [attr.x2]="bdw().b.x" [attr.y2]="bdw().b.z" [attr.stroke]="tc('structure')" [attr.stroke-width]="7" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" pointer-events="none" />
           }
           @if (scatterPreview(); as sp) {
-            <polygon [attr.points]="sp" fill="#4f9a4a" fill-opacity="0.22" stroke="#7bd36b" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+            <polygon [attr.points]="sp" [attr.fill]="tc('scatter')" fill-opacity="0.2" [attr.stroke]="tc('scatter')" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
           }
           @if (drag()?.t === 'fenceDraw') {
-            <line [attr.x1]="fd().a.x" [attr.y1]="fd().a.z" [attr.x2]="fd().b.x" [attr.y2]="fd().b.z" stroke="#ffd166" stroke-width="5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+            <line [attr.x1]="fd().a.x" [attr.y1]="fd().a.z" [attr.x2]="fd().b.x" [attr.y2]="fd().b.z" [attr.stroke]="tc('fence')" stroke-width="5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
           }
           @if (drag()?.t === 'draw') {
             <rect [attr.x]="dr().x" [attr.y]="dr().z" [attr.width]="dr().w" [attr.height]="dr().d" fill="#b7ed83" fill-opacity="0.25" stroke="#b7ed83" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
@@ -428,6 +366,74 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
           }
         </svg>
       }
+      @if (mode() === 'model' && overlayOn()) {
+        <div class="palette" role="toolbar" aria-label="Tools">
+          @for (t of visibleTools(); track t.id) {
+            @if (t.sep) {
+              <i class="psep"></i>
+            }
+            <button class="pbtn" [class.on]="tool() === t.id" [style.--tc]="t.color" (click)="setTool(t.id)" [title]="t.name + ' · ' + t.hint">{{ t.icon }}</button>
+          }
+          @if (!indoor() && hasPath() && !view3d()) {
+            <i class="psep"></i>
+            <button class="pbtn" [class.on]="pinMode() === 's'" style="--tc: #ff6b6b" (click)="armPin('s')" title="Pin start · click where the loaded flight started">⚑</button>
+            <button class="pbtn" [class.on]="pinMode() === 'e'" style="--tc: #ff6b6b" (click)="armPin('e')" title="Pin end · click where the loaded flight ended">⚐</button>
+          }
+        </div>
+        @if (tool() !== 'select') {
+          <div class="opts">
+            <b [style.color]="toolColor()">{{ toolName() }}</b>
+                @switch (tool()) {
+                  @case ('structure') {
+                    <select class="mini" [value]="structKind()" (change)="structKind.set(structKindOf($event))" title="What to place">
+                      @for (k of structKinds; track k.id) {
+                        <option [value]="k.id" [selected]="k.id === structKind()">{{ k.label }}</option>
+                      }
+                    </select>
+                  }
+                  @case ('measure') {
+                    <button class="btn" [disabled]="!meas().segs.length" (click)="meas.set({ segs: [], a: null })" title="Remove all measures">Clear</button>
+                  }
+                  @case ('scatter') {
+                    <select class="mini" [value]="scatterMode()" (change)="scatterMode.set(scatterModeOf($event))" title="Brush shape">
+                      <option value="pen" [selected]="scatterMode() === 'pen'">Pen (stroke)</option>
+                      <option value="rect" [selected]="scatterMode() === 'rect'">Square</option>
+                      <option value="circle" [selected]="scatterMode() === 'circle'">Circle</option>
+                      <option value="lasso" [selected]="scatterMode() === 'lasso'">Lasso</option>
+                    </select>
+                    <label class="lay" title="Average distance between trees">every <input class="mini" type="number" min="2" max="30" step="0.5" [value]="scatterSpacing()" (change)="scatterSpacing.set(num($event))" /> m</label>
+                    @if (scatterMode() === 'pen') {
+                      <label class="lay" title="Width of the pen stroke">width <input class="mini" type="number" min="2" max="60" step="1" [value]="scatterWidth()" (change)="scatterWidth.set(num($event))" /> m</label>
+                    }
+                  }
+                  @case ('building') {
+                    <label class="lay" title="Snap the new building flush against close neighbours (closes small gaps, straightens small angles)"><input type="checkbox" [checked]="autoAlign()" (change)="autoAlign.set(checked($event))" /> auto-align</label>
+                    <select class="mini" [value]="buildKind()" (change)="buildKind.set(buildKindOf($event))" title="What to draw">
+                      <option value="building" [selected]="buildKind() === 'building'">Building</option>
+                      <option value="greenhouse" [selected]="buildKind() === 'greenhouse'">Greenhouse (arched steel frame)</option>
+                    </select>
+                  }
+                  @case ('column') {
+                    <select class="mini" [value]="colShape()" (change)="colShape.set(shapeOf($event))" title="Shape of new columns">
+                      <option value="square" [selected]="colShape() === 'square'">square</option>
+                      <option value="round" [selected]="colShape() === 'round'">round</option>
+                    </select>
+                    <label class="lay" title="Column size (side or diameter), metres">⌀ <input type="number" class="mini" min="0.15" step="0.05" [value]="colSize()" (change)="colSize.set(Math.max(0.15, num($event)))" /> m</label>
+                  }
+                  @case ('stairs') {
+                    <select class="mini" [value]="stairsKind()" (change)="stairsKind.set(stairsKindOf($event))" title="Stairs or a ramp">
+                      <option value="stairs" [selected]="stairsKind() === 'stairs'">stairs</option>
+                      <option value="ramp" [selected]="stairsKind() === 'ramp'">ramp</option>
+                    </select>
+                    @if (level() < (b()?.levels.length ?? 1) - 1) {
+                      <label class="lay" title="Cut a hole in the floor above where the stairs arrive"><input type="checkbox" [checked]="stairwell()" (change)="stairwell.set(checked($event))" /> open floor above</label>
+                    }
+                  }
+                }
+
+          </div>
+        }
+      }
       @if (mode() === 'area') {
         <div class="frame" [style.left.px]="fb().l" [style.top.px]="fb().t" [style.width.px]="fb().w" [style.height.px]="fb().h" [style.transform]="'rotate(' + rot() + 'deg)'">
           <div class="rotk" (pointerdown)="frameRotDown($event)" (pointermove)="move($event)" (pointerup)="up($event)" (pointercancel)="up($event)" title="Drag to turn the frame (shift = steps of 15°). Only what is inside the turned frame is used."></div>
@@ -459,9 +465,9 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
       }
 
       @if (mode() === 'model' && overlayOn()) {
-        <app-float-box fid="inspector-v2" title="Inspector" [x]="8" [y]="40" [w]="300" [h]="430">
+        <app-float-box fid="inspector-v3" title="Inspector" [x]="54" [y]="48" [w]="330" [h]="480" [cols]="true">
           @if (previewTarget(); as pt) {
-            <app-element-preview [target]="pt" [key]="previewKey()" [caption]="previewCaption()" />
+            <app-element-preview [target]="pt" [key]="previewKey()" [caption]="previewCaption()" (picked)="onPreviewPick($event)" />
           }
           @switch (pick()?.t) {
             @case ('opening') {
@@ -571,13 +577,34 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
                   @if (lvl(); as l) {
                     <div class="f"><label>wall height <input type="number" min="1" step="0.5" [value]="l.height" (change)="editLevel(setHeight, num($event))" /></label></div>
                   }
-                  @if (!bd.footprint) {
-                    <div class="f" title="Standard warehouse shell on this floor: long walls = repeated 2 lower-panel bays + 1 full-height door, one end all doors, the other all lower panels, 3 rows of columns. Editable afterwards.">
-                      <button class="btn" (click)="storeShell()">▦ Store shell</button>
-                      <label>bay <input type="number" min="2" max="20" step="0.5" [value]="storeBay()" (change)="storeBay.set(num($event))" /> m</label>
-                      <label>columns every <input type="number" min="2" max="40" step="1" [value]="storeStep()" (change)="storeStep.set(num($event))" /> m</label>
+                  <details class="full mods">
+                    <summary>Modules · repeatable blocks <span class="dim small">(floor {{ levelName(level()) }})</span></summary>
+                    <div class="f">
+                      <b>Façade</b>
+                      <select (change)="modSide.set(selVal($event))" title="Which wall">
+                        <option value="all" [selected]="modSide() === 'all'">all walls</option>
+                        <option value="n" [selected]="modSide() === 'n'">north</option><option value="s" [selected]="modSide() === 's'">south</option>
+                        <option value="e" [selected]="modSide() === 'e'">east</option><option value="w" [selected]="modSide() === 'w'">west</option>
+                      </select>
+                      <select (change)="modPattern.set(selVal($event))" title="What each bay is">
+                        <option value="store" [selected]="modPattern() === 'store'">2 panels + 1 door</option>
+                        <option value="panels" [selected]="modPattern() === 'panels'">all lower panels</option>
+                        <option value="doors" [selected]="modPattern() === 'doors'">all full-height doors</option>
+                      </select>
+                      <label title="Distance between piers">bay <input type="number" min="2" max="20" step="0.5" [value]="modBay()" (change)="modBay.set(num($event))" /> m</label>
+                      <button class="btn" (click)="applyFacade()" [disabled]="!!bd.footprint" title="Replace the openings of the wall(s): piers, bays, lintel above. Editable afterwards">Apply</button>
                     </div>
-                  }
+                    <div class="f">
+                      <b>Columns</b>
+                      <label>rows <input type="number" min="1" max="8" step="1" [value]="modRows()" (change)="modRows.set(num($event))" /></label>
+                      <label>every <input type="number" min="2" max="40" step="1" [value]="modStep()" (change)="modStep.set(num($event))" /> m</label>
+                      <label title="Edge rows from the long walls">edge <input type="number" min="1" max="30" step="0.5" [value]="modInset()" (change)="modInset.set(num($event))" /> m</label>
+                      <button class="btn" (click)="applyColumnRows()" title="Replace this floor's columns with rows along the hall (4 rows = 1 - 2 - 1)">Apply</button>
+                    </div>
+                    <div class="f">
+                      <button class="btn" (click)="storeShell()" [disabled]="!!bd.footprint" title="The main store in one go: long walls 2 panels + 1 door, one end all doors, the other all panels, 4 rows of columns. Only for this building.">▦ Main store preset</button>
+                    </div>
+                  </details>
                   @if (topLevel(); as tl) {
                     <div class="f"><span class="dim">roof</span>
                     @if (!bd.footprint) {
@@ -644,9 +671,75 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
     .sp {
       flex: 1;
     }
-    .bar.tools {
-      padding-top: 2px;
-      border-top: 1px solid var(--line);
+    .palette {
+      position: absolute;
+      left: 8px;
+      top: 8px;
+      z-index: 900;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 4px;
+      max-height: calc(100% - 16px);
+      overflow: auto;
+      background: var(--panel-solid);
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      scrollbar-width: none;
+    }
+    .pbtn {
+      position: relative;
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      font-size: 16px;
+      line-height: 1;
+      color: var(--text, #e8efe9);
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .pbtn::after {
+      content: '';
+      position: absolute;
+      right: 3px;
+      bottom: 3px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--tc);
+    }
+    .pbtn:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .pbtn.on {
+      background: rgba(255, 255, 255, 0.13);
+      border-color: var(--tc);
+    }
+    .psep {
+      display: block;
+      height: 1px;
+      margin: 3px 2px;
+      background: var(--line);
+    }
+    .opts {
+      position: absolute;
+      left: 54px;
+      top: 8px;
+      z-index: 900;
+      max-width: calc(100% - 110px);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 10px;
+      padding: 4px 8px;
+      font-size: 12px;
+      background: var(--panel-solid);
+      border: 1px solid var(--line);
+      border-radius: 9px;
     }
     .grp {
       display: inline-flex;
@@ -671,7 +764,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
       font-size: 11px;
     }
     .lay input[type='range'] {
-      width: 70px;
+      width: 56px;
     }
     .wrap {
       position: relative;
@@ -701,6 +794,9 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
     .ov.cap {
       pointer-events: auto;
       cursor: crosshair;
+    }
+    .ov.cap.sel {
+      cursor: default;
     }
     .ov .hit {
       pointer-events: auto;
@@ -745,7 +841,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
       position: absolute;
       z-index: 1100;
       top: 8px;
-      left: 56px; /* clear of the map's zoom [+] [-] buttons */
+      left: 8px;
       right: 56px;
       display: flex;
       gap: 6px;
@@ -757,7 +853,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
       position: absolute;
       z-index: 1100;
       top: 40px;
-      left: 56px;
+      left: 8px;
       right: 56px;
       max-height: 40%;
       overflow: auto;
@@ -841,8 +937,22 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
     .f {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px 10px;
+      gap: 4px 8px;
       align-items: center;
+    }
+    .f {
+      flex: 0 1 auto;
+    }
+    .f.levels,
+    .f.wide {
+      flex: 1 1 100%;
+    }
+    .f > label {
+      min-width: 0;
+    }
+    .f input[type='text'] {
+      min-width: 0;
+      flex: 1;
     }
     .f label {
       display: inline-flex;
@@ -854,6 +964,17 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
     }
     .levels {
       gap: 3px;
+    }
+    .mods {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 3px 6px;
+    }
+    .mods summary {
+      cursor: pointer;
+    }
+    .mods .f {
+      margin-top: 4px;
     }
   `,
 })
@@ -881,25 +1002,29 @@ export class BandoEditor {
   protected readonly handles: readonly Handle[] = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'];
   protected readonly corners: readonly [number, number][] = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
   /** `where`: shown outdoors ('out'), only while editing a floor ('in'), or always. Tools that need a building hide without one. */
-  protected readonly tools: readonly { id: Tool; label: string; hint: string; where: 'out' | 'in' | 'both'; needsBuilding?: boolean }[] = [
-    { id: 'select', label: '↖ Select', hint: 'Select · move · resize · rotate', where: 'both' },
-    { id: 'building', label: '＋ Building', hint: 'Drag a rectangle on the map; it snaps flush to close neighbours unless auto-align is off', where: 'out' },
-    { id: 'structure', label: '▲ Structure', hint: 'Place a tower, bridge, container, vehicle ... (choose the kind next to the button)', where: 'out' },
-    { id: 'tree', label: '＋ Tree', hint: 'Click the map to plant a tree', where: 'out' },
-    { id: 'scatter', label: '🌲 Brush', hint: 'Paint trees with a pen, or fill a square, circle or hand-drawn area with random trees', where: 'out' },
-    { id: 'fence', label: '▭ Fence', hint: 'Drag to draw a free-standing wall or fence', where: 'out' },
-    { id: 'merge', label: '⊎ Merge', hint: 'Then click a touching building to join it into the selected one', where: 'out', needsBuilding: true },
-    { id: 'cut', label: '✂ Cut', hint: 'Cut a notch out of the selected building (U, H, L shapes)', where: 'out', needsBuilding: true },
-    { id: 'wing', label: '⊕ Wing', hint: 'Add a wing to the selected building', where: 'out', needsBuilding: true },
-    { id: 'wall', label: '▬ Wall', hint: 'Draw an interior wall on this floor', where: 'in' },
-    { id: 'door', label: '＋ Door', hint: 'Click a wall of this floor', where: 'in' },
-    { id: 'window', label: '＋ Window', hint: 'Click a wall of this floor', where: 'in' },
-    { id: 'void', label: '▢ Void', hint: 'Drag a hole in this floor (water on the ground floor)', where: 'in' },
-    { id: 'column', label: '● Column', hint: 'Click to place a column: it snaps to the other columns and shows the distances', where: 'in' },
-    { id: 'colbox', label: '▢ Pick columns', hint: 'Drag a box around columns to select them (shift-click adds / removes one). Duplicate and Fill then use the whole selection as the module.', where: 'in', needsBuilding: true },
-    { id: 'stairs', label: '⌸ Stairs', hint: 'Click to place stairs (or a ramp) on this floor', where: 'in' },
-    { id: 'measure', label: '↔ Measure', hint: 'Click point A, then point B · click the line to remove it', where: 'both' },
+  protected readonly tools: readonly { id: Tool; icon: string; name: string; color: string; hint: string; where: 'out' | 'in' | 'both'; needsBuilding?: boolean; sep?: boolean }[] = [
+    { id: 'select', icon: '↖', name: 'Select', color: '#e6eee9', hint: 'Click selects · drag moves / resizes / rotates · indoors, drag on the floor to box-select columns, outside the building to pan', where: 'both' },
+    { id: 'measure', icon: '📏', name: 'Measure', color: '#38d6ff', hint: 'Click point A, then B (magnet to elements) · click a line to remove it', where: 'both' },
+    { id: 'building', icon: '🏠', name: 'Building', color: '#b7ed83', hint: 'Drag a rectangle on the map; it snaps flush to close neighbours unless auto-align is off', where: 'out', sep: true },
+    { id: 'structure', icon: '🏗', name: 'Structure', color: '#f78fb3', hint: 'Tower, bridge, container, vehicle ... (choose the kind in the options)', where: 'out' },
+    { id: 'tree', icon: '🌳', name: 'Tree', color: '#4cd964', hint: 'Click the map to plant a tree', where: 'out' },
+    { id: 'scatter', icon: '🖌', name: 'Tree brush', color: '#00cec9', hint: 'Paint trees with a pen, or fill a square, circle or hand-drawn area with random trees', where: 'out' },
+    { id: 'fence', icon: '🧱', name: 'Fence', color: '#ff9f43', hint: 'Drag to draw a free-standing wall or fence', where: 'out' },
+    { id: 'merge', icon: '⊎', name: 'Merge', color: '#a29bfe', hint: 'Then click a touching (or almost touching) building to join it into the selected one', where: 'out', needsBuilding: true, sep: true },
+    { id: 'cut', icon: '✂', name: 'Cut', color: '#ff6b6b', hint: 'Cut a notch out of the selected building (U, H, L shapes)', where: 'out', needsBuilding: true },
+    { id: 'wing', icon: '⊕', name: 'Wing', color: '#74b9ff', hint: 'Add a wing to the selected building', where: 'out', needsBuilding: true },
+    { id: 'wall', icon: '▬', name: 'Wall', color: '#e1b12c', hint: 'Draw an interior wall on this floor', where: 'in', sep: true },
+    { id: 'door', icon: '🚪', name: 'Door', color: '#55efc4', hint: 'Click a wall of this floor', where: 'in' },
+    { id: 'window', icon: '🪟', name: 'Window', color: '#e056fd', hint: 'Click a wall of this floor', where: 'in' },
+    { id: 'void', icon: '⬚', name: 'Void', color: '#0984e3', hint: 'Drag a hole in this floor (water on the ground floor)', where: 'in' },
+    { id: 'column', icon: '●', name: 'Column', color: '#fab1a0', hint: 'Click to place a column: it snaps to the other columns and shows the distances', where: 'in' },
+    { id: 'stairs', icon: '⌸', name: 'Stairs', color: '#badc58', hint: 'Click to place stairs (or a ramp) on this floor', where: 'in' },
   ];
+  protected readonly toolDef = computed(() => this.tools.find((t) => t.id === this.tool()));
+  protected readonly toolName = computed(() => this.toolDef()?.name ?? '');
+  protected readonly toolColor = computed(() => this.toolDef()?.color ?? '#fff');
+  /** The colour of one tool, so what it draws while you drag matches its palette button. */
+  protected tc = (id: Tool): string => this.tools.find((t) => t.id === id)?.color ?? '#fff';
 
   protected readonly mode = signal<'area' | 'model'>('area');
   /** 2D edits the plan on the map; 3D shows the whole bando in an orbit view. */
@@ -1012,7 +1137,7 @@ export class BandoEditor {
   protected readonly b = this.ed.building;
   protected readonly hasModel = computed(() => !this.studio.isNew() && this.ed.draft().buildings.length + this.ed.draft().trees.length > 0);
   protected readonly overlayOn = computed(() => this.mode() === 'model' && this.hasModel() && this.ed.draft().bearingDeg === 0);
-  protected readonly captures = computed(() => this.tool() !== 'select' || this.pinMode() !== null);
+  protected readonly captures = computed(() => this.tool() !== 'select' || this.pinMode() !== null || this.indoor());
   protected readonly hasPath = computed(() => !!this.flights.active);
   protected readonly atMax = computed(() => this.half().e >= MAX_HALF_EXTENT || this.half().n >= MAX_HALF_EXTENT);
 
@@ -1311,8 +1436,9 @@ export class BandoEditor {
 
   private init(): void {
     const st = this.studio.start();
-    const map = L.map(this.mapEl().nativeElement, { zoomControl: true, minZoom: 15, maxZoom: 21, zoomSnap: 0.25, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false, attributionControl: true, doubleClickZoom: false }).setView([st.lat, st.lon], st.zoom);
+    const map = L.map(this.mapEl().nativeElement, { zoomControl: false, minZoom: 15, maxZoom: 21, zoomSnap: 0.25, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false, attributionControl: true, doubleClickZoom: false }).setView([st.lat, st.lon], st.zoom);
     this.map = map;
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
     this.applyBase(this.studio.basemap(), this.studio.mapOpacity());
     const sync = (): void => {
       const c = map.getCenter();
@@ -1529,6 +1655,17 @@ export class BandoEditor {
     // only reached while the overlay captures (a drawing tool or a pin is armed)
     const p = this.toWorld(e);
     this.capture(e);
+    if (!this.pinMode() && this.tool() === 'select' && this.indoor()) {
+      // indoors the plan owns the pointer: drag on the floor = box-select, outside the building = pan the map
+      const sel = this.b();
+      const l = sel ? this.toLocal(sel, p) : null;
+      if (sel && l && Math.abs(l.x) <= sel.length / 2 && Math.abs(l.z) <= sel.width / 2) {
+        const a = { x: l.x + sel.length / 2, z: l.z + sel.width / 2 };
+        if (!e.shiftKey) this.colSet.set([]);
+        this.drag.set({ t: 'colBox', a, b: { ...a } });
+      } else this.drag.set({ t: 'pan', x: e.clientX, y: e.clientY });
+      return;
+    }
     if (!this.pinMode() && PLACE.includes(this.tool())) {
       const sel = this.b();
       if (sel) this.bgDownSelected(sel, p, this.tool());
@@ -1608,11 +1745,6 @@ export class BandoEditor {
       const l = this.toLocal(bd, p);
       const a = { x: Math.min(bd.length, Math.max(0, snap(l.x + bd.length / 2, 0.5))), z: Math.min(bd.width, Math.max(0, snap(l.z + bd.width / 2, 0.5))) };
       this.drag.set({ t: 'voidDraw', a, b: { ...a } });
-    } else if (t === 'colbox') {
-      const l = this.toLocal(bd, p);
-      const a = { x: l.x + bd.length / 2, z: l.z + bd.width / 2 };
-      this.colSet.set([]);
-      this.drag.set({ t: 'colBox', a, b: { ...a } });
     } else if (t === 'column') this.columnClick(bd, p);
     else if (t === 'stairs') this.placeStairsAt(bd);
     else if (t === 'cut' || t === 'wing') {
@@ -1741,6 +1873,12 @@ export class BandoEditor {
   protected axisOf = (e: Event): 'x' | 'z' => ((e.target as HTMLSelectElement).value === 'z' ? 'z' : 'x');
 
   /** A click on the 3D model: select what it hit (or nothing). */
+  /** A click on a column / wall inside the inspector's 3D preview selects it in the editor too. */
+  protected onPreviewPick(p: { kind: 'column' | 'wall'; i: number }): void {
+    this.colSet.set([]);
+    this.pick.set(p.kind === 'column' ? { t: 'column', i: p.i } : { t: 'wall', i: p.i });
+  }
+
   protected onPick3d(p: SitePick | null): void {
     if (!p) {
       this.pick.set(null);
@@ -1754,6 +1892,12 @@ export class BandoEditor {
     } else if (p.kind === 'structure') {
       const i = (this.ed.draft().structures ?? []).findIndex((x) => x.id === p.id);
       if (i >= 0) this.pick.set({ t: 'structure', i });
+    } else if (p.kind === 'column' || p.kind === 'wall') {
+      // an element of one floor: select its building, show that floor and pick the element (the inspector previews it in place)
+      this.ed.select(p.id);
+      this.level.set(p.li);
+      this.colSet.set([]);
+      this.pick.set(p.kind === 'column' ? { t: 'column', i: p.i } : { t: 'wall', i: p.i });
     } else if (p.kind === 'fence') this.pick.set({ t: 'fence', i: p.i });
     else this.pick.set({ t: 'tree', i: p.i });
   }
@@ -2205,6 +2349,11 @@ export class BandoEditor {
         this.drag.set({ ...d, b: { x: Math.min(bd.length, Math.max(0, snap(l.x + bd.length / 2, 0.5))), z: Math.min(bd.width, Math.max(0, snap(l.z + bd.width / 2, 0.5))) } });
         break;
       }
+      case 'pan': {
+        this.map?.panBy([d.x - e.clientX, d.y - e.clientY], { animate: false });
+        this.drag.set({ t: 'pan', x: e.clientX, y: e.clientY });
+        break;
+      }
       case 'colBox': {
         if (!bd) break;
         const l = this.toLocal(bd, p);
@@ -2276,9 +2425,10 @@ export class BandoEditor {
     } else if (d.t === 'colBox' && bd) {
       const x0 = Math.min(d.a.x, d.b.x), x1 = Math.max(d.a.x, d.b.x), z0 = Math.min(d.a.z, d.b.z), z1 = Math.max(d.a.z, d.b.z);
       const hit = (this.lvl()?.columns ?? []).map((c, i) => (c.x >= x0 && c.x <= x1 && c.z >= z0 && c.z <= z1 ? i : -1)).filter((i) => i >= 0);
-      this.colSet.set(hit);
-      this.pick.set(hit.length ? { t: 'column', i: hit[hit.length - 1]! } : { t: 'building' });
-      this.toast.show(hit.length ? `${hit.length} column(s) selected. Duplicate repeats the group; Fill floor continues its grid.` : 'No columns in that box.');
+      const added = e.shiftKey ? [...new Set([...this.colIdxs(), ...hit])] : hit;
+      this.colSet.set(added);
+      this.pick.set(added.length ? { t: 'column', i: added[added.length - 1]! } : { t: 'building' });
+      if (hit.length > 1) this.toast.show(`${hit.length} columns selected. Duplicate repeats the group; Fill floor continues its grid.`);
     } else if (d.t === 'scatter') {
       const poly = areaOf(this.scatterMode(), d.pts, this.scatterWidth());
       const live = this.ed.draft();
@@ -2431,11 +2581,32 @@ export class BandoEditor {
     this.applyNow();
   }
 
-  protected readonly storeBay = signal(5);
-  protected readonly storeStep = signal(10);
+  protected readonly modSide = signal('all');
+  protected readonly modPattern = signal('store');
+  protected readonly modBay = signal(5);
+  protected readonly modRows = signal(4);
+  protected readonly modStep = signal(10);
+  protected readonly modInset = signal(4);
+  protected selVal = (e: Event): string => (e.target as HTMLSelectElement).value;
+  protected applyFacade(): void {
+    let n = 0;
+    this.mutate((b) => {
+      const li = Math.min(this.level(), b.levels.length - 1);
+      for (const w of wallsOf(b)) if (this.modSide() === 'all' || w.key === this.modSide()) n += setFacade(b, li, w, this.modPattern() as FacadePattern, { bay: this.modBay() });
+    }, 0);
+    this.toast.show(n ? `${n} bays made.` : 'No wall long enough for that bay size.');
+  }
+  protected applyColumnRows(): void {
+    let n = 0;
+    this.mutate((b) => {
+      n = setColumnRows(b, Math.min(this.level(), b.levels.length - 1), { rows: this.modRows(), step: this.modStep(), inset: this.modInset() });
+    }, 0);
+    this.colSet.set([]);
+    this.toast.show(n ? `${n} columns placed.` : 'No room for columns.');
+  }
   protected storeShell(): void {
     this.mutate((b) => {
-      applyStore(b, Math.min(this.level(), b.levels.length - 1), { bay: this.storeBay(), step: this.storeStep() });
+      applyStore(b, Math.min(this.level(), b.levels.length - 1), { bay: this.modBay(), step: this.modStep(), rows: this.modRows(), inset: this.modInset() });
     }, 0);
     this.toast.show('Store shell applied to this floor. Doors, panels and columns are still editable one by one.');
   }

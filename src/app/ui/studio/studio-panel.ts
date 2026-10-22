@@ -46,11 +46,10 @@ import { BandoEditor } from './bando-editor';
         </div>
       } @else {
         <div class="zone">
-          <div class="row">
+          <app-bando-editor>
             <button class="btn" (click)="studio.back()">← Bandos</button>
-            <input type="text" class="grow" [ngModel]="studio.name()" (ngModelChange)="studio.name.set($event)" placeholder="Bando name" aria-label="Bando name" />
-          </div>
-          <app-bando-editor />
+            <input type="text" class="name" [ngModel]="studio.name()" (ngModelChange)="studio.name.set($event)" placeholder="Bando name" aria-label="Bando name" />
+          </app-bando-editor>
         </div>
       }
     </app-panel>
@@ -61,6 +60,9 @@ import { BandoEditor } from './bando-editor';
       flex-direction: column;
       flex: 1 1 auto;
       min-height: 0;
+    }
+    .name {
+      width: 180px;
     }
     .list {
       display: flex;

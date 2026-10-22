@@ -24,7 +24,7 @@ import { PANEL_BY_ID, type PanelId } from '../panel-defs';
     '[style.width.px]': 'panelWidth()',
     // collapsed: drop the remembered height so the box hugs the title bar instead of staying big over the page;
     // expanded (or ghost-collapsed): exactly the remembered / default height — never the transient content height.
-    '[style.height]': 'state().minimized ? "auto" : panelHeight()',
+    '[style.height.px]': 'state().minimized ? null : panelHeight()',
     '(pointerdown)': 'raise(); gripDown($event)',
     '(document:pointerup)': 'sizeCommit()',
     '(document:pointercancel)': 'sizeCommit()',

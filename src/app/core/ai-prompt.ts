@@ -74,7 +74,7 @@ Commands (all fields optional except op; distances in metres; "position" and x0.
 - add_columns: pattern (row|grid), count, spacing, axis (length|width), size, level. convert: to (greenhouse|building): the building is rebuilt, its interior is lost.
 - set_facade: facade (doors = every bay a full-height door, panels = every bay a lower panel with an opening above, store = repeated 2 panels + 1 door), side (omit = all walls), bay (metres between piers, default 5), level.
 - set_columns: rows (default 3), step (metres between columns along the hall), inset (edge rows from the long walls), size, level. Replaces the columns of that floor.
-- industrial_store: the standard warehouse shell on a rectangular building (long walls = repeated 2 panels + 1 door, one end all doors, the other all lower panels, 3 rows of columns). Optional bay, rows, step, inset, size, level.
+- industrial_store: the standard warehouse shell on a rectangular building (long walls = repeated 2 panels + 1 door, one end all doors, the other all lower panels, 4 rows of columns). Optional bay, rows, step, inset, size, level.
 "building" is the building's name; leave it out for the selected one.
 
 Rules: use only these commands. Do not invent buildings. Prefer a few simple commands. If the request is unclear or impossible, return "commands": [] and ask one short question in "reply". Windows go on walls, doors on walls; a door gap is the way to connect rooms.

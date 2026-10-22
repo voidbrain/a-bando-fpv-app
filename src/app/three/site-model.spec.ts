@@ -142,3 +142,18 @@ describe('roofs sit on top of the walls', () => {
     expect(picks.sort()).toEqual(['building', 'building', 'fence', 'structure']); // the walls group, the roof group, the fence, the chimney
   });
 });
+
+/** Regression: a wall with several openings put its pieces at the wrong lengths, so slabs stuck out past the building. */
+describe('walls with several openings', () => {
+  it('stay inside the building outline', () => {
+    const s = emptySpec({ lat: 45, lon: 12 }, 'T');
+    s.buildings = [{ id: 'b', name: 'B', pos: { x: 0, z: 0 }, rotDeg: 0, length: 30, width: 12, levels: [{ baseY: 0, height: 5, sides: { n: true, s: true, e: true, w: true }, doors: { n: [{ kind: 'door', c: 5, w: 3, h: 4 }, { kind: 'door', c: 15, w: 3, h: 4 }, { kind: 'window', c: 25, w: 3, h: 1.5, sill: 1 }] }, partitions: [], roof: 'flat', roofRise: 0 }] }];
+    s.trees = [];
+    s.pads = [];
+    const box = new THREE.Box3().setFromObject(buildSiteFromSpec(s, { bare: true }).group);
+    expect(box.min.x).toBeGreaterThan(-15.6);
+    expect(box.max.x).toBeLessThan(15.6);
+    expect(box.min.z).toBeGreaterThan(-6.6);
+    expect(box.max.z).toBeLessThan(6.6);
+  });
+});

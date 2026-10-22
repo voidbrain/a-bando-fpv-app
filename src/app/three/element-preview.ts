@@ -149,6 +149,10 @@ export class PreviewRenderer {
   private lastInput = 0;
   /** Turn slowly when left alone (can be stopped). */
   spin = true;
+  /** Called when a column or interior wall is clicked (not dragged). */
+  onPick: ((p: { kind: 'column' | 'wall'; i: number }) => void) | null = null;
+  private readonly ray = new THREE.Raycaster();
+  private downAt: { x: number; y: number } | null = null;
   private raf = 0;
   private last = 0;
   private dragging: { x: number; y: number } | null = null;
@@ -168,6 +172,7 @@ export class PreviewRenderer {
       this.off.push(() => canvas.removeEventListener(t, f as EventListener));
     };
     on('pointerdown', (e) => {
+      this.downAt = { x: e.clientX, y: e.clientY };
       this.dragging = { x: e.clientX, y: e.clientY };
       canvas.setPointerCapture(e.pointerId);
       this.lastInput = performance.now();
@@ -179,7 +184,12 @@ export class PreviewRenderer {
       this.dragging = { x: e.clientX, y: e.clientY };
       this.lastInput = performance.now();
     });
-    on('pointerup', () => (this.dragging = null));
+    on('pointerup', (e) => {
+      this.dragging = null;
+      const d = this.downAt;
+      this.downAt = null;
+      if (d && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 4) this.pickAt(e);
+    });
     on('pointercancel', () => (this.dragging = null));
     on('wheel', (e) => {
       e.preventDefault();
@@ -187,6 +197,22 @@ export class PreviewRenderer {
       this.lastInput = performance.now();
     }, { passive: false });
     this.raf = requestAnimationFrame(this.tick);
+  }
+
+  /** Click on a column / interior wall of the previewed floor: report which one. */
+  private pickAt(e: PointerEvent): void {
+    if (!this.content || !this.onPick) return;
+    const r = this.canvas.getBoundingClientRect();
+    this.ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), this.camera);
+    for (const hit of this.ray.intersectObject(this.content, true)) {
+      for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) {
+        const p = o.userData['pick'] as { kind?: string; i?: number } | undefined;
+        if (p && (p.kind === 'column' || p.kind === 'wall') && typeof p.i === 'number') {
+          this.onPick?.({ kind: p.kind, i: p.i });
+          return;
+        }
+      }
+    }
   }
 
   private minDist = 2;

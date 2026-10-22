@@ -46,11 +46,11 @@ describe('building modules', () => {
     expect(north.length).toBe(6);
     expect(north.every((x) => x.kind === 'window' && x.sill === 1.5)).toBe(true);
     expect(south.every((x) => x.kind === 'door')).toBe(true);
-    // 3 rows x 5 columns (every 10 m, none within 1 m of the end), nothing doubled
+    // 4 rows (1 - 2 - 1) x 5 columns (every 10 m, none within 1 m of the end), nothing doubled
     const cols = b.levels[0]!.columns!;
-    expect(cols.length).toBe(15);
-    expect(new Set(cols.map((c) => `${c.x}/${c.z}`)).size).toBe(15);
-    expect(cols.filter((c) => Math.abs(c.x - 15) < 0.01).length).toBe(5);
+    expect(cols.length).toBe(20);
+    expect(new Set(cols.map((c) => `${c.x}/${c.z}`)).size).toBe(20);
+    expect(new Set(cols.map((c) => c.x)).size).toBe(4); // an edge row each side + two in the middle
   });
 
   it('running the preset twice gives the same result', () => {

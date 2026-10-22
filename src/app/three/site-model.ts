@@ -139,7 +139,7 @@ function buildSide(ctx: Ctx, b: BuildingSpec, l: LevelSpec, side: 'n' | 's' | 'e
   };
   let p = 0;
   for (const o of (l.doors[side] ?? []).slice().sort((x, y) => x.c - y.c)) {
-    wall(p, o.c - o.w / 2, l.height / 2, l.height);
+    wall(p, o.c - o.w / 2 - p, l.height / 2, l.height);
     const gy0 = o.kind === 'door' ? 0 : Math.min(l.height - 0.2, o.sill ?? Math.max(0.4, l.height * 0.75));
     const gy1 = Math.min(l.height, gy0 + o.h);
     if (gy0 > 0) wall(o.c - o.w / 2, o.w, gy0 / 2, gy0);
@@ -189,14 +189,15 @@ function buildWalls(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.Objec
       if (l.sides[side]) buildSide(ctx, b, l, side, target);
     }
   }
-  for (const [a, c] of l.partitions) {
+  const li = Math.max(0, b.levels.indexOf(l));
+  l.partitions.forEach(([a, c], pi) => {
     const len = Math.hypot(c.x - a.x, c.z - a.z);
-    if (len < 0.3) continue;
+    if (len < 0.3) return;
     const mx = (a.x + c.x) / 2 - b.length / 2, mz = (a.z + c.z) / 2 - b.width / 2;
     const my = l.baseY + l.height / 2;
-    if (Math.abs(a.x - c.x) < 0.01) ctx.addBox(target, mx, my, mz, 0.3, l.height, len, ctx.mat.wall, true, true);
-    else ctx.addBox(target, mx, my, mz, len, l.height, 0.3, ctx.mat.wall, true, true);
-  }
+    const m = Math.abs(a.x - c.x) < 0.01 ? ctx.addBox(target, mx, my, mz, 0.3, l.height, len, ctx.mat.wall, true, true) : ctx.addBox(target, mx, my, mz, len, l.height, 0.3, ctx.mat.wall, true, true);
+    m.userData['pick'] = { kind: 'wall', id: b.id, li, i: pi };
+  });
 }
 
 function buildRoof(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.Object3D): void {
@@ -263,16 +264,19 @@ function buildFloorAndColumns(ctx: Ctx, b: BuildingSpec, l: LevelSpec, inner: TH
     for (const v of voids) if (v.water) ctx.addBox(inner, (v.x0 + v.x1) / 2, 0.03, (v.z0 + v.z1) / 2, v.x1 - v.x0, 0.06, v.z1 - v.z0, water, false, false);
   }
   const colMat = material('#b8b4a8');
-  for (const c of l.columns ?? []) {
+  const li = Math.max(0, b.levels.indexOf(l));
+  (l.columns ?? []).forEach((c, ci) => {
     const cx = c.x - L / 2, cz = c.z - W / 2, y = l.baseY + l.height / 2;
+    const tag = { kind: 'column', id: b.id, li, i: ci }; // what a click on it in the editor selects
     if (c.round) {
       const cyl = new THREE.Mesh(new THREE.CylinderGeometry(c.size / 2, c.size / 2, l.height, 14), colMat);
       cyl.castShadow = true;
       cyl.receiveShadow = true;
+      cyl.userData['pick'] = tag;
       ctx.addMesh(inner, cyl, cx, y, cz);
       ctx.addBox(inner, cx, y, cz, c.size, l.height, c.size, colMat, true, false).visible = false; // the collision box
-    } else ctx.addBox(inner, cx, y, cz, c.size, l.height, c.size, colMat, true, true);
-  }
+    } else ctx.addBox(inner, cx, y, cz, c.size, l.height, c.size, colMat, true, true).userData['pick'] = tag;
+  });
 }
 
 /** Greenhouse tunnel: elliptical glass vault (middle third torn away), steel ribs every ~2.5 m, bar-only ends. */

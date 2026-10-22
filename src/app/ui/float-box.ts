@@ -31,7 +31,7 @@ interface Geo {
       <button (pointerdown)="$event.stopPropagation()" (click)="open.set(!open())" [title]="open() ? 'Collapse' : 'Expand'">{{ open() ? '▾' : '▸' }}</button>
     </header>
     @if (open()) {
-      <div class="body"><ng-content /></div>
+      <div class="body" [class.cols]="cols()"><ng-content /></div>
       <div class="blgrip" title="Drag to resize" (pointerdown)="blDown($event)" (pointermove)="blMove($event)" (pointerup)="blUp()" (pointercancel)="blUp()"></div>
     }
   `,
@@ -95,6 +95,19 @@ interface Geo {
       color: var(--dim);
       cursor: pointer;
     }
+    .body.cols {
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-content: flex-start;
+      gap: 5px 8px;
+    }
+    .body.cols > * {
+      min-width: 0;
+    }
+    .body.cols > .dim,
+    .body.cols > .full {
+      flex: 1 1 100%;
+    }
     .body {
       flex: 1;
       min-height: 0;
@@ -116,6 +129,8 @@ export class FloatBox {
   /** The smallest size the box may have (a chat box is useless below ~300 × 280). */
   readonly minW = input(160);
   readonly minH = input(60);
+  /** Lay the content out in rows that wrap, so short controls sit side by side. */
+  readonly cols = input(false);
 
   protected readonly open = signal(true);
   private ro: ResizeObserver | null = null;

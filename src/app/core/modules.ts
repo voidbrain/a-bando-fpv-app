@@ -6,7 +6,7 @@ import type { BuildingSpec } from './site-spec';
  * They are plain functions over the same data the mouse tools edit (openings and columns), so everything stays
  * editable afterwards. The "industrial store" preset is the standard warehouse shell: long walls with a repeated
  * module of two lower-panel bays + one full-height door, one end wall all lower panels, the other all doors, and
- * three rows of columns down the hall.
+ * four rows of columns (1 - 2 - 1) down the hall.
  */
 export type FacadePattern = 'doors' | 'panels' | 'store';
 export const FACADE_PATTERNS: readonly FacadePattern[] = ['doors', 'panels', 'store'];
@@ -130,6 +130,7 @@ export function applyStore(b: BuildingSpec, li: number, o: StoreOpts = {}): stri
     out.push(`${setFacade(b, li, doorsOnMax ? last : first, 'doors', o)} door bays on one end wall`);
     out.push(`${setFacade(b, li, doorsOnMax ? first : last, 'panels', o)} panel bays on the other end wall`);
   }
-  out.push(`${setColumnRows(b, li, o)} columns`);
+  // 1 - 2 - 1: an edge row on each side and a pair in the middle, so four rows unless told otherwise
+  out.push(`${setColumnRows(b, li, { ...o, rows: o.rows ?? 4 })} columns`);
   return out;
 }

@@ -123,3 +123,11 @@ npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
 - Columns: `colSet` (+ primary pick) is the selection; `duplicateColumns` copies it as a module, `fillModule` continues its lattice over the floor. The "Pick columns" tool rubber-bands.
 - `AiService.changes`: one entry per command that changed something, with a link (`show`) that selects the building, opens the floor and flies the map there, a reviewed flag and `acceptAll`.
 - `ui/studio/elements-box.ts`: list of all elements with outline thumbnails; trees are grouped in 60 m cells.
+
+## Tool palette, modules, picking (patch 3)
+- The 2D/3D editor has a vertical tool palette (`tools` in `bando-editor.ts`). Every tool has its own colour (`tc(id)`); never reuse a colour between tools or with the area frame. Tool options show in the `.opts` chip bar.
+- Select is the default tool: click selects, drag on empty floor = marquee (columns indoors), drag on the map = pan. There is no separate "pick columns" tool.
+- Repeatable blocks live in the Modules section (columns rows, façade pattern, bay). "Main store preset" (`applyStore`, 4 rows = 1-2-1) is only a shortcut composing those blocks; it is not applied to every building.
+- 3D picks: columns and partitions carry `userData.pick` (`SitePick` kinds `column`/`wall`); the inspector preview forwards clicks through `onPick`.
+- Lesson: `buildSide` in `site-model.ts` once built wall segments too long when a side had 2+ openings (walls reached neighbouring buildings). Covered by "walls with several openings stay inside the building outline".
+- Lesson: panel height must be bound as `[style.height.px]`; a unit-less `[style.height]` is ignored.
