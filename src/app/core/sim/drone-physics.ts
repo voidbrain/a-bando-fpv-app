@@ -106,7 +106,7 @@ export function stepDrone(d: DroneState, dt: number, input: PilotInput, cfg: Con
       .normalize();
   }
 
-  const ground = world?.groundAt?.(d.p.x, d.p.z) ?? 0;
+  const ground = world?.groundAt?.(d.p.x, d.p.z, d.p.y) ?? 0;
   // On the ground the drone levels itself and keeps its heading.
   if (!d.armed && d.p.y < ground + 0.1) {
     d.yaw = eulerYXZ(d.q).y;
@@ -143,7 +143,7 @@ export function stepDrone(d: DroneState, dt: number, input: PilotInput, cfg: Con
     d.p.y = water + 0.05;
     d.v.set(0, 0, 0);
   }
-  const floor = (world?.groundAt?.(d.p.x, d.p.z) ?? 0) + DRONE_REST_HEIGHT;
+  const floor = (world?.groundAt?.(d.p.x, d.p.z, d.p.y) ?? 0) + DRONE_REST_HEIGHT;
   if (d.p.y < floor) {
     d.p.y = floor;
     if (d.v.y < -GROUND_CRASH_SPEED) crashed = true;

@@ -195,6 +195,23 @@ export interface WaterSpec {
   level?: number;
 }
 
+/**
+ * Something under the ground: a tunnel, culvert, underpass, bunker or basement. A prism: an outline on the plan, an inside
+ * floor and ceiling height, and a wall / slab thickness. The terrain is cut wherever it passes through the inside, so
+ * the openings (portals) appear by themselves where the ground is between the floor and the ceiling.
+ */
+export interface UndergroundSpec {
+  id: string;
+  name: string;
+  outline: Vec2[];
+  floor: number;
+  ceiling: number;
+  shape: 'box' | 'pipe' | 'vault';
+  wall: number;
+  /** Water in the bottom (culverts), metres; 0 / absent = dry. */
+  water?: number;
+}
+
 /** A rectangular map area: centre and half extents (metres) east-west / north-south. */
 export interface ZoneSpec {
   lat: number;
@@ -243,6 +260,8 @@ export interface SiteSpec {
   surfaces?: SurfaceSpec[];
   /** Ponds, canals, basins. */
   waters?: WaterSpec[];
+  /** Tunnels, culverts, bunkers, basements. */
+  underground?: UndergroundSpec[];
   /** Ground shape (real elevation + the pilot's strokes). Absent = flat ground at y = 0. */
   terrain?: TerrainSpec;
   /** Two landmarks used to fit logged GPS paths onto the model (model corners ↔ real corners). */

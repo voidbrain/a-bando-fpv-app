@@ -1,6 +1,8 @@
 import type { Vec3 } from '../math3d';
 import { heightAt, type HeightGrid } from '../terrain';
 import { insidePolygon } from '../layers';
+import type { UndergroundSpec } from '../site-spec';
+import { floorUnder } from '../underground';
 
 /** Axis-aligned box [x0, x1, y0, y1, z0, z1, isRoof] in unscaled model coordinates. */
 export type SolidBox = readonly [number, number, number, number, number, number, boolean];
@@ -10,8 +12,8 @@ export type TreeCylinder = readonly [number, number, number, number, number?];
 /** Anything the drone can bump into. Implemented by {@link SiteCollider}; tests can supply a fake. */
 export interface CollisionWorld {
   hit(p: Vec3): boolean;
-  /** Ground height under (x, z), world (scaled) metres. Absent = flat at 0. */
-  groundAt?(x: number, z: number): number;
+  /** Ground height under (x, z), world (scaled) metres; with `y`, a tunnel floor when the point is inside one. Absent = flat at 0. */
+  groundAt?(x: number, z: number, y?: number): number;
   /** Water surface under (x, z), world metres, or null where there is no water. Touching it is a crash. */
   waterAt?(x: number, z: number): number | null;
 }
@@ -34,6 +36,8 @@ export class SiteCollider implements CollisionWorld {
     readonly ground: HeightGrid | null = null,
     /** Water basins (unscaled): outline and surface level. */
     readonly waters: readonly { pts: readonly { x: number; z: number }[]; level: number }[] = [],
+    /** Underground volumes (unscaled): inside one, the floor is its own, not the terrain above. */
+    readonly underground: readonly UndergroundSpec[] = [],
   ) {}
 
   waterAt(x: number, z: number): number | null {
@@ -42,8 +46,12 @@ export class SiteCollider implements CollisionWorld {
     return null;
   }
 
-  groundAt(x: number, z: number): number {
+  groundAt(x: number, z: number, y?: number): number {
     const k = this.scale;
+    if (y !== undefined && this.underground.length) {
+      const f = floorUnder(this.underground, x / k, z / k, y / k);
+      if (f !== null) return f * k;
+    }
     return heightAt(this.ground, x / k, z / k) * k;
   }
 

@@ -238,3 +238,15 @@ describe('drone and water', () => {
     expect(d.p.y).toBeCloseTo(0.55, 2);
   });
 });
+
+describe('drone in a tunnel', () => {
+  it('rests on the tunnel floor under a hill instead of being pushed up onto the hill', () => {
+    const grid = buildHeights({ cell: 1, half: { e: 60, n: 60 }, strokes: [{ op: 'hill', pts: [{ x: 0, z: 0 }], radius: 35, strength: 10 }] }).grid;
+    const tunnel = { id: 't', name: 'T', outline: [{ x: -45, z: -2 }, { x: 45, z: -2 }, { x: 45, z: 2 }, { x: -45, z: 2 }], floor: -0.5, ceiling: 3, shape: 'box' as const, wall: 0.4 };
+    const world = new SiteCollider([], [], grid, [], [tunnel]);
+    const d = createDroneState(1, { x: 0, z: 0, y: -0.5 });
+    run(d, 1, neutral(), world);
+    expect(d.p.y).toBeLessThan(1);
+    expect(d.p.y).toBeGreaterThan(-0.5);
+  });
+});

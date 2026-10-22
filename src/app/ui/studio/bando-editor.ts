@@ -5,12 +5,13 @@ import * as L from 'leaflet';
 import { contains, edgesOf, type Pt, type Rect } from '../../core/footprint';
 import { buildingsOverlap, stairsFor, columnGrid, columnRow, convertBuilding, duplicateColumn, duplicateColumns, fillModule, mergeBuildings, overlapsOthers, repeatOpening } from '../../core/building-ops';
 import { addOpening, insideBuilding, listOpenings, moveOpening, outlineOf, wallsOf, previewOpening, patchOpening, removeOpening, reshapeBuilding, resetToRect, resizeOpening, type OpenSeg } from '../../core/openings';
-import { cloneSpec, uid, type BuildingSpec, type LevelSpec, type LocationInfo, type RoadKind, type RoadSpec, type SiteSpec, type StructureKind, type StructureSpec, type SurfaceKind } from '../../core/site-spec';
+import { cloneSpec, uid, type BuildingSpec, type LevelSpec, type LocationInfo, type RoadKind, type RoadSpec, type SiteSpec, type StructureKind, type StructureSpec, type SurfaceKind, type UndergroundSpec } from '../../core/site-spec';
 import { autoAlign, magnetAngle } from '../../core/align';
 import { columnsInLine, pointsInside, treeZones } from '../../core/elements';
 import { FENCES, fenceDef, newFence, setFenceMaterial, type FenceMaterial } from '../../core/fences';
 import { areaCorners } from '../../core/areas';
 import { ROADS, SURFACES, WATER_COLOR, roadDef, simplifyPath, surfaceDef } from '../../core/layers';
+import { newTunnel, tunnelOutline } from '../../core/underground';
 import { contourPaths, defaultTerrain, type Falloff, type TerrainOp, type TerrainStroke } from '../../core/terrain';
 import { siteGround } from '../../core/site-ground';
 import { PickMenu, type PickOption } from './pick-menu';
@@ -39,8 +40,8 @@ import type { SitePick } from '../../three/site-view';
 import { SiteView } from './site-view';
 import type { PreviewTarget } from '../../three/element-preview';
 
-type Tool = 'select' | 'building' | 'structure' | 'stairs' | 'merge' | 'cut' | 'wing' | 'tree' | 'scatter' | 'fence' | 'door' | 'window' | 'wall' | 'void' | 'column' | 'measure' | 'terrain' | 'road' | 'surface' | 'water';
-type Pick = { t: 'building' } | { t: 'tree'; i: number } | { t: 'opening'; id: string } | { t: 'wall'; i: number } | { t: 'fence'; i: number } | { t: 'void'; i: number } | { t: 'column'; i: number } | { t: 'structure'; i: number } | { t: 'road'; i: number } | { t: 'surface'; i: number } | { t: 'water'; i: number } | null;
+type Tool = 'select' | 'building' | 'structure' | 'stairs' | 'merge' | 'cut' | 'wing' | 'tree' | 'scatter' | 'fence' | 'door' | 'window' | 'wall' | 'void' | 'column' | 'measure' | 'terrain' | 'road' | 'surface' | 'water' | 'tunnel';
+type Pick = { t: 'building' } | { t: 'tree'; i: number } | { t: 'opening'; id: string } | { t: 'wall'; i: number } | { t: 'fence'; i: number } | { t: 'void'; i: number } | { t: 'column'; i: number } | { t: 'structure'; i: number } | { t: 'road'; i: number } | { t: 'surface'; i: number } | { t: 'water'; i: number } | { t: 'under'; i: number } | null;
 type Entry = { key: string; tool: Tool; mode?: ScatterMode; op?: TerrainOp; icon: string; name: string; color: string; hint: string; group: string; sep?: boolean };
 type CtxItem = { label: string; act?: () => void; danger?: boolean; sep?: boolean; head?: boolean };
 type Handle = 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se';
@@ -62,6 +63,7 @@ type Drag =
   | { t: 'scatter'; pts: Pt[] }
   | { t: 'terrain'; pts: Pt[]; h0: number }
   | { t: 'layer'; pts: Pt[] }
+  | { t: 'under'; a: Pt; b: Pt }
   | { t: 'fenceEnd'; i: number; end: 0 | 1 }
   | { t: 'voidDraw'; a: Pt; b: Pt }
   | { t: 'column'; i: number; dx: number; dz: number }
@@ -183,6 +185,15 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
           }
           @for (w of ed.draft().waters ?? []; track $index) {
             <polygon class="hit edge" [class.out]="indoor()" [attr.points]="polyPts(w.pts)" [attr.fill]="waterColor" fill-opacity="0.6" [attr.stroke]="isPicked('water', $index) ? '#ffd166' : '#1f4f73'" [attr.stroke-width]="isPicked('water', $index) ? 3 : 1.5" vector-effect="non-scaling-stroke" [attr.data-pk]="'water:' + $index" (pointerdown)="layerDown($event, 'water', $index)" />
+          }
+          @if (cutCells(); as cc) {
+            <path [attr.d]="cc" fill="#101410" fill-opacity="0.75" pointer-events="none" />
+          }
+          @for (u of ed.draft().underground ?? []; track u.id) {
+            <polygon class="hit edge" [class.out]="indoor()" [attr.points]="polyPts(u.outline)" fill="none" [attr.stroke]="underSel() === u ? '#ffd166' : tc('tunnel')" [attr.stroke-width]="underSel() === u ? 3 : 2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" [attr.data-pk]="'under:' + $index" (pointerdown)="underDown($event, $index)" />
+          }
+          @if (underPreview(); as up) {
+            <polygon [attr.points]="up" [attr.fill]="tc('tunnel')" fill-opacity="0.2" [attr.stroke]="tc('tunnel')" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
           }
           @for (r of ed.draft().roads ?? []; track $index) {
             @if (isPicked('road', $index)) {
@@ -504,6 +515,15 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                       <label class="lay" title="Width of the pen stroke">width <input class="mini" type="number" min="2" max="60" step="1" [value]="scatterWidth()" (change)="scatterWidth.set(num($event))" /> m</label>
                     }
                   }
+                  @case ('tunnel') {
+                    <app-pick-menu label="What" [options]="underKindOptions" [value]="underKind()" (valueChange)="underKind.set($event === 'room' ? 'room' : 'tunnel')" />
+                    @if (underKind() === 'tunnel') {
+                      <app-pick-menu label="Section" [compact]="true" [options]="underShapeOptions" [value]="underShape()" (valueChange)="underShape.set(asUnderShape($event))" />
+                      <label class="lay" title="Inside width, metres">width <input class="mini" type="number" min="0.8" max="30" step="0.5" [value]="underWidth()" (change)="underWidth.set(Math.max(0.8, num($event)))" /> m</label>
+                    }
+                    <label class="lay" title="Inside height, metres">height <input class="mini" type="number" min="0.8" max="30" step="0.5" [value]="underHeight()" (change)="underHeight.set(Math.max(0.8, num($event)))" /> m</label>
+                    <label class="lay" title="How far the floor is below the ground where you start dragging (a room: its ceiling)">depth <input class="mini" type="number" min="0" max="60" step="0.5" [value]="underDepth()" (change)="underDepth.set(Math.max(0, num($event)))" /> m</label>
+                  }
                   @case ('road') {
                     <app-pick-menu label="Kind" [options]="roadOptions" [value]="roadKind()" (valueChange)="setRoadKind(asRoad($event))" />
                     <label class="lay" title="Width, metres">width <input class="mini" type="number" min="0.5" max="40" step="0.5" [value]="roadWidth()" (change)="roadWidth.set(Math.max(0.5, num($event)))" /> m</label>
@@ -648,6 +668,18 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                   <label>rotation° <input type="number" step="5" [value]="st.rotDeg.toFixed(0)" (change)="setStruct({ rotDeg: num($event) })" /></label>
                 }</div>
                 <div class="f"><button class="btn" (click)="duplicateStruct()">⧉ Duplicate</button> <button class="btn danger" (click)="deleteSel()">Delete</button></div>
+              }
+            }
+            @case ('under') {
+              @if (underSel(); as u) {
+                <div class="f"><label class="grow">name <input type="text" class="grow" [value]="u.name" (change)="setUnder({ name: text($event) })" /></label></div>
+                <div class="f"><label>floor <input type="number" step="0.5" [value]="u.floor" (change)="setUnder({ floor: num($event) })" /> m</label>
+                <label>ceiling <input type="number" step="0.5" [value]="u.ceiling" (change)="setUnder({ ceiling: num($event) })" /> m</label></div>
+                <div class="f"><app-pick-menu label="Section" [options]="underShapeOptions" [value]="u.shape" (valueChange)="setUnder({ shape: asUnderShape($event) })" />
+                <label>walls <input type="number" min="0.1" max="3" step="0.1" [value]="u.wall" (change)="setUnder({ wall: Math.max(0.1, num($event)) })" /> m</label></div>
+                <div class="f"><label>water in it <input type="number" min="0" step="0.1" [value]="u.water ?? 0" (change)="setUnder({ water: Math.max(0, num($event)) || undefined })" /> m</label></div>
+                <div class="f"><span class="dim">Heights are metres from the bando's zero. It opens where the ground is between floor and ceiling: dashed = covered, dark = open.</span></div>
+                <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
               }
             }
             @case ('road') {
@@ -1369,6 +1401,7 @@ export class BandoEditor {
     { id: 'surface', icon: 'surface', group: 'layers', name: 'Surface', color: '#e8d48b', hint: 'Draw an outline: the ground inside becomes asphalt, gravel, sand ...', where: 'out' },
     { id: 'water', icon: 'water', group: 'layers', name: 'Water', color: '#5d8cff', hint: 'Draw an outline: a pond or basin, dug into the ground', where: 'out' },
     { id: 'terrain', icon: 'terrainRaise', group: 'terrain', name: 'Terrain', color: '#c49a6c', hint: 'Shape the ground: raise, lower, smooth, flatten, or stamp a hill, crater or ramp', where: 'out' },
+    { id: 'tunnel', icon: 'tunnel', group: 'terrain', name: 'Tunnel', color: '#9b5de5', hint: 'Drag a tunnel (or a room) under the ground; it opens where the ground is cut', where: 'out' },
     { id: 'wall', icon: 'wall', group: 'room', name: 'Wall', color: '#e1b12c', hint: 'Draw an interior wall on this floor', where: 'in', sep: true },
     { id: 'void', icon: 'void', group: 'room', name: 'Void', color: '#0984e3', hint: 'Drag a hole in this floor (water on the ground floor)', where: 'in' },
     { id: 'stairs', icon: 'stairs', group: 'room', name: 'Stairs', color: '#badc58', hint: 'Click to place stairs (or a ramp) on this floor', where: 'in' },
@@ -1745,6 +1778,84 @@ export class BandoEditor {
     this.pick.set({ t, i });
   }
   protected roadLen = (r: RoadSpec): number => r.pts.slice(1).reduce((a, q, i) => a + Math.hypot(q.x - r.pts[i]!.x, q.z - r.pts[i]!.z), 0);
+
+  // ---- underground: tunnels and rooms ----
+  protected readonly underKind = signal<'tunnel' | 'room'>('tunnel');
+  protected readonly underWidth = signal(4);
+  protected readonly underHeight = signal(3.5);
+  protected readonly underDepth = signal(1);
+  protected readonly underShape = signal<UndergroundSpec['shape']>('box');
+  protected readonly underKindOptions: readonly PickOption[] = [
+    { id: 'tunnel', label: 'Tunnel', icon: 'tunnel', hint: 'Drag from end to end' },
+    { id: 'room', label: 'Room', icon: 'bunker', hint: 'Drag a rectangle (bunker, basement)' },
+  ];
+  protected readonly underShapeOptions: readonly PickOption[] = [
+    { id: 'box', label: 'Box', icon: 'culvertBox', hint: 'Concrete box section' },
+    { id: 'pipe', label: 'Pipe', icon: 'culvertPipe', hint: 'Round culvert' },
+    { id: 'vault', label: 'Vault', icon: 'culvertVault', hint: 'Brick vault' },
+  ];
+  protected asUnderShape = (v: string): UndergroundSpec['shape'] => (v === 'pipe' || v === 'vault' ? v : 'box');
+  /** The outline being dragged (site metres) as SVG points. */
+  protected readonly underPreview = computed(() => {
+    const d = this.drag();
+    if (d?.t !== 'under') return '';
+    return this.polyPts(this.underOutline(d.a, d.b));
+  });
+  private underOutline(a: Pt, b: Pt): Pt[] {
+    if (this.underKind() === 'tunnel') return tunnelOutline(a, b, this.underWidth());
+    return [a, { x: b.x, z: a.z }, b, { x: a.x, z: b.z }];
+  }
+  private commitUnder(a: Pt, b: Pt): void {
+    const room = this.underKind() === 'room';
+    if (room ? Math.abs(b.x - a.x) < 2 || Math.abs(b.z - a.z) < 2 : Math.hypot(b.x - a.x, b.z - a.z) < 3) return void this.toast.show(room ? 'Drag a rectangle at least 2 m each way.' : 'Drag from one end of the tunnel to the other.');
+    const n = (this.ed.draft().underground?.length ?? 0) + 1;
+    const g = this.ground();
+    const v: UndergroundSpec = room
+      ? { id: uid('ug'), name: `Room ${n}`, outline: this.underOutline(a, b), floor: Math.round((Math.min(g.at(a.x, a.z), g.at(b.x, b.z)) - this.underDepth() - this.underHeight()) * 10) / 10, ceiling: 0, shape: 'box', wall: 0.4 }
+      : newTunnel(g.grid, a, b, { width: this.underWidth(), height: this.underHeight(), depth: this.underDepth(), shape: this.underShape(), id: uid('ug'), name: `Tunnel ${n}` });
+    if (room) v.ceiling = v.floor + this.underHeight();
+    this.ed.commitSite((s) => {
+      s.terrain ??= defaultTerrain(s.extent); // the ground must be a terrain to be cut where the tunnel opens
+      (s.underground ??= []).push(v);
+    });
+    this.pick.set({ t: 'under', i: n - 1 });
+    this.applyNow();
+    this.toast.show(`${v.name}: floor ${v.floor} m, ceiling ${v.ceiling} m. It is open where the ground is between them (dark on the plan); deeper ground covers it.`, 4000);
+  }
+  protected readonly underSel = computed(() => {
+    const p = this.pick();
+    return p?.t === 'under' ? (this.ed.draft().underground?.[p.i] ?? null) : null;
+  });
+  protected setUnder(patch: Partial<UndergroundSpec>): void {
+    const p = this.pick();
+    if (p?.t !== 'under') return;
+    this.ed.commitSite((s) => {
+      const v = s.underground?.[p.i];
+      if (!v) return;
+      Object.assign(v, patch);
+      if (v.ceiling < v.floor + 0.8) v.ceiling = v.floor + 0.8;
+    });
+    this.applyNow();
+  }
+  protected underDown(e: PointerEvent, i: number): void {
+    if (this.tool() !== 'select') return this.bgDown(e);
+    e.stopPropagation();
+    this.capture(e);
+    this.pick.set({ t: 'under', i });
+  }
+  /** Where the ground is cut by underground volumes (the openings), as one SVG path of grid cells. */
+  protected readonly cutCells = computed(() => {
+    const g = this.ground();
+    if (!g.grid || !g.cut) return '';
+    const out: string[] = [];
+    const c = g.grid.cell;
+    for (let k = 0; k < g.cut.length; k++) {
+      if (!g.cut[k]) continue;
+      const i = k % g.grid.nx, j = (k - i) / g.grid.nx;
+      out.push(`M${g.grid.x0 + i * c - c / 2} ${g.grid.z0 + j * c - c / 2}h${c}v${c}h${-c}Z`);
+    }
+    return out.join('');
+  });
 
   // ---- terrain brushes ----
   protected readonly terrainOp = signal<TerrainOp>('raise');
@@ -2176,6 +2287,7 @@ export class BandoEditor {
     if (t === 'column') return 'Click inside the building to place a column on this floor; drag to move.';
     if (t === 'cut' || t === 'wing') return this.b() ? `Drag a rectangle over the selected building to ${t === 'cut' ? 'cut it out' : 'add it as a wing'}.` : 'Select a building first.';
     if (t === 'tree') return 'Click to plant trees; switch to ↖ to move or delete them.';
+    if (t === 'tunnel') return (this.underKind() === 'tunnel' ? 'Drag from one end of the tunnel to the other.' : 'Drag a rectangle: a room under the ground (a bunker, a basement).') + ' It opens where the ground is between its floor and ceiling: lower the ground at its ends with Terrain to make the mouths.';
     if (t === 'road') return 'Drag along the way. Select a road to change its kind, width or surface.';
     if (t === 'surface' || t === 'water') return `Draw the outline by hand. Select it (click its edge) to change it or delete it.`;
     if (t === 'terrain') return { raise: 'Drag to raise the ground along the stroke.', lower: 'Drag to dig along the stroke.', smooth: 'Drag to soften bumps and steps.', flatten: 'Drag from a point: the ground around the stroke goes to that point\'s height.', hill: 'Click to put a hill there.', crater: 'Click to dig a crater (with a little rim).', ramp: 'Drag from the foot of the ramp to its top.' }[this.terrainOp()] + ' One stroke = one undo step.';
@@ -2563,6 +2675,7 @@ export class BandoEditor {
     } else if (t === 'building') this.drag.set({ t: 'draw', x0: snap(p.x, 1), z0: snap(p.z, 1), x1: snap(p.x, 1), z1: snap(p.z, 1) });
     else if (t === 'scatter') this.drag.set({ t: 'scatter', pts: [{ x: p.x, z: p.z }] });
     else if (t === 'road' || t === 'surface' || t === 'water') this.drag.set({ t: 'layer', pts: [{ x: p.x, z: p.z }] });
+    else if (t === 'tunnel') this.drag.set({ t: 'under', a: { x: snap(p.x, 0.5), z: snap(p.z, 0.5) }, b: { x: snap(p.x, 0.5), z: snap(p.z, 0.5) } });
     else if (t === 'terrain') this.drag.set({ t: 'terrain', pts: [{ x: p.x, z: p.z }], h0: siteGround(this.ed.draft()).at(p.x, p.z) });
     else if (t === 'tree') {
       this.ed.addTree(snap(p.x, 0.5), snap(p.z, 0.5), this.newTreeKind());
@@ -2639,7 +2752,7 @@ export class BandoEditor {
 
   protected bldDown(e: PointerEvent, bd: BuildingSpec): void {
     const t = this.tool();
-    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'terrain' || t === 'road' || t === 'surface' || t === 'water' || t === 'measure' || t === 'fence' || t === 'structure' || (PLACE.includes(t) && this.b())) return this.bgDown(e);
+    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'terrain' || t === 'road' || t === 'surface' || t === 'water' || t === 'tunnel' || t === 'measure' || t === 'fence' || t === 'structure' || (PLACE.includes(t) && this.b())) return this.bgDown(e);
     e.stopPropagation();
     const p = this.toWorld(e);
     this.capture(e);
@@ -2710,7 +2823,7 @@ export class BandoEditor {
 
   protected treeDown(e: PointerEvent, i: number): void {
     const t = this.tool();
-    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'terrain' || t === 'road' || t === 'surface' || t === 'water' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
+    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'terrain' || t === 'road' || t === 'surface' || t === 'water' || t === 'tunnel' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
     e.stopPropagation();
     this.capture(e);
     const tr = this.ed.draft().trees[i];
@@ -2743,7 +2856,7 @@ export class BandoEditor {
 
   protected structDown(e: PointerEvent, i: number): void {
     const t = this.tool();
-    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'terrain' || t === 'road' || t === 'surface' || t === 'water' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
+    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'terrain' || t === 'road' || t === 'surface' || t === 'water' || t === 'tunnel' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
     e.stopPropagation();
     this.capture(e);
     const st = this.ed.draft().structures?.[i];
@@ -2967,7 +3080,7 @@ export class BandoEditor {
 
   protected fenceDown(e: PointerEvent, i: number): void {
     const t = this.tool();
-    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'terrain' || t === 'road' || t === 'surface' || t === 'water' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
+    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'terrain' || t === 'road' || t === 'surface' || t === 'water' || t === 'tunnel' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
     e.stopPropagation();
     this.capture(e);
     this.pick.set({ t: 'fence', i });
@@ -3294,6 +3407,9 @@ export class BandoEditor {
         });
         break;
       }
+      case 'under':
+        this.drag.set({ ...d, b: { x: snap(p.x, 0.5), z: snap(p.z, 0.5) } });
+        break;
       case 'layer': {
         const last = d.pts[d.pts.length - 1]!;
         if (Math.hypot(p.x - last.x, p.z - last.z) * this.ppm() >= 4) this.drag.set({ ...d, pts: [...d.pts, p] });
@@ -3437,6 +3553,8 @@ export class BandoEditor {
       this.finishSelArea(d, e.shiftKey);
     } else if (d.t === 'layer') {
       this.commitLayer(d.pts);
+    } else if (d.t === 'under') {
+      this.commitUnder(d.a, d.b);
     } else if (d.t === 'terrain') {
       this.commitTerrain(d.pts, d.h0);
     } else if (d.t === 'scatter') {
@@ -3605,6 +3723,9 @@ export class BandoEditor {
       case 'water':
         this.pick.set({ t: 'water', i: n });
         return [head('Water'), del];
+      case 'under':
+        this.pick.set({ t: 'under', i: n });
+        return [head(this.ed.draft().underground?.[n]?.name ?? 'Underground'), del];
       case 'wall':
         this.pick.set({ t: 'wall', i: n });
         return [head('Interior wall'), del];
@@ -3699,6 +3820,7 @@ export class BandoEditor {
     else if (p?.t === 'road') this.ed.commitSite((s) => void s.roads?.splice(p.i, 1));
     else if (p?.t === 'surface') this.ed.commitSite((s) => void s.surfaces?.splice(p.i, 1));
     else if (p?.t === 'water') this.ed.commitSite((s) => void s.waters?.splice(p.i, 1));
+    else if (p?.t === 'under') this.ed.commitSite((s) => void s.underground?.splice(p.i, 1));
     else if (p?.t === 'void' && bd) this.ed.commitSite((s) => void this.index(s, bd.id)?.levels[li]?.voids?.splice(p.i, 1));
     else if (p?.t === 'column' && bd) {
       const gone = [...this.colIdxs()].sort((x, y) => y - x);

@@ -2,8 +2,9 @@ import { cutRect, edgesOf, slabs } from '../core/footprint';
 import { buildStructure } from './structures';
 import { fenceDef, postsAlong } from '../core/fences';
 import { WATER_COLOR, insidePolygon, roadDef, surfaceDef } from '../core/layers';
+import { tunnelAxis, volumeSolids } from '../core/underground';
 import * as THREE from 'three';
-import { type BuildingSpec, type LevelSpec, type RoadSpec, type SiteSpec, type SurfaceSpec, type TreeSpec, createRandom } from '../core/site-spec';
+import { type BuildingSpec, type LevelSpec, type RoadSpec, type SiteSpec, type SurfaceSpec, type TreeSpec, type UndergroundSpec, createRandom } from '../core/site-spec';
 import { SiteCollider, type SolidBox, type TreeCylinder } from '../core/sim/collider';
 import { siteGround, type SiteGround } from '../core/site-ground';
 import type { HeightGrid } from '../core/terrain';
@@ -351,7 +352,7 @@ const PATCH_COLORS = ['#6f9350', '#86a35a', '#8a8656', '#7d7a52', '#98a262', '#9
  * The terrain as one mesh (a vertex per grid point, or every other one on a big grid), coloured like the old meadow:
  * the ground colour with the same seeded patches baked into the vertex colours, so they follow the slopes.
  */
-function terrainMesh(g: HeightGrid, color: string, rnd: () => number, surfaces: readonly SurfaceSpec[] = []): THREE.Mesh {
+function terrainMesh(g: HeightGrid, color: string, rnd: () => number, surfaces: readonly SurfaceSpec[] = [], cut: Uint8Array | null = null): THREE.Mesh {
   const step = g.nx * g.nz > 250_000 ? 2 : 1;
   const nx = Math.floor((g.nx - 1) / step) + 1, nz = Math.floor((g.nz - 1) / step) + 1;
   const pos = new Float32Array(nx * nz * 3);
@@ -407,6 +408,11 @@ function terrainMesh(g: HeightGrid, color: string, rnd: () => number, surfaces: 
   let n = 0;
   for (let j = 0; j < nz - 1; j++) {
     for (let i = 0; i < nx - 1; i++) {
+      // the ground is cut where an underground volume passes through it: drop the cells touching a cut vertex
+      if (cut) {
+        const gi = j * step * g.nx + i * step, s1 = step, s2 = step * g.nx;
+        if (cut[gi] || cut[gi + s1] || cut[gi + s2] || cut[gi + s1 + s2]) continue;
+      }
       const a = j * nx + i, b = a + 1, c = a + nx, e = c + 1;
       idx[n++] = a; idx[n++] = c; idx[n++] = b;
       idx[n++] = b; idx[n++] = c; idx[n++] = e;
@@ -415,7 +421,7 @@ function terrainMesh(g: HeightGrid, color: string, rnd: () => number, surfaces: 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  geo.setIndex(new THREE.BufferAttribute(idx.subarray(0, n), 1));
   geo.computeVertexNormals();
   const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }));
   m.receiveShadow = true;
@@ -477,6 +483,76 @@ function roadMesh(ground: SiteGround, r: RoadSpec, order: number): THREE.Mesh {
   return m;
 }
 
+const UNDER_MAT = new THREE.MeshStandardMaterial({ color: '#6b6d66', roughness: 0.95, side: THREE.DoubleSide });
+
+/** One underground volume as meshes: a slab of its outline at the floor, then walls and a flat ceiling, a pipe or a vault. */
+function buildUnderground(v: UndergroundSpec): THREE.Group {
+  const out = new THREE.Group();
+  const slab = (y: number): void => {
+    const shape = new THREE.Shape(v.outline.map((q) => new THREE.Vector2(q.x, -q.z)));
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: v.wall, bevelEnabled: false });
+    geo.rotateX(-Math.PI / 2); // extruded along +y from y = 0
+    const m = new THREE.Mesh(geo, UNDER_MAT);
+    m.position.y = y;
+    m.receiveShadow = true;
+    out.add(m);
+  };
+  slab(v.floor - v.wall);
+  const axis = tunnelAxis(v);
+  const h = v.ceiling - v.floor;
+  if (axis && v.shape !== 'box') {
+    const dx = axis.b.x - axis.a.x, dz = axis.b.z - axis.a.z, len = Math.hypot(dx, dz);
+    const ang = -Math.atan2(dz, dx);
+    if (v.shape === 'pipe') {
+      const r = Math.min(axis.width, h) / 2 + v.wall / 2;
+      const g = new THREE.CylinderGeometry(r, r, len, 20, 1, true);
+      g.rotateZ(Math.PI / 2); // along x
+      const m = new THREE.Mesh(g, UNDER_MAT);
+      m.position.set((axis.a.x + axis.b.x) / 2, v.floor + r - v.wall / 2, (axis.a.z + axis.b.z) / 2);
+      m.rotation.y = ang;
+      out.add(m);
+    } else {
+      // vault: straight walls up to the springing line, a half cylinder over them
+      const r = axis.width / 2, wallH = Math.max(0.3, h - r);
+      for (const side of [-1, 1]) {
+        const w = new THREE.Mesh(new THREE.BoxGeometry(len, wallH, v.wall), UNDER_MAT);
+        const off = side * (r + v.wall / 2); // along the tunnel's normal (-dz, dx) / len
+        w.position.set((axis.a.x + axis.b.x) / 2 + (-dz / len) * off, v.floor + wallH / 2, (axis.a.z + axis.b.z) / 2 + (dx / len) * off);
+        w.rotation.y = ang;
+        out.add(w);
+      }
+      const g = new THREE.CylinderGeometry(r + v.wall / 2, r + v.wall / 2, len, 16, 1, true, 0, Math.PI);
+      g.rotateZ(Math.PI / 2);
+      g.rotateX(Math.PI / 2);
+      const m = new THREE.Mesh(g, UNDER_MAT);
+      m.position.set((axis.a.x + axis.b.x) / 2, v.floor + wallH, (axis.a.z + axis.b.z) / 2);
+      m.rotation.y = ang;
+      out.add(m);
+    }
+  } else {
+    for (let i = 0; i < v.outline.length; i++) {
+      const a = v.outline[i]!, b = v.outline[(i + 1) % v.outline.length]!;
+      const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
+      if (len < 0.05) continue;
+      const w = new THREE.Mesh(new THREE.BoxGeometry(len, h + 2 * v.wall, v.wall), UNDER_MAT);
+      w.position.set((a.x + b.x) / 2, (v.floor + v.ceiling) / 2, (a.z + b.z) / 2);
+      w.rotation.y = -Math.atan2(dz, dx);
+      w.castShadow = true;
+      out.add(w);
+    }
+    slab(v.ceiling);
+  }
+  if (v.water) {
+    const shape = new THREE.Shape(v.outline.map((q) => new THREE.Vector2(q.x, -q.z)));
+    const geo = new THREE.ShapeGeometry(shape);
+    geo.rotateX(-Math.PI / 2);
+    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: WATER_COLOR, transparent: true, opacity: 0.8 }));
+    m.position.y = v.floor + v.water;
+    out.add(m);
+  }
+  return out;
+}
+
 /** Build the whole site from a {@link SiteSpec}. Deterministic: the same spec always produces the same scene. */
 export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {}): SiteModel {
   const group = new THREE.Group();
@@ -527,7 +603,7 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
   if (!opts.bare && ground.grid) {
     // ---- terrain: the height grid, flat ground around it, roads laid on it
     const g = ground.grid;
-    group.add(terrainMesh(g, spec.groundColor, rnd, spec.surfaces));
+    group.add(terrainMesh(g, spec.groundColor, rnd, spec.surfaces, ground.cut));
     const outer = spec.extent * 1.1, gx = -g.x0, gz = -g.z0;
     const grass = material(spec.groundColor);
     if (outer > Math.min(gx, gz)) {
@@ -601,6 +677,14 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
       m.userData['pick'] = { kind: 'water', i };
       group.add(m);
     });
+  }
+
+  // ---- underground volumes: walls, floor and ceiling (a pipe or a vault for straight tunnels), solid for the drone
+  for (const v of opts.bare ? [] : (spec.underground ?? [])) {
+    const g = buildUnderground(v);
+    g.userData['pick'] = { kind: 'underground', id: v.id };
+    group.add(g);
+    solids.push(...volumeSolids(v));
   }
 
   // ---- buildings
@@ -720,7 +804,7 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     group.add(m);
   }
 
-  const collider = new SiteCollider(solids, treeSolids, ground.grid, opts.bare ? [] : (spec.waters ?? []).map((w, i) => ({ pts: w.pts, level: ground.grid ? (ground.water[i] ?? 0) : 0.03 })));
+  const collider = new SiteCollider(solids, treeSolids, ground.grid, opts.bare ? [] : (spec.waters ?? []).map((w, i) => ({ pts: w.pts, level: ground.grid ? (ground.water[i] ?? 0) : 0.03 })), opts.bare ? [] : (spec.underground ?? []));
   return {
     group,
     roof,

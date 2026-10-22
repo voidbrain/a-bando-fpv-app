@@ -221,3 +221,33 @@ describe('site model ground layers', () => {
     }
   });
 });
+
+describe('site model underground', () => {
+  it('cuts the terrain at a tunnel mouth, builds its walls, and the drone floor inside is the tunnel floor', () => {
+    const s = spec();
+    s.buildings = [];
+    s.structures = [];
+    s.terrain = { cell: 1, half: { e: 120, n: 120 }, strokes: [{ op: 'hill', pts: [{ x: 0, z: -60 }], radius: 35, strength: 10 }] };
+    const outline = [{ x: -45, z: -62 }, { x: 45, z: -62 }, { x: 45, z: -58 }, { x: -45, z: -58 }];
+    const flatTris = (): number => {
+      let n = 0;
+      buildSiteFromSpec(s).group.traverse((o) => {
+        if (o instanceof THREE.Mesh && o.geometry.getAttribute('color') && o.geometry.index) n = o.geometry.index.count;
+      });
+      return n;
+    };
+    const before = flatTris();
+    s.underground = [{ id: 'u', name: 'Tunnel', outline, floor: -0.5, ceiling: 3, shape: 'box', wall: 0.4 }];
+    const m = buildSiteFromSpec(s);
+    expect(flatTris()).toBeLessThan(before); // the portals are holes in the ground
+    let found = false;
+    m.group.traverse((o) => {
+      if ((o.userData['pick'] as { kind?: string } | undefined)?.kind === 'underground') found = true;
+    });
+    expect(found).toBe(true);
+    expect(m.collider.groundAt(0, -60)).toBeGreaterThan(8); // on top of the hill
+    expect(m.collider.groundAt(0, -60, 1)).toBeCloseTo(-0.5); // inside the tunnel
+    expect(m.collider.hit(new Vec3(0.3, 1.5, -58))).toBe(true); // its wall
+    expect(m.collider.hit(new Vec3(0.3, 1.5, -60))).toBe(false); // its inside
+  });
+});

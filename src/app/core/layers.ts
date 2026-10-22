@@ -2,7 +2,7 @@
  * The ground layers: roads (centre lines that level the ground across their width), surfaces (what the ground is made
  * of) and water (dug basins with a flat surface). Seeded from OpenStreetMap, edited like everything else. Pure.
  */
-import type { PadSpec, RoadKind, RoadSpec, SiteSpec, SurfaceKind, Vec2, WaterSpec } from './site-spec';
+import type { PadSpec, RoadKind, RoadSpec, SiteSpec, SurfaceKind, UndergroundSpec, Vec2, WaterSpec } from './site-spec';
 import { heightAt, type HeightGrid } from './terrain';
 
 export interface RoadDef {
@@ -47,8 +47,8 @@ const pts = (v: unknown, min: number): Vec2[] | null => {
  * The layers of a stored spec, every value checked. A spec saved before roads existed has its roads as rotated pads:
  * those (all pads but the last, the take-off pad) become two-point roads.
  */
-export function sanitizeLayers(s: Partial<SiteSpec>): Partial<Pick<SiteSpec, 'roads' | 'surfaces' | 'waters' | 'pads'>> {
-  const out: Partial<Pick<SiteSpec, 'roads' | 'surfaces' | 'waters' | 'pads'>> = {};
+export function sanitizeLayers(s: Partial<SiteSpec>): Partial<Pick<SiteSpec, 'roads' | 'surfaces' | 'waters' | 'pads' | 'underground'>> {
+  const out: Partial<Pick<SiteSpec, 'roads' | 'surfaces' | 'waters' | 'pads' | 'underground'>> = {};
   if (Array.isArray(s.roads)) {
     out.roads = s.roads.flatMap((r) => {
       const p = pts(r?.pts, 2);
@@ -71,6 +71,25 @@ export function sanitizeLayers(s: Partial<SiteSpec>): Partial<Pick<SiteSpec, 'ro
     out.waters = s.waters.flatMap((w) => {
       const p = pts(w?.pts, 3);
       return p ? [{ pts: p, depth: clamp(typeof w.depth === 'number' && isFinite(w.depth) ? w.depth : 1.5, 0.2, 20), ...(typeof w.level === 'number' && isFinite(w.level) ? { level: clamp(w.level, -10, 5) } : {}) }] : [];
+    });
+  }
+  if (Array.isArray(s.underground)) {
+    out.underground = s.underground.slice(0, 50).flatMap((u, i): UndergroundSpec[] => {
+      const p = pts(u?.outline, 3);
+      if (!p) return [];
+      const floor = typeof u.floor === 'number' && isFinite(u.floor) ? clamp(u.floor, -200, 300) : -3;
+      const ceiling = typeof u.ceiling === 'number' && isFinite(u.ceiling) ? clamp(u.ceiling, floor + 0.8, floor + 60) : floor + 3;
+      const shape = u.shape === 'pipe' || u.shape === 'vault' ? u.shape : 'box';
+      return [{
+        id: typeof u.id === 'string' && u.id ? u.id : `ug-${i}`,
+        name: typeof u.name === 'string' ? u.name.slice(0, 80) : 'Tunnel',
+        outline: p.slice(0, 64),
+        floor,
+        ceiling,
+        shape,
+        wall: typeof u.wall === 'number' && isFinite(u.wall) ? clamp(u.wall, 0.1, 3) : 0.4,
+        ...(typeof u.water === 'number' && isFinite(u.water) && u.water > 0 ? { water: clamp(u.water, 0, ceiling - floor) } : {}),
+      }];
     });
   }
   return out;

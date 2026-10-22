@@ -66,6 +66,12 @@ export const TOOL_ICONS: Readonly<Record<string, readonly Stroke[]>> = {
   dirt: [{ p: 'M2 15 C6 12 9 17 13 14 S19 12 22 15' }, { p: 'M2 19 H22', d: true }, dot(7, 9, 0.8), dot(16, 8, 0.8)],
   sand: [{ p: 'M2 18 C6 14 10 14 14 17 S20 19 22 16' }, { p: 'M4 11 C7 9 10 9 13 11', d: true }],
   rubble: [{ p: 'M3 20 L6 15 L10 17 L12 12 L16 15 L19 11 L21 20 Z' }, { p: 'M8 9 L10 7 L12 9 Z M15 6 L17 5 L18 7 Z' }],
+  // ---- underground ----
+  tunnel: [{ p: 'M2 20 C6 6 18 6 22 20' }, { p: 'M7 20 V15 a5 5 0 0 1 10 0 V20' }],
+  bunker: [{ p: 'M2 9 H22' }, { p: 'M5 12 H19 V20 H5 Z', d: true }, { p: 'M12 9 V12' }],
+  culvertBox: [{ p: 'M5 6 H19 V18 H5 Z M8 9 H16 V15 H8 Z' }],
+  culvertPipe: [{ p: 'M4 12 a8 8 0 1 0 16 0 a8 8 0 1 0 -16 0 M7 12 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0' }],
+  culvertVault: [{ p: 'M4 20 V11 a8 8 0 0 1 16 0 V20 M7 20 V12 a5 5 0 0 1 10 0 V20' }],
   // ---- terrain ----
   terrainRaise: [{ p: 'M2 20 C7 20 8 11 12 11 S17 20 22 20' }, { p: 'M12 8 V2 M9 5 L12 2 L15 5' }],
   terrainLower: [{ p: 'M2 10 C7 10 8 19 12 19 S17 10 22 10' }, { p: 'M12 3 V9 M9 6 L12 9 L15 6' }],
