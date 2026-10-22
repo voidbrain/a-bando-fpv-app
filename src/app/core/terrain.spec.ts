@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { siteGround, siteOutline } from './site-ground';
 import { emptySpec, sanitizeSpec, type BuildingSpec } from './site-spec';
-import { applyStroke, buildHeights, defaultTerrain, emptyGrid, flattenPad, heightAt, rangeUnder, rayGround, sanitizeTerrain, setTerrainBase, type TerrainSpec } from './terrain';
+import { applyStroke, buildHeights, contourPaths, defaultTerrain, emptyGrid, flattenPad, heightAt, rangeUnder, rayGround, sanitizeTerrain, setTerrainBase, type TerrainSpec } from './terrain';
 
 const flat = (half = 50): TerrainSpec => ({ cell: 1, half: { e: half, n: half }, strokes: [] });
 const bld = (x: number, z: number, l: number, w: number, rot = 0): BuildingSpec => ({ id: `b${x}`, name: 'b', pos: { x, z }, rotDeg: rot, length: l, width: w, levels: [] });
@@ -126,5 +126,17 @@ describe('site ground', () => {
     const q = rayGround(null, { x: 0, y: 10, z: 0 }, { x: 0, y: -1, z: 0 })!;
     expect(q.x).toBeCloseTo(0);
     expect(rayGround(grid, { x: 0, y: 50, z: 0 }, { x: 0, y: 1, z: 0 })).toBeNull();
+  });
+});
+
+describe('contours', () => {
+  it('draws nothing on flat ground and rings around a hill, every 5th one major', () => {
+    expect(contourPaths(emptyGrid(flat(20)))).toEqual({ minor: '', major: '' });
+    const g = emptyGrid(flat(30));
+    applyStroke(g, { op: 'hill', pts: [{ x: 0, z: 0 }], radius: 20, strength: 6 });
+    const c = contourPaths(g);
+    expect(c.minor.length).toBeGreaterThan(100);
+    expect(c.major.length).toBeGreaterThan(10);
+    expect(c.minor).toMatch(/^M-?\d/);
   });
 });

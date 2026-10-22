@@ -53,6 +53,13 @@ export const TOOL_ICONS: Readonly<Record<string, readonly Stroke[]>> = {
   chainlink: [{ p: 'M3 21 V4 M21 21 V4' }, { p: 'M3 6 L18 21 M3 13 L11 21 M10 4 L21 15 M17 4 L21 8 M21 6 L6 21 M21 13 L13 21 M14 4 L3 15 M7 4 L3 8', d: true }],
   greenhouse: [{ p: 'M3 20 V12 a9 9 0 0 1 18 0 V20 Z' }, { p: 'M12 3 V20 M7.5 5 V20 M16.5 5 V20', d: true }],
   colSquare: [{ p: 'M7 7 H17 V17 H7 Z' }, dot(12, 12, 1.6)],
+  // ---- terrain ----
+  terrainRaise: [{ p: 'M2 20 C7 20 8 11 12 11 S17 20 22 20' }, { p: 'M12 8 V2 M9 5 L12 2 L15 5' }],
+  terrainLower: [{ p: 'M2 10 C7 10 8 19 12 19 S17 10 22 10' }, { p: 'M12 3 V9 M9 6 L12 9 L15 6' }],
+  terrainSmooth: [{ p: 'M2 15 L5 10 L8 16 L11 9 L14 15', d: true }, { p: 'M2 19 C8 19 10 14 14 14 S20 19 22 19' }],
+  terrainFlatten: [{ p: 'M2 20 L7 11 H17 L22 20' }, { p: 'M5 8 H19', d: true }],
+  terrainHill: [{ p: 'M2 19 Q12 1 22 19' }, { p: 'M2 19 H22', d: true }],
+  terrainCrater: [{ p: 'M2 11 H5 Q12 25 19 11 H22' }, { p: 'M5 11 L6 9 M19 11 L18 9' }],
 };
 
 /** A tool's icon as a small inline SVG. */

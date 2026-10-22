@@ -10,6 +10,8 @@ import { autoAlign, magnetAngle } from '../../core/align';
 import { columnsInLine, pointsInside, treeZones } from '../../core/elements';
 import { FENCES, fenceDef, newFence, setFenceMaterial, type FenceMaterial } from '../../core/fences';
 import { areaCorners } from '../../core/areas';
+import { contourPaths, defaultTerrain, type Falloff, type TerrainOp, type TerrainStroke } from '../../core/terrain';
+import { siteGround } from '../../core/site-ground';
 import { PickMenu, type PickOption } from './pick-menu';
 import { anglesAt, arcOf, fmtLength, lengthOf, nearestSnap, orthoSnap, snapTargets, type Seg } from '../../core/measure';
 import { applyStore, setColumnRows, setFacade, type FacadePattern } from '../../core/modules';
@@ -36,9 +38,9 @@ import type { SitePick } from '../../three/site-view';
 import { SiteView } from './site-view';
 import type { PreviewTarget } from '../../three/element-preview';
 
-type Tool = 'select' | 'building' | 'structure' | 'stairs' | 'merge' | 'cut' | 'wing' | 'tree' | 'scatter' | 'fence' | 'door' | 'window' | 'wall' | 'void' | 'column' | 'measure';
+type Tool = 'select' | 'building' | 'structure' | 'stairs' | 'merge' | 'cut' | 'wing' | 'tree' | 'scatter' | 'fence' | 'door' | 'window' | 'wall' | 'void' | 'column' | 'measure' | 'terrain';
 type Pick = { t: 'building' } | { t: 'tree'; i: number } | { t: 'opening'; id: string } | { t: 'wall'; i: number } | { t: 'fence'; i: number } | { t: 'void'; i: number } | { t: 'column'; i: number } | { t: 'structure'; i: number } | null;
-type Entry = { key: string; tool: Tool; mode?: ScatterMode; icon: string; name: string; color: string; hint: string; group: string; sep?: boolean };
+type Entry = { key: string; tool: Tool; mode?: ScatterMode; op?: TerrainOp; icon: string; name: string; color: string; hint: string; group: string; sep?: boolean };
 type CtxItem = { label: string; act?: () => void; danger?: boolean; sep?: boolean; head?: boolean };
 type Handle = 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se';
 type Drag =
@@ -57,6 +59,7 @@ type Drag =
   | { t: 'structRot'; i: number }
   | { t: 'fenceDraw'; a: Pt; b: Pt }
   | { t: 'scatter'; pts: Pt[] }
+  | { t: 'terrain'; pts: Pt[]; h0: number }
   | { t: 'fenceEnd'; i: number; end: 0 | 1 }
   | { t: 'voidDraw'; a: Pt; b: Pt }
   | { t: 'column'; i: number; dx: number; dz: number }
@@ -166,6 +169,10 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
         >
           @for (p of ed.draft().pads; track $index) {
             <rect [attr.x]="p.x - p.w / 2" [attr.y]="p.z - p.d / 2" [attr.width]="p.w" [attr.height]="p.d" [attr.transform]="'rotate(' + (p.rotDeg ?? 0) + ' ' + p.x + ' ' + p.z + ')'" [attr.fill]="p.color ?? '#888'" opacity="0.55" />
+          }
+          @if (contours(); as ct) {
+            <path [attr.d]="ct.minor" fill="none" stroke="#3a2a14" stroke-opacity="0.35" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none" />
+            <path [attr.d]="ct.major" fill="none" stroke="#3a2a14" stroke-opacity="0.7" stroke-width="1.6" vector-effect="non-scaling-stroke" pointer-events="none" />
           }
           @for (f of pathView(); track f.id) {
             @for (sg of f.segs; track $index) {
@@ -375,6 +382,14 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
               <text [attr.x]="mh.x + 11 / ppm()" [attr.y]="mh.z + 14 / ppm()" [attr.font-size]="11 / ppm()" fill="#ffe066" stroke="#222" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ measSnap() }}</text>
             }
           }
+          @if (tool() === 'terrain') {
+            @if (terrPreview(); as tp) {
+              <path [attr.d]="tp" fill="none" [attr.stroke]="tc('terrain')" stroke-opacity="0.35" [attr.stroke-width]="terrainOp() === 'ramp' ? terrRadius() : terrRadius() * 2" stroke-linecap="round" stroke-linejoin="round" pointer-events="none" />
+            }
+            @if (hover(); as hv) {
+              <circle [attr.cx]="hv.x" [attr.cy]="hv.z" [attr.r]="terrainOp() === 'ramp' ? terrRadius() / 2 : terrRadius()" fill="none" [attr.stroke]="tc('terrain')" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+            }
+          }
           @if (selOutline(); as so) {
             <polygon [attr.points]="so" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" pointer-events="none" />
           }
@@ -466,6 +481,17 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                       <label class="lay" title="Width of the pen stroke">width <input class="mini" type="number" min="2" max="60" step="1" [value]="scatterWidth()" (change)="scatterWidth.set(num($event))" /> m</label>
                     }
                   }
+                  @case ('terrain') {
+                    <app-pick-menu label="Shape the ground" [options]="terrOpOptions" [value]="terrainOp()" (valueChange)="terrainOp.set(asOp($event))" />
+                    <label class="lay" title="Brush radius (ramp: its width)">⌀ <input class="mini" type="number" min="1" max="100" step="1" [value]="terrRadius()" (change)="terrRadius.set(Math.max(1, num($event)))" /> m</label>
+                    @if (terrainOp() !== 'flatten') {
+                      <label class="lay" [title]="terrainOp() === 'smooth' ? 'How much to soften (percent)' : 'Metres'">{{ terrStrengthLabel() }} <input class="mini" type="number" [min]="terrainOp() === 'smooth' ? 5 : 0.1" [max]="terrainOp() === 'smooth' ? 100 : 60" step="0.5" [value]="terrStrength()" (change)="terrStrength.set(Math.max(0.1, num($event)))" />{{ terrainOp() === 'smooth' ? '' : ' m' }}</label>
+                    }
+                    @if (terrainOp() !== 'ramp') {
+                      <app-pick-menu label="Edge" [compact]="true" [options]="falloffOptions" [value]="terrFalloff()" (valueChange)="terrFalloff.set(asFalloff($event))" />
+                    }
+                    <button class="btn" [disabled]="!ed.draft().terrain?.strokes?.length" (click)="clearTerrain()" title="Remove every terrain stroke (back to the real ground, or flat)">Reset</button>
+                  }
                   @case ('tree') {
                     <app-pick-menu label="Tree" [options]="treeMixOptions" [value]="treeMix()" (valueChange)="treeMix.set(asMix($event))" />
                   }
@@ -514,6 +540,9 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
         <div class="notice">This bando was built with the old rotated layout and can't be drawn over the map. Go to <b>1 · Area</b> and press <b>Regenerate</b> to rebuild it aligned to the map.</div>
       }
 
+      @if (groundUnder() !== null) {
+        <div class="read" aria-live="off">ground {{ groundUnder()!.toFixed(1) }} m</div>
+      }
       @if (ctx(); as c) {
         <div class="ctx" [style.left.px]="c.x" [style.top.px]="c.y" (pointerdown)="$event.stopPropagation()" (contextmenu)="$event.preventDefault(); $event.stopPropagation()">
           @for (it of c.items; track $index) {
@@ -1274,6 +1303,7 @@ export class BandoEditor {
     { id: 'tree', icon: 'tree', group: 'trees', name: 'Tree', color: '#4cd964', hint: 'Click the map to plant a tree', where: 'out' },
     { id: 'scatter', icon: 'brush', group: 'trees', name: 'Tree brush', color: '#00cec9', hint: 'Paint trees with a pen, or fill a square, circle or hand-drawn area with random trees', where: 'out' },
     { id: 'fence', icon: 'fence', group: 'fence', name: 'Fence', color: '#ff9f43', hint: 'Drag to draw a free-standing wall or fence', where: 'out' },
+    { id: 'terrain', icon: 'terrainRaise', group: 'terrain', name: 'Terrain', color: '#c49a6c', hint: 'Shape the ground: raise, lower, smooth, flatten, or stamp a hill, crater or ramp', where: 'out' },
     { id: 'wall', icon: 'wall', group: 'room', name: 'Wall', color: '#e1b12c', hint: 'Draw an interior wall on this floor', where: 'in', sep: true },
     { id: 'void', icon: 'void', group: 'room', name: 'Void', color: '#0984e3', hint: 'Drag a hole in this floor (water on the ground floor)', where: 'in' },
     { id: 'stairs', icon: 'stairs', group: 'room', name: 'Stairs', color: '#badc58', hint: 'Click to place stairs (or a ramp) on this floor', where: 'in' },
@@ -1288,16 +1318,27 @@ export class BandoEditor {
     { mode: 'circle', icon: 'areaCircle', name: 'Tree area · circle' },
     { mode: 'lasso', icon: 'lasso', name: 'Tree area · lasso' },
   ];
+  private static readonly TERRAIN: readonly { op: TerrainOp; icon: string; name: string }[] = [
+    { op: 'raise', icon: 'terrainRaise', name: 'Terrain · raise' },
+    { op: 'lower', icon: 'terrainLower', name: 'Terrain · lower' },
+    { op: 'smooth', icon: 'terrainSmooth', name: 'Terrain · smooth' },
+    { op: 'flatten', icon: 'terrainFlatten', name: 'Terrain · flatten' },
+    { op: 'hill', icon: 'terrainHill', name: 'Terrain · hill' },
+    { op: 'crater', icon: 'terrainCrater', name: 'Terrain · crater' },
+    { op: 'ramp', icon: 'ramp', name: 'Terrain · ramp' },
+  ];
   /** Every tool on offer right now, with the brush expanded to its shapes. */
   protected readonly entries = computed<Entry[]>(() =>
     this.visibleTools().flatMap((t): Entry[] =>
       t.id === 'scatter'
         ? BandoEditor.SCATTER.map((m) => ({ key: `scatter:${m.mode}`, tool: t.id, mode: m.mode, icon: m.icon, name: m.name, color: t.color, hint: t.hint, group: t.group }))
-        : [{ key: t.id, tool: t.id, icon: t.icon, name: t.name, color: t.color, hint: t.hint, group: t.group, sep: t.sep }],
+        : t.id === 'terrain'
+          ? BandoEditor.TERRAIN.map((m) => ({ key: `terrain:${m.op}`, tool: t.id, op: m.op, icon: m.icon, name: m.name, color: t.color, hint: t.hint, group: t.group }))
+          : [{ key: t.id, tool: t.id, icon: t.icon, name: t.name, color: t.color, hint: t.hint, group: t.group, sep: t.sep }],
     ),
   );
   private entryOn(e: Entry): boolean {
-    return this.tool() === e.tool && (!e.mode || this.scatterMode() === e.mode);
+    return this.tool() === e.tool && (!e.mode || this.scatterMode() === e.mode) && (!e.op || this.terrainOp() === e.op);
   }
   /** The palette: one button per group (like a paint program), showing the active tool of the group or the last one used. The rest sit in a flyout. */
   protected readonly groups = computed(() => {
@@ -1399,6 +1440,7 @@ export class BandoEditor {
     if (def?.needsBuilding && (!this.b() || this.b()!.frame)) this.toast.show(this.b()?.frame ? `${e.name} does not work on a greenhouse.` : `${e.name}: select a building first, then use it.`);
     this.groupCur.update((g) => ({ ...g, [e.group]: e.key }));
     if (e.mode) this.scatterMode.set(e.mode);
+    if (e.op) this.terrainOp.set(e.op);
     this.setTool(e.tool);
     this.fly.set(null);
   }
@@ -1552,6 +1594,70 @@ export class BandoEditor {
     const set = columnsInLine(cols, i, along);
     this.colSet.set(set);
     this.toast.show(`${set.length} columns selected (${along === 'x' ? 'row' : along === 'z' ? 'line' : 'all alike'}).`);
+  }
+  // ---- terrain brushes ----
+  protected readonly terrainOp = signal<TerrainOp>('raise');
+  protected readonly terrRadius = signal(8);
+  protected readonly terrStrength = signal(2);
+  protected readonly terrFalloff = signal<Falloff>('smooth');
+  protected readonly terrOpOptions: readonly PickOption[] = BandoEditor.TERRAIN.map((t) => ({ id: t.op, label: t.op[0]!.toUpperCase() + t.op.slice(1), icon: t.icon }));
+  protected readonly falloffOptions: readonly PickOption[] = [
+    { id: 'smooth', label: 'Soft edge', icon: 'terrainHill', hint: 'Rounded, natural' },
+    { id: 'linear', label: 'Straight edge', icon: 'ramp', hint: 'A steady slope to the rim' },
+    { id: 'flat', label: 'Hard edge', icon: 'terrainFlatten', hint: 'Full strength almost to the rim' },
+  ];
+  protected asOp = (v: string): TerrainOp => BandoEditor.TERRAIN.find((t) => t.op === v)?.op ?? 'raise';
+  protected asFalloff = (v: string): Falloff => (v === 'linear' || v === 'flat' ? v : 'smooth');
+  /** What "strength" means for the current operation, for its label. */
+  protected readonly terrStrengthLabel = computed(() => ({ raise: 'up', lower: 'down', smooth: 'amount %', flatten: '', hill: 'height', crater: 'depth', ramp: 'rise' })[this.terrainOp()]);
+  /** The ground the editor shows (contours, the height under the pointer): the draft's terrain, same cache as the 3D model. */
+  private readonly ground = computed(() => siteGround(this.ed.draft()));
+  private contourCache: { grid: unknown; out: { minor: string; major: string } } | null = null;
+  protected readonly contours = computed(() => {
+    const g = this.ground().grid;
+    if (!g) return null;
+    if (this.contourCache?.grid !== g) this.contourCache = { grid: g, out: contourPaths(g) };
+    return this.contourCache.out;
+  });
+  /** Height of the ground under the pointer while a terrain tool is active. */
+  protected readonly groundUnder = computed(() => {
+    const h = this.hover();
+    return this.tool() === 'terrain' && h ? this.ground().at(h.x, h.z) : null;
+  });
+  /** The stroke being painted, as an SVG path, and the brush footprint under the pointer. */
+  protected readonly terrPreview = computed(() => {
+    const d = this.drag();
+    const pts = d?.t === 'terrain' ? d.pts : [];
+    return pts.length > 1 ? 'M' + pts.map((q) => `${q.x} ${q.z}`).join('L') : '';
+  });
+  /** Turn a finished drag into a stroke on the spec (the terrain is created flat on first use). */
+  private commitTerrain(pts: Pt[], h0: number): void {
+    const op = this.terrainOp(), r = this.terrRadius(), k = this.terrStrength();
+    let stroke: TerrainStroke;
+    if (op === 'hill' || op === 'crater') stroke = { op, pts: [pts[0]!], radius: r, strength: Math.abs(k), falloff: this.terrFalloff() };
+    else if (op === 'ramp') {
+      if (pts.length < 2 || Math.hypot(pts[1]!.x - pts[0]!.x, pts[1]!.z - pts[0]!.z) < 2) {
+        this.toast.show('Drag from the foot of the ramp to its top.');
+        return;
+      }
+      stroke = { op, pts: [pts[0]!, pts[pts.length - 1]!], radius: r / 2, strength: k };
+    } else if (op === 'smooth') stroke = { op, pts, radius: r, strength: Math.min(1, Math.max(0.05, k / 100)), falloff: this.terrFalloff() };
+    else if (op === 'flatten') stroke = { op, pts, radius: r, strength: 1, height: Math.round(h0 * 10) / 10, falloff: this.terrFalloff() };
+    else stroke = { op, pts, radius: r, strength: Math.abs(k), falloff: this.terrFalloff() };
+    this.ed.commitSite((s) => {
+      s.terrain ??= defaultTerrain(s.extent);
+      s.terrain.strokes.push(stroke);
+    });
+    this.applyNow();
+  }
+  /** Back to flat ground (one undo step). */
+  protected clearTerrain(): void {
+    if (!this.ed.draft().terrain?.strokes.length) return;
+    this.ed.commitSite((s) => {
+      if (s.terrain) s.terrain.strokes = [];
+    });
+    this.applyNow();
+    this.toast.show('Terrain strokes removed. Undo brings them back.');
   }
   protected readonly scatterMode = signal<ScatterMode>('pen');
   protected readonly scatterSpacing = signal(5);
@@ -1910,6 +2016,7 @@ export class BandoEditor {
     if (t === 'column') return 'Click inside the building to place a column on this floor; drag to move.';
     if (t === 'cut' || t === 'wing') return this.b() ? `Drag a rectangle over the selected building to ${t === 'cut' ? 'cut it out' : 'add it as a wing'}.` : 'Select a building first.';
     if (t === 'tree') return 'Click to plant trees; switch to ↖ to move or delete them.';
+    if (t === 'terrain') return { raise: 'Drag to raise the ground along the stroke.', lower: 'Drag to dig along the stroke.', smooth: 'Drag to soften bumps and steps.', flatten: 'Drag from a point: the ground around the stroke goes to that point\'s height.', hill: 'Click to put a hill there.', crater: 'Click to dig a crater (with a little rim).', ramp: 'Drag from the foot of the ramp to its top.' }[this.terrainOp()] + ' One stroke = one undo step.';
     if (t === 'scatter') return { pen: 'Drag along a path: trees are planted randomly in a strip around it.', rect: 'Drag a square: it is filled with random trees.', circle: 'Drag from the centre: a circle is filled with random trees.', lasso: 'Draw a loop freehand: it is filled with random trees.' }[this.scatterMode()];
     if (t === 'door' || t === 'window') return this.b() ? `Click a wall of “${this.b()!.name}” to add a ${t}.` : 'Select a building first.';
     if (t === 'wall') return this.b() ? 'Drag inside the building to draw an interior wall.' : 'Select a building first.';
@@ -2293,6 +2400,7 @@ export class BandoEditor {
       this.drag.set({ t: 'fenceDraw', a: q, b: { ...q } });
     } else if (t === 'building') this.drag.set({ t: 'draw', x0: snap(p.x, 1), z0: snap(p.z, 1), x1: snap(p.x, 1), z1: snap(p.z, 1) });
     else if (t === 'scatter') this.drag.set({ t: 'scatter', pts: [{ x: p.x, z: p.z }] });
+    else if (t === 'terrain') this.drag.set({ t: 'terrain', pts: [{ x: p.x, z: p.z }], h0: siteGround(this.ed.draft()).at(p.x, p.z) });
     else if (t === 'tree') {
       this.ed.addTree(snap(p.x, 0.5), snap(p.z, 0.5), this.newTreeKind());
       this.applyNow();
@@ -2368,7 +2476,7 @@ export class BandoEditor {
 
   protected bldDown(e: PointerEvent, bd: BuildingSpec): void {
     const t = this.tool();
-    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'measure' || t === 'fence' || t === 'structure' || (PLACE.includes(t) && this.b())) return this.bgDown(e);
+    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'terrain' || t === 'measure' || t === 'fence' || t === 'structure' || (PLACE.includes(t) && this.b())) return this.bgDown(e);
     e.stopPropagation();
     const p = this.toWorld(e);
     this.capture(e);
@@ -2439,7 +2547,7 @@ export class BandoEditor {
 
   protected treeDown(e: PointerEvent, i: number): void {
     const t = this.tool();
-    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
+    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'terrain' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
     e.stopPropagation();
     this.capture(e);
     const tr = this.ed.draft().trees[i];
@@ -2472,7 +2580,7 @@ export class BandoEditor {
 
   protected structDown(e: PointerEvent, i: number): void {
     const t = this.tool();
-    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
+    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'terrain' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
     e.stopPropagation();
     this.capture(e);
     const st = this.ed.draft().structures?.[i];
@@ -2696,7 +2804,7 @@ export class BandoEditor {
 
   protected fenceDown(e: PointerEvent, i: number): void {
     const t = this.tool();
-    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
+    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'terrain' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
     e.stopPropagation();
     this.capture(e);
     this.pick.set({ t: 'fence', i });
@@ -2854,7 +2962,7 @@ export class BandoEditor {
   protected move(e: PointerEvent): void {
     const d = this.drag();
     if (!d) {
-      if (this.placing()) this.hover.set(this.toWorld(e)); // the ghost (and its guides) follow the pointer
+      if (this.placing() || this.tool() === 'terrain') this.hover.set(this.toWorld(e)); // the ghost (and its guides) follow the pointer
       // measuring: after the first point, a live line follows the pointer
       if (this.tool() === 'measure') this.measHover.set(this.measPoint(this.toWorld(e)));
       return;
@@ -3023,6 +3131,15 @@ export class BandoEditor {
         });
         break;
       }
+      case 'terrain': {
+        const op = this.terrainOp();
+        this.hover.set(p);
+        if (op === 'hill' || op === 'crater') break;
+        const last = d.pts[d.pts.length - 1]!;
+        if (op === 'ramp') this.drag.set({ ...d, pts: [d.pts[0]!, p] });
+        else if (Math.hypot(p.x - last.x, p.z - last.z) >= Math.max(0.5, this.terrRadius() / 4)) this.drag.set({ ...d, pts: [...d.pts, p] });
+        break;
+      }
       case 'scatter': {
         const last = d.pts[d.pts.length - 1]!;
         const mode = this.scatterMode();
@@ -3150,6 +3267,8 @@ export class BandoEditor {
       if (len >= 6) this.placeStructure('bridge', { x: (d.a.x + d.b.x) / 2, z: (d.a.z + d.b.z) / 2 }, { length: Math.round(len), rotDeg: Math.round((Math.atan2(d.b.z - d.a.z, d.b.x - d.a.x) * 180) / Math.PI) });
     } else if (d.t === 'selArea') {
       this.finishSelArea(d, e.shiftKey);
+    } else if (d.t === 'terrain') {
+      this.commitTerrain(d.pts, d.h0);
     } else if (d.t === 'scatter') {
       const poly = areaOf(this.scatterMode(), d.pts, this.scatterWidth());
       const live = this.ed.draft();

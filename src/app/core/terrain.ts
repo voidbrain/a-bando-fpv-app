@@ -319,3 +319,45 @@ export function rayGround(g: HeightGrid | null | undefined, o: { x: number; y: n
   }
   return null;
 }
+
+/**
+ * Contour lines of a grid as SVG path data in site metres: `minor` every `step` metres, `major` every 5 steps (the
+ * plan view draws the major ones bolder). Marching squares; a big grid is sampled every `stride` cells. Flat ground = ''.
+ */
+export function contourPaths(g: HeightGrid, step = 1, stride = g.nx * g.nz > 90_000 ? 2 : 1): { minor: string; major: string } {
+  let lo = Infinity, hi = -Infinity;
+  for (let k = 0; k < g.h.length; k++) {
+    lo = Math.min(lo, g.h[k]!);
+    hi = Math.max(hi, g.h[k]!);
+  }
+  if (!(hi - lo >= step * 0.5)) return { minor: '', major: '' };
+  const minor: string[] = [], major: string[] = [];
+  const at = (i: number, j: number): number => g.h[j * g.nx + i]!;
+  const f = (n: number): string => n.toFixed(2);
+  for (let j = 0; j + stride < g.nz; j += stride) {
+    for (let i = 0; i + stride < g.nx; i += stride) {
+      const a = at(i, j), b = at(i + stride, j), c = at(i + stride, j + stride), d = at(i, j + stride);
+      const cmin = Math.min(a, b, c, d), cmax = Math.max(a, b, c, d);
+      if (cmax - cmin < 1e-6) continue;
+      const x0 = g.x0 + i * g.cell, z0 = g.z0 + j * g.cell, s = stride * g.cell;
+      for (let lv = Math.ceil(cmin / step) * step; lv <= cmax; lv += step) {
+        if (lv === cmin && lv === cmax) continue;
+        // crossing points on the four edges (top, right, bottom, left)
+        const pts: [number, number][] = [];
+        const edge = (p: number, q: number, xa: number, za: number, xb: number, zb: number): void => {
+          if ((p < lv) !== (q < lv)) {
+            const t = (lv - p) / (q - p);
+            pts.push([xa + (xb - xa) * t, za + (zb - za) * t]);
+          }
+        };
+        edge(a, b, x0, z0, x0 + s, z0);
+        edge(b, c, x0 + s, z0, x0 + s, z0 + s);
+        edge(c, d, x0 + s, z0 + s, x0, z0 + s);
+        edge(d, a, x0, z0 + s, x0, z0);
+        const out = Math.round(lv / step) % 5 === 0 ? major : minor;
+        for (let k = 0; k + 1 < pts.length; k += 2) out.push(`M${f(pts[k]![0])} ${f(pts[k]![1])}L${f(pts[k + 1]![0])} ${f(pts[k + 1]![1])}`);
+      }
+    }
+  }
+  return { minor: minor.join(''), major: major.join('') };
+}
