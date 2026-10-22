@@ -3,7 +3,7 @@ import type { Calibration, GeoPoint } from '../core/models';
 import { setSiteOrigin } from '../core/constants';
 import { solveCalibration, toGeo } from '../core/geo';
 import { bounds, edgesOf, recentre, rectilinear, type Pt } from '../core/footprint';
-import type { BuildingSpec, LocationInfo, PadSpec, SiteSpec, StructureSpec, TreeSpec, Vec2, WallOpening, ZoneSpec } from '../core/site-spec';
+import type { BuildingSpec, LocationInfo, SiteSpec, StructureSpec, TreeSpec, Vec2, WallOpening, ZoneSpec } from '../core/site-spec';
 import { keepInsideAreas } from '../core/areas';
 import { emptySpec, uid } from '../core/site-spec';
 import { setActiveGround, setTakeoff } from '../core/takeoff';
@@ -148,7 +148,10 @@ export class SiteService {
       }
       void k;
       if (data.partial) this.toast.show('Trees and roads could not be loaded (servers busy): buildings only. Regenerate later to add them.');
-      const spec = this.specFromZone(info, data.footprints, data.trees, data.roads, data.structures, area, seed);
+      const spec = this.specFromZone(info, data.footprints, data.trees, data.structures, area, seed);
+      spec.roads = data.roads;
+      spec.surfaces = data.surfaces;
+      spec.waters = data.waters;
       spec.zone = { lat: info.lat, lon: info.lon, halfE: area.halfE, halfN: area.halfN, ...(area.rotDeg ? { rotDeg: area.rotDeg } : {}) };
       if (opts.areas && opts.areas.length > 1) {
         spec.areas = opts.areas.map((a) => ({ ...a }));
@@ -174,7 +177,7 @@ export class SiteService {
       this.toast.show(
         spec.buildings.length
           ? `Generated “${spec.name}”: ${spec.buildings.length} buildings, ${spec.trees.length} trees.`
-          : `No buildings mapped in this area: “${spec.name}” has ${spec.trees.length} trees and ${spec.pads.length} roads. Add buildings in the Model editor.`,
+          : `No buildings mapped in this area: “${spec.name}” has ${spec.trees.length} trees and ${spec.roads?.length ?? 0} roads. Add buildings in the Model editor.`,
       );
       if (groundNote) this.toast.show(groundNote.trim(), 5000);
       return spec;
@@ -334,7 +337,7 @@ export class SiteService {
    * +z = south), origin at the zone centre. Each footprint keeps its true outline when it is rectilinear (L, T, U, H
    * shapes ...) or becomes a rectangle along its longest edge otherwise; roads are rotated pads.
    */
-  private specFromZone(info: LocationInfo, fps: Footprint[], osmTrees: TreeSpec[], roads: PadSpec[], structures: StructureSpec[], area: { halfE: number; halfN: number; rotDeg?: number }, seed: number): SiteSpec {
+  private specFromZone(info: LocationInfo, fps: Footprint[], osmTrees: TreeSpec[], structures: StructureSpec[], area: { halfE: number; halfN: number; rotDeg?: number }, seed: number): SiteSpec {
     const mLat = 111132;
     const mLon = 111320 * Math.cos((info.lat * Math.PI) / 180);
     const buildings: BuildingSpec[] = [];
@@ -426,7 +429,7 @@ export class SiteService {
     spec.buildings = buildings;
     spec.trees = osmTrees.filter((t) => !inside(t.x, t.z, 0));
     spec.structures = structures;
-    spec.pads = [...roads, { x: sx, z: sz, w: 6, d: 6, color: '#a9aaa0' }];
+    spec.pads = [{ x: sx, z: sz, w: 6, d: 6, color: '#a9aaa0' }];
     spec.seed = seed;
     spec.extent = Math.max(area.halfE, area.halfN) * 1.5 + 40;
     spec.droneStart = { x: sx, z: sz };

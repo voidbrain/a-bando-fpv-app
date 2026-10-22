@@ -136,6 +136,13 @@ export function stepDrone(d: DroneState, dt: number, input: PilotInput, cfg: Con
       d.p[axis] = next[axis];
     }
   }
+  // water: touching the surface ends the flight (it floats there, stopped)
+  const water = world?.waterAt?.(d.p.x, d.p.z) ?? null;
+  if (water !== null && d.p.y < water + 0.05) {
+    crashed = true;
+    d.p.y = water + 0.05;
+    d.v.set(0, 0, 0);
+  }
   const floor = (world?.groundAt?.(d.p.x, d.p.z) ?? 0) + DRONE_REST_HEIGHT;
   if (d.p.y < floor) {
     d.p.y = floor;

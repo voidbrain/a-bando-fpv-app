@@ -1,8 +1,9 @@
 import { cutRect, edgesOf, slabs } from '../core/footprint';
 import { buildStructure } from './structures';
 import { fenceDef, postsAlong } from '../core/fences';
+import { WATER_COLOR, insidePolygon, roadDef, surfaceDef } from '../core/layers';
 import * as THREE from 'three';
-import { type BuildingSpec, type LevelSpec, type SiteSpec, type TreeSpec, createRandom } from '../core/site-spec';
+import { type BuildingSpec, type LevelSpec, type RoadSpec, type SiteSpec, type SurfaceSpec, type TreeSpec, createRandom } from '../core/site-spec';
 import { SiteCollider, type SolidBox, type TreeCylinder } from '../core/sim/collider';
 import { siteGround, type SiteGround } from '../core/site-ground';
 import type { HeightGrid } from '../core/terrain';
@@ -350,7 +351,7 @@ const PATCH_COLORS = ['#6f9350', '#86a35a', '#8a8656', '#7d7a52', '#98a262', '#9
  * The terrain as one mesh (a vertex per grid point, or every other one on a big grid), coloured like the old meadow:
  * the ground colour with the same seeded patches baked into the vertex colours, so they follow the slopes.
  */
-function terrainMesh(g: HeightGrid, color: string, rnd: () => number): THREE.Mesh {
+function terrainMesh(g: HeightGrid, color: string, rnd: () => number, surfaces: readonly SurfaceSpec[] = []): THREE.Mesh {
   const step = g.nx * g.nz > 250_000 ? 2 : 1;
   const nx = Math.floor((g.nx - 1) / step) + 1, nz = Math.floor((g.nz - 1) / step) + 1;
   const pos = new Float32Array(nx * nz * 3);
@@ -379,6 +380,22 @@ function terrainMesh(g: HeightGrid, color: string, rnd: () => number): THREE.Mes
     for (let j = j0; j <= j1; j++) {
       for (let i = i0; i <= i1; i++) {
         if (Math.hypot(g.x0 + i * step * g.cell - cx, g.z0 + j * step * g.cell - cz) > r) continue;
+        const k = (j * nx + i) * 3;
+        col[k] = c.r;
+        col[k + 1] = c.g;
+        col[k + 2] = c.b;
+      }
+    }
+  }
+  // surfaces (asphalt, gravel, sand ...) paint the vertices inside their outline
+  for (const sf of surfaces) {
+    const c = new THREE.Color(surfaceDef(sf.kind).color);
+    const xs = sf.pts.map((q) => q.x), zs = sf.pts.map((q) => q.z);
+    const i0 = Math.max(0, Math.floor((Math.min(...xs) - g.x0) / (step * g.cell))), i1 = Math.min(nx - 1, Math.ceil((Math.max(...xs) - g.x0) / (step * g.cell)));
+    const j0 = Math.max(0, Math.floor((Math.min(...zs) - g.z0) / (step * g.cell))), j1 = Math.min(nz - 1, Math.ceil((Math.max(...zs) - g.z0) / (step * g.cell)));
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        if (!insidePolygon(sf.pts, g.x0 + i * step * g.cell, g.z0 + j * step * g.cell)) continue;
         const k = (j * nx + i) * 3;
         col[k] = c.r;
         col[k + 1] = c.g;
@@ -419,6 +436,44 @@ function drapedPad(ground: SiteGround, x: number, z: number, w: number, d: numbe
   geo.computeVertexNormals();
   const m = new THREE.Mesh(geo, mat);
   m.receiveShadow = true;
+  return m;
+}
+
+/** A flat polygon (site metres) as a horizontal mesh at y = 0. */
+function flatShape(pts: readonly { x: number; z: number }[], mat: THREE.Material): THREE.Mesh {
+  const shape = new THREE.Shape(pts.map((q) => new THREE.Vector2(q.x, -q.z)));
+  const geo = new THREE.ShapeGeometry(shape);
+  geo.rotateX(-Math.PI / 2); // (x, y) -> (x, 0, -y): back to x east, z south
+  const m = new THREE.Mesh(geo, mat);
+  m.receiveShadow = true;
+  return m;
+}
+
+/** A road as a ribbon laid on the ground: a cross-section every ~2 m, 6 cm above the (levelled) ground. */
+function roadMesh(ground: SiteGround, r: RoadSpec, order: number): THREE.Mesh {
+  const pos: number[] = [], idx: number[] = [];
+  const half = r.width / 2;
+  const add = (x: number, z: number, nx: number, nz: number): void => {
+    const y = ground.at(x, z) + 0.06;
+    pos.push(x + nx * half, y, z + nz * half, x - nx * half, y, z - nz * half);
+  };
+  for (let i = 1; i < r.pts.length; i++) {
+    const a = r.pts[i - 1]!, b = r.pts[i]!;
+    const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
+    if (len < 0.01) continue;
+    const nx = -dz / len, nz = dx / len;
+    const n = Math.max(1, Math.ceil(len / 2));
+    for (let k = i === 1 ? 0 : 1; k <= n; k++) add(a.x + (dx * k) / n, a.z + (dz * k) / n, nx, nz);
+  }
+  for (let v = 0; v + 3 < pos.length / 3; v += 2) idx.push(v, v + 2, v + 1, v + 1, v + 2, v + 3);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const color = r.surface ? surfaceDef(r.surface).color : roadDef(r.kind).color;
+  const m = new THREE.Mesh(geo, material(color, { side: THREE.DoubleSide, ...(ground.grid ? {} : { depthWrite: false, depthTest: false }) }));
+  m.receiveShadow = true;
+  if (!ground.grid) m.renderOrder = order;
   return m;
 }
 
@@ -472,7 +527,7 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
   if (!opts.bare && ground.grid) {
     // ---- terrain: the height grid, flat ground around it, roads laid on it
     const g = ground.grid;
-    group.add(terrainMesh(g, spec.groundColor, rnd));
+    group.add(terrainMesh(g, spec.groundColor, rnd, spec.surfaces));
     const outer = spec.extent * 1.1, gx = -g.x0, gz = -g.z0;
     const grass = material(spec.groundColor);
     if (outer > Math.min(gx, gz)) {
@@ -491,6 +546,7 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
       }
     }
     for (const pd of spec.pads) group.add(drapedPad(ground, pd.x, pd.z, pd.w, pd.d, pd.rotDeg ?? 0, material(pd.color ?? '#a9aaa0')));
+    for (const r of spec.roads ?? []) group.add(roadMesh(ground, r, 0));
     const start = new THREE.Mesh(new THREE.BoxGeometry(4, 0.04, 4), material('#e8c65a'));
     start.position.set(spec.droneStart.x, ground.start + 0.2, spec.droneStart.z);
     start.receiveShadow = true;
@@ -498,11 +554,11 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
   } else if (!opts.bare) {
     // ---- ground + meadow patches (patches ignore depth; everything drawn after them covers them)
     const grass = material(spec.groundColor);
-    const ground = new THREE.Mesh(new THREE.BoxGeometry(spec.extent * 2.2, 1, spec.extent * 2.2), grass);
-    ground.position.set(0, -0.5, 0);
-    ground.receiveShadow = true;
-    ground.renderOrder = GROUND_ORDER;
-    group.add(ground);
+    const field = new THREE.Mesh(new THREE.BoxGeometry(spec.extent * 2.2, 1, spec.extent * 2.2), grass);
+    field.position.set(0, -0.5, 0);
+    field.receiveShadow = true;
+    field.renderOrder = GROUND_ORDER;
+    group.add(field);
     const patchMats = ['#6f9350', '#86a35a', '#8a8656', '#7d7a52', '#98a262', '#9a8a5c'].map((c) => material(c, { depthWrite: false, depthTest: false }));
     for (let i = 0; i < 300; i++) {
       const p = new THREE.Mesh(new THREE.CircleGeometry(3 + rnd() * 13, 6), patchMats[i % 6]);
@@ -523,10 +579,28 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
       o.renderOrder = order++;
       group.add(o);
     }
+    // flat ground: surfaces and roads are decals drawn after the meadow patches
+    for (const sf of spec.surfaces ?? []) {
+      const m = flatShape(sf.pts, material(surfaceDef(sf.kind).color, { depthWrite: false, depthTest: false }));
+      m.position.y = 0.012;
+      m.renderOrder = order++;
+      group.add(m);
+    }
+    for (const r of spec.roads ?? []) group.add(roadMesh(ground, r, order++));
     const start = new THREE.Mesh(new THREE.BoxGeometry(4, 0.04, 4), material('#e8c65a'));
     start.position.set(spec.droneStart.x, 0.2, spec.droneStart.z);
     start.receiveShadow = true;
     group.add(start);
+  }
+  // ---- water: a flat, see-through surface at each basin's level (the ground under it is dug when there is a terrain)
+  const waterMat = new THREE.MeshStandardMaterial({ color: WATER_COLOR, transparent: true, opacity: 0.78, roughness: 0.15, metalness: 0.1 });
+  if (!opts.bare) {
+    (spec.waters ?? []).forEach((w, i) => {
+      const m = flatShape(w.pts, waterMat);
+      m.position.y = ground.grid ? (ground.water[i] ?? 0) : 0.03;
+      m.userData['pick'] = { kind: 'water', i };
+      group.add(m);
+    });
   }
 
   // ---- buildings
@@ -646,7 +720,7 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     group.add(m);
   }
 
-  const collider = new SiteCollider(solids, treeSolids, ground.grid);
+  const collider = new SiteCollider(solids, treeSolids, ground.grid, opts.bare ? [] : (spec.waters ?? []).map((w, i) => ({ pts: w.pts, level: ground.grid ? (ground.water[i] ?? 0) : 0.03 })));
   return {
     group,
     roof,

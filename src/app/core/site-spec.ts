@@ -8,6 +8,7 @@
  */
 
 import { sanitizeTerrain, type TerrainSpec } from './terrain';
+import { sanitizeLayers } from './layers';
 
 export interface Vec2 {
   x: number;
@@ -169,6 +170,31 @@ export interface PadSpec {
   color?: string;
 }
 
+export type RoadKind = 'road' | 'track' | 'path' | 'rail';
+export type SurfaceKind = 'grass' | 'asphalt' | 'concrete' | 'gravel' | 'dirt' | 'sand' | 'rubble';
+
+/** A road, track, path or railway: a centre line laid on the ground, `width` metres wide (it levels the ground across). */
+export interface RoadSpec {
+  pts: Vec2[];
+  width: number;
+  kind: RoadKind;
+  surface?: SurfaceKind;
+}
+
+/** What the ground is made of inside an outline (drives its colour; visual only). */
+export interface SurfaceSpec {
+  pts: Vec2[];
+  kind: SurfaceKind;
+}
+
+/** A pond, canal or basin: the ground inside is dug `depth` metres below the water, the water sits just below the lowest bank. */
+export interface WaterSpec {
+  pts: Vec2[];
+  depth: number;
+  /** Water level relative to the lowest bank, metres (default -0.3). */
+  level?: number;
+}
+
 /** A rectangular map area: centre and half extents (metres) east-west / north-south. */
 export interface ZoneSpec {
   lat: number;
@@ -211,6 +237,12 @@ export interface SiteSpec {
   extent: number;
   /** Take-off pad position in site metres (scaled with the model). */
   droneStart: Vec2;
+  /** Roads, tracks, paths and railways laid on the ground (older bandos have their roads as rotated `pads`). */
+  roads?: RoadSpec[];
+  /** Ground materials (grass, asphalt, gravel ...) inside outlines. */
+  surfaces?: SurfaceSpec[];
+  /** Ponds, canals, basins. */
+  waters?: WaterSpec[];
   /** Ground shape (real elevation + the pilot's strokes). Absent = flat ground at y = 0. */
   terrain?: TerrainSpec;
   /** Two landmarks used to fit logged GPS paths onto the model (model corners ↔ real corners). */
@@ -359,6 +391,7 @@ export function sanitizeSpec(raw: unknown): SiteSpec | null {
     extent: typeof s.extent === 'number' ? s.extent : 500,
     droneStart: s.droneStart && typeof s.droneStart.x === 'number' ? s.droneStart : { x: 0, z: 0 },
     terrain: sanitizeTerrain(s.terrain),
+    ...sanitizeLayers(s),
     calibCorners: s.calibCorners ?? { p1: { x: -100, z: -100 }, p2: { x: 100, z: 100 } },
     geoCorners:
       s.geoCorners && typeof s.geoCorners.p1?.lat === 'number' && typeof s.geoCorners.p2?.lat === 'number'

@@ -222,3 +222,19 @@ describe('drone on a terrain', () => {
     }
   });
 });
+
+describe('drone and water', () => {
+  it('touching the water surface is a crash; flying over it is not', () => {
+    const pond = [{ x: -10, z: -10 }, { x: 10, z: -10 }, { x: 10, z: 10 }, { x: -10, z: 10 }];
+    const world = new SiteCollider([], [], null, [{ pts: pond, level: 0.5 }]);
+    expect(world.waterAt(0, 0)).toBeCloseTo(0.5);
+    expect(world.waterAt(20, 0)).toBeNull();
+    const d = createDroneState(1, { x: 0, z: 0 });
+    d.armed = true;
+    d.p.y = 2;
+    expect(run(d, 0.2, { ...neutral(), throttle: 0.3 }, world)).toBe(false);
+    d.armed = false; // motors off: it drops into the pond, too slowly to crash on the ground
+    expect(run(d, 1.5, neutral(), world)).toBe(true);
+    expect(d.p.y).toBeCloseTo(0.55, 2);
+  });
+});

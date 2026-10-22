@@ -53,6 +53,11 @@ export function keepInsideAreas(spec: SiteSpec, areas: readonly ZoneSpec[], marg
   spec.trees = spec.trees.filter((t) => keep(t.x, t.z));
   spec.structures = (spec.structures ?? []).filter((s) => keep(s.x, s.z));
   spec.pads = spec.pads.filter((p) => p === start || keep(p.x, p.z));
+  // lines and outlines: kept when any of their points is inside an area
+  const anyIn = (pts: readonly { x: number; z: number }[]): boolean => pts.some((p) => keep(p.x, p.z));
+  if (spec.roads) spec.roads = spec.roads.filter((r) => anyIn(r.pts));
+  if (spec.surfaces) spec.surfaces = spec.surfaces.filter((s) => anyIn(s.pts));
+  if (spec.waters) spec.waters = spec.waters.filter((w) => anyIn(w.pts));
 }
 
 /** Two areas framing (almost) the same place: the same one. */

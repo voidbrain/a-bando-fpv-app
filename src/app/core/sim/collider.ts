@@ -1,5 +1,6 @@
 import type { Vec3 } from '../math3d';
 import { heightAt, type HeightGrid } from '../terrain';
+import { insidePolygon } from '../layers';
 
 /** Axis-aligned box [x0, x1, y0, y1, z0, z1, isRoof] in unscaled model coordinates. */
 export type SolidBox = readonly [number, number, number, number, number, number, boolean];
@@ -11,6 +12,8 @@ export interface CollisionWorld {
   hit(p: Vec3): boolean;
   /** Ground height under (x, z), world (scaled) metres. Absent = flat at 0. */
   groundAt?(x: number, z: number): number;
+  /** Water surface under (x, z), world metres, or null where there is no water. Touching it is a crash. */
+  waterAt?(x: number, z: number): number | null;
 }
 
 /**
@@ -29,7 +32,15 @@ export class SiteCollider implements CollisionWorld {
     readonly trees: readonly TreeCylinder[] = [],
     /** Terrain heights (unscaled); null = flat ground at 0. */
     readonly ground: HeightGrid | null = null,
+    /** Water basins (unscaled): outline and surface level. */
+    readonly waters: readonly { pts: readonly { x: number; z: number }[]; level: number }[] = [],
   ) {}
+
+  waterAt(x: number, z: number): number | null {
+    const k = this.scale;
+    for (const w of this.waters) if (insidePolygon(w.pts, x / k, z / k)) return w.level * k;
+    return null;
+  }
 
   groundAt(x: number, z: number): number {
     const k = this.scale;

@@ -201,3 +201,23 @@ describe('site model on a terrain', () => {
     expect(m.collider.groundAt(70, 40)).toBeCloseTo(ty);
   });
 });
+
+describe('site model ground layers', () => {
+  it('draws roads, surfaces and water, flat or on a terrain', () => {
+    for (const withTerrain of [false, true]) {
+      const s = spec();
+      s.roads = [{ pts: [{ x: -80, z: 50 }, { x: 0, z: 60 }, { x: 80, z: 50 }], width: 6, kind: 'road' }];
+      s.surfaces = [{ pts: [{ x: 70, z: -70 }, { x: 100, z: -70 }, { x: 100, z: -40 }, { x: 70, z: -40 }], kind: 'sand' }];
+      s.waters = [{ pts: [{ x: -100, z: -100 }, { x: -70, z: -100 }, { x: -70, z: -70 }, { x: -100, z: -70 }], depth: 2 }];
+      if (withTerrain) s.terrain = { cell: 1, half: { e: 120, n: 120 }, strokes: [] };
+      const m = buildSiteFromSpec(s);
+      let water = 0;
+      m.group.traverse((o) => {
+        if ((o.userData['pick'] as { kind?: string } | undefined)?.kind === 'water') water++;
+      });
+      expect(water).toBe(1);
+      expect(m.collider.waterAt(-85, -85)).not.toBeNull();
+      if (withTerrain) expect(m.ground.at(-85, -85)).toBeLessThan(m.collider.waterAt(-85, -85)!);
+    }
+  });
+});

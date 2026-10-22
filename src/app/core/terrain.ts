@@ -286,17 +286,6 @@ export function buildHeights(t: TerrainSpec, pads: readonly FlatPad[] = []): { g
   return { grid: g, pads: pads.map((p) => flattenPad(g, p)) };
 }
 
-let memo: { key: string; out: { grid: HeightGrid; pads: number[] } } | null = null;
-
-/** {@link buildHeights}, remembered for the last input (the scene is rebuilt on every edit; the terrain rarely changes). */
-export function cachedHeights(t: TerrainSpec, pads: readonly FlatPad[]): { grid: HeightGrid; pads: number[] } {
-  const key = JSON.stringify([t, pads, t.base ? bases.has(t.base.key) : false]);
-  if (memo?.key === key) return memo.out;
-  const out = buildHeights(t, pads);
-  memo = { key, out };
-  return out;
-}
-
 /** First point where a ray meets the terrain (or y = 0 outside it), marching in ~cell steps; null if it never does. */
 export function rayGround(g: HeightGrid | null | undefined, o: { x: number; y: number; z: number }, d: { x: number; y: number; z: number }, maxDist = 5000): Vec2 | null {
   const step = Math.max(0.25, (g?.cell ?? 1) * 0.5);
