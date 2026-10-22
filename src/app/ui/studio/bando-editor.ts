@@ -5,6 +5,8 @@ import { contains, edgesOf, type Pt, type Rect } from '../../core/footprint';
 import { buildingsOverlap, stairsFor, columnGrid, columnRow, convertBuilding, duplicateColumn, mergeBuildings, overlapsOthers, repeatOpening } from '../../core/building-ops';
 import { addOpening, insideBuilding, listOpenings, moveOpening, outlineOf, previewOpening, patchOpening, removeOpening, reshapeBuilding, resetToRect, resizeOpening, type OpenSeg } from '../../core/openings';
 import { cloneSpec, uid, type BuildingSpec, type LevelSpec, type LocationInfo, type SiteSpec, type StructureKind, type StructureSpec } from '../../core/site-spec';
+import { applyStore } from '../../core/modules';
+import { areaOf, nearBuilding, scatterTrees, type ScatterMode } from '../../core/scatter';
 import { placeColumn, type Placement } from '../../core/placement';
 import { RECT_KINDS, STRUCTURE_DEFAULTS } from '../../three/structures';
 import { AiService } from '../../services/ai.service';
@@ -25,7 +27,7 @@ import type { SitePick } from '../../three/site-view';
 import { SiteView } from './site-view';
 import type { PreviewTarget } from '../../three/element-preview';
 
-type Tool = 'select' | 'building' | 'structure' | 'stairs' | 'merge' | 'cut' | 'wing' | 'tree' | 'fence' | 'door' | 'window' | 'wall' | 'void' | 'column' | 'measure';
+type Tool = 'select' | 'building' | 'structure' | 'stairs' | 'merge' | 'cut' | 'wing' | 'tree' | 'scatter' | 'fence' | 'door' | 'window' | 'wall' | 'void' | 'column' | 'measure';
 type Pick = { t: 'building' } | { t: 'tree'; i: number } | { t: 'opening'; id: string } | { t: 'wall'; i: number } | { t: 'fence'; i: number } | { t: 'void'; i: number } | { t: 'column'; i: number } | { t: 'structure'; i: number } | null;
 type Handle = 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se';
 type Drag =
@@ -43,6 +45,7 @@ type Drag =
   | { t: 'structMove'; i: number; dx: number; dz: number }
   | { t: 'structRot'; i: number }
   | { t: 'fenceDraw'; a: Pt; b: Pt }
+  | { t: 'scatter'; pts: Pt[] }
   | { t: 'fenceEnd'; i: number; end: 0 | 1 }
   | { t: 'voidDraw'; a: Pt; b: Pt }
   | { t: 'column'; i: number; dx: number; dz: number }
@@ -90,7 +93,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
           @if (indoor() && b(); as ib) {
             <span class="grp">
               @for (l of ib.levels; track $index) {
-                <button class="btn" [class.on]="$index === level()" (click)="level.set($index)" title="Edit this floor">L{{ $index + 1 }}</button>
+                <button class="btn" [class.on]="$index === level()" (click)="level.set($index)" title="Edit this floor">{{ levelName($index) }}</button>
               }
               <button class="btn" (click)="addLevel()" title="Add a floor on top (a copy of the last one; the roof moves up)">＋</button>
               <button class="btn" [disabled]="ib.levels.length < 2" (click)="removeFloor()" title="Remove the selected floor">－</button>
@@ -127,6 +130,18 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
                       <option [value]="k.id" [selected]="k.id === structKind()">{{ k.label }}</option>
                     }
                   </select>
+                }
+                @case ('scatter') {
+                  <select class="mini" [value]="scatterMode()" (change)="scatterMode.set(scatterModeOf($event))" title="Brush shape">
+                    <option value="pen" [selected]="scatterMode() === 'pen'">Pen (stroke)</option>
+                    <option value="rect" [selected]="scatterMode() === 'rect'">Square</option>
+                    <option value="circle" [selected]="scatterMode() === 'circle'">Circle</option>
+                    <option value="lasso" [selected]="scatterMode() === 'lasso'">Lasso</option>
+                  </select>
+                  <label class="lay" title="Average distance between trees">every <input class="mini" type="number" min="2" max="30" step="0.5" [value]="scatterSpacing()" (change)="scatterSpacing.set(num($event))" /> m</label>
+                  @if (scatterMode() === 'pen') {
+                    <label class="lay" title="Width of the pen stroke">width <input class="mini" type="number" min="2" max="60" step="1" [value]="scatterWidth()" (change)="scatterWidth.set(num($event))" /> m</label>
+                  }
                 }
                 @case ('building') {
                   <select class="mini" [value]="buildKind()" (change)="buildKind.set(buildKindOf($event))" title="What to draw">
@@ -340,6 +355,9 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
           @if (drag()?.t === 'bridgeDraw') {
             <line [attr.x1]="bdw().a.x" [attr.y1]="bdw().a.z" [attr.x2]="bdw().b.x" [attr.y2]="bdw().b.z" stroke="#ffd166" [attr.stroke-width]="7" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" pointer-events="none" />
           }
+          @if (scatterPreview(); as sp) {
+            <polygon [attr.points]="sp" fill="#4f9a4a" fill-opacity="0.22" stroke="#7bd36b" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+          }
           @if (drag()?.t === 'fenceDraw') {
             <line [attr.x1]="fd().a.x" [attr.y1]="fd().a.z" [attr.x2]="fd().b.x" [attr.y2]="fd().b.z" stroke="#ffd166" stroke-width="5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
           }
@@ -476,7 +494,7 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
             }
             @case ('void') {
               @if (voidSel(); as v) {
-                <div class="f"><span class="dim">Void · {{ (v.x1 - v.x0).toFixed(1) }} × {{ (v.z1 - v.z0).toFixed(1) }} m · floor {{ level() + 1 }}</span></div>
+                <div class="f"><span class="dim">Void · {{ (v.x1 - v.x0).toFixed(1) }} × {{ (v.z1 - v.z0).toFixed(1) }} m · floor {{ levelName(level()) }}</span></div>
                 @if (level() === 0) {
                   <div class="f"><label><input type="checkbox" [checked]="!!v.water" (change)="setVoid({ water: checked($event) })" /> water (basin)</label></div>
                 }
@@ -519,13 +537,20 @@ const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
                 @if (!bd.frame) {
                   <div class="f levels">
                     @for (l of bd.levels; track $index) {
-                      <button class="btn" [class.on]="$index === level()" (click)="level.set($index)">L{{ $index + 1 }}</button>
+                      <button class="btn" [class.on]="$index === level()" (click)="level.set($index)">{{ levelName($index) }}</button>
                     }
                     <button class="btn" (click)="addLevel()" title="Add a floor on top (a copy of the last one; the roof moves up)">＋ floor</button>
                     <button class="btn" [disabled]="bd.levels.length < 2" (click)="removeFloor()">－ floor</button>
                   </div>
                   @if (lvl(); as l) {
                     <div class="f"><label>wall height <input type="number" min="1" step="0.5" [value]="l.height" (change)="editLevel(setHeight, num($event))" /></label></div>
+                  }
+                  @if (!bd.footprint) {
+                    <div class="f" title="Standard warehouse shell on this floor: long walls = repeated 2 lower-panel bays + 1 full-height door, one end all doors, the other all lower panels, 3 rows of columns. Editable afterwards.">
+                      <button class="btn" (click)="storeShell()">▦ Store shell</button>
+                      <label>bay <input type="number" min="2" max="20" step="0.5" [value]="storeBay()" (change)="storeBay.set(num($event))" /> m</label>
+                      <label>columns every <input type="number" min="2" max="40" step="1" [value]="storeStep()" (change)="storeStep.set(num($event))" /> m</label>
+                    </div>
                   }
                   @if (topLevel(); as tl) {
                     <div class="f"><span class="dim">roof</span>
@@ -821,6 +846,7 @@ export class BandoEditor {
     { id: 'building', label: '＋ Building', hint: 'Drag a rectangle on the map (it cannot overlap another building)', where: 'out' },
     { id: 'structure', label: '▲ Structure', hint: 'Place a tower, bridge, container, vehicle ... (choose the kind next to the button)', where: 'out' },
     { id: 'tree', label: '＋ Tree', hint: 'Click the map to plant a tree', where: 'out' },
+    { id: 'scatter', label: '🌲 Brush', hint: 'Paint trees with a pen, or fill a square, circle or hand-drawn area with random trees', where: 'out' },
     { id: 'fence', label: '▭ Fence', hint: 'Drag to draw a free-standing wall or fence', where: 'out' },
     { id: 'merge', label: '⊎ Merge', hint: 'Then click a touching building to join it into the selected one', where: 'out', needsBuilding: true },
     { id: 'cut', label: '✂ Cut', hint: 'Cut a notch out of the selected building (U, H, L shapes)', where: 'out', needsBuilding: true },
@@ -870,7 +896,19 @@ export class BandoEditor {
   protected readonly indoor = signal(false);
   protected readonly level = signal(0);
   protected readonly pick = signal<Pick>(null);
+  protected levelName = (i: number): string => (i === 0 ? 'G' : `L${i}`);
   protected readonly drag = signal<Drag | null>(null);
+  protected readonly scatterMode = signal<ScatterMode>('pen');
+  protected readonly scatterSpacing = signal(5);
+  protected readonly scatterWidth = signal(10);
+  protected scatterModeOf = (e: Event): ScatterMode => selectedFrom(e) as ScatterMode;
+  /** The area the brush is about to fill, as an SVG polygon `points` string. */
+  protected readonly scatterPreview = computed(() => {
+    const d = this.drag();
+    if (d?.t !== 'scatter') return '';
+    const poly = areaOf(this.scatterMode(), d.pts, this.scatterWidth());
+    return poly.map((q) => `${q.x},${q.z}`).join(' ');
+  });
   protected readonly pinMode = this.scene.pin;
   protected readonly meas = signal<{ a: Pt | null; b: Pt | null }>({ a: null, b: null });
   protected query = '';
@@ -1016,7 +1054,7 @@ export class BandoEditor {
   });
   protected readonly previewCaption = computed(() => {
     const t = this.previewTarget();
-    if (t?.kind === 'part' || t?.kind === 'floor') return `floor ${this.level() + 1} · the rest is ghosted · drag to rotate`;
+    if (t?.kind === 'part' || t?.kind === 'floor') return `floor ${this.levelName(this.level())} · the rest is ghosted · drag to rotate`;
     return 'drag to rotate · wheel to zoom';
   });
   protected readonly visibleTools = computed(() =>
@@ -1024,7 +1062,7 @@ export class BandoEditor {
       (t) =>
         (t.where === 'both' || (t.where === 'in') === this.indoor()) &&
         (!t.needsBuilding || (!!this.b() && !this.b()!.frame)) &&
-        (!this.view3d() || ['select', 'building', 'structure', 'tree', 'fence'].includes(t.id)), // on the ground in 3D: what a click can place
+        (!this.view3d() || ['select', 'building', 'structure', 'tree', 'scatter', 'fence'].includes(t.id)), // on the ground in 3D: what a click can place
     ),
   );
   protected readonly placing = computed(() => PLACE.includes(this.tool()));
@@ -1140,10 +1178,11 @@ export class BandoEditor {
     if (t === 'column') return 'Click inside the building to place a column on this floor; drag to move.';
     if (t === 'cut' || t === 'wing') return this.b() ? `Drag a rectangle over the selected building to ${t === 'cut' ? 'cut it out' : 'add it as a wing'}.` : 'Select a building first.';
     if (t === 'tree') return 'Click to plant trees; switch to ↖ to move or delete them.';
+    if (t === 'scatter') return { pen: 'Drag along a path: trees are planted randomly in a strip around it.', rect: 'Drag a square: it is filled with random trees.', circle: 'Drag from the centre: a circle is filled with random trees.', lasso: 'Draw a loop freehand: it is filled with random trees.' }[this.scatterMode()];
     if (t === 'door' || t === 'window') return this.b() ? `Click a wall of “${this.b()!.name}” to add a ${t}.` : 'Select a building first.';
     if (t === 'wall') return this.b() ? 'Drag inside the building to draw an interior wall.' : 'Select a building first.';
     if (t === 'measure') return 'Click point A, then point B. Click the line to remove it.';
-    if (this.indoor()) return `Floor ${this.level() + 1}: roof off in 3D. Doors, windows, walls, voids and columns are edited here, per floor. Delete removes the selection.`;
+    if (this.indoor()) return `Floor ${this.levelName(this.level())}: roof off in 3D. Doors, windows, walls, voids and columns are edited here, per floor. Delete removes the selection.`;
     return 'Drag a building to move it, corners / edge squares to resize or reshape, the yellow knob to rotate. Drag the map to pan.';
   });
 
@@ -1416,6 +1455,7 @@ export class BandoEditor {
       const q = { x: snap(p.x, 0.5), z: snap(p.z, 0.5) };
       this.drag.set({ t: 'fenceDraw', a: q, b: { ...q } });
     } else if (t === 'building') this.drag.set({ t: 'draw', x0: snap(p.x, 1), z0: snap(p.z, 1), x1: snap(p.x, 1), z1: snap(p.z, 1) });
+    else if (t === 'scatter') this.drag.set({ t: 'scatter', pts: [{ x: p.x, z: p.z }] });
     else if (t === 'tree') {
       this.ed.addTree(snap(p.x, 0.5), snap(p.z, 0.5));
       this.applyNow();
@@ -1442,7 +1482,7 @@ export class BandoEditor {
 
   protected bldDown(e: PointerEvent, bd: BuildingSpec): void {
     const t = this.tool();
-    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'measure' || t === 'fence' || t === 'structure' || (PLACE.includes(t) && this.b())) return this.bgDown(e);
+    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'measure' || t === 'fence' || t === 'structure' || (PLACE.includes(t) && this.b())) return this.bgDown(e);
     e.stopPropagation();
     const p = this.toWorld(e);
     this.capture(e);
@@ -1513,7 +1553,7 @@ export class BandoEditor {
 
   protected treeDown(e: PointerEvent, i: number): void {
     const t = this.tool();
-    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
+    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
     e.stopPropagation();
     this.capture(e);
     const tr = this.ed.draft().trees[i];
@@ -1538,7 +1578,7 @@ export class BandoEditor {
 
   protected structDown(e: PointerEvent, i: number): void {
     const t = this.tool();
-    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
+    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
     e.stopPropagation();
     this.capture(e);
     const st = this.ed.draft().structures?.[i];
@@ -1741,7 +1781,7 @@ export class BandoEditor {
 
   protected fenceDown(e: PointerEvent, i: number): void {
     const t = this.tool();
-    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
+    if (this.pinMode() || t === 'building' || t === 'tree' || t === 'scatter' || t === 'measure' || t === 'fence' || t === 'structure') return this.bgDown(e);
     e.stopPropagation();
     this.capture(e);
     this.pick.set({ t: 'fence', i });
@@ -1997,6 +2037,13 @@ export class BandoEditor {
         });
         break;
       }
+      case 'scatter': {
+        const last = d.pts[d.pts.length - 1]!;
+        const mode = this.scatterMode();
+        if (mode === 'rect' || mode === 'circle') this.drag.set({ t: 'scatter', pts: [d.pts[0]!, { x: p.x, z: p.z }] });
+        else if (Math.hypot(p.x - last.x, p.z - last.z) >= 1) this.drag.set({ t: 'scatter', pts: [...d.pts, { x: p.x, z: p.z }] });
+        break;
+      }
       case 'fenceDraw':
         this.drag.set({ ...d, b: { x: snap(p.x, 0.5), z: snap(p.z, 0.5) } });
         break;
@@ -2074,6 +2121,17 @@ export class BandoEditor {
     if (d.t === 'bridgeDraw') {
       const len = Math.hypot(d.b.x - d.a.x, d.b.z - d.a.z);
       if (len >= 6) this.placeStructure('bridge', { x: (d.a.x + d.b.x) / 2, z: (d.a.z + d.b.z) / 2 }, { length: Math.round(len), rotDeg: Math.round((Math.atan2(d.b.z - d.a.z, d.b.x - d.a.x) * 180) / Math.PI) });
+    } else if (d.t === 'scatter') {
+      const poly = areaOf(this.scatterMode(), d.pts, this.scatterWidth());
+      const live = this.ed.draft();
+      const made = scatterTrees(poly, live.trees, { spacing: this.scatterSpacing() }, (q) => nearBuilding(live.buildings, q));
+      if (made.length) {
+        this.ed.commitSite((s) => {
+          s.trees.push(...made);
+        });
+        this.applyNow();
+      }
+      this.toast.show(made.length ? `${made.length} trees planted. Undo removes the whole stroke.` : 'No room for trees there (or the stroke was too short).');
     } else if (d.t === 'fenceDraw') {
       if (Math.hypot(d.b.x - d.a.x, d.b.z - d.a.z) >= 0.5) {
         this.ed.commitSite((s) => {
@@ -2205,6 +2263,15 @@ export class BandoEditor {
       if (x) fn(x, v);
     });
     this.applyNow();
+  }
+
+  protected readonly storeBay = signal(5);
+  protected readonly storeStep = signal(10);
+  protected storeShell(): void {
+    this.mutate((b) => {
+      applyStore(b, Math.min(this.level(), b.levels.length - 1), { bay: this.storeBay(), step: this.storeStep() });
+    }, 0);
+    this.toast.show('Store shell applied to this floor. Doors, panels and columns are still editable one by one.');
   }
 
   protected readonly setName = (b: BuildingSpec, v: string): void => { b.name = v; };

@@ -1,3 +1,4 @@
+import { FACADE_PATTERNS, applyStore, setColumnRows, setFacade, type FacadePattern } from './modules';
 import { addFloor, columnGrid, columnRow, convertBuilding } from './building-ops';
 import { STRUCTURE_DEFAULTS } from '../three/structures';
 import { contains, type Rect } from './footprint';
@@ -20,6 +21,7 @@ export const OPS = [
   'cut_notch', 'add_wing',
   'rename', 'rotate', 'move', 'resize',
   'add_structure', 'remove_structure', 'set_openings', 'add_columns', 'convert',
+  'set_facade', 'set_columns', 'industrial_store',
 ] as const;
 
 export const STRUCTURE_KINDS: readonly StructureKind[] = ['chimney', 'silo', 'tank', 'water_tower', 'lattice_tower', 'bridge', 'stairs', 'ramp', 'tower_crane', 'container', 'car', 'truck', 'excavator'];
@@ -66,6 +68,13 @@ export interface AiCommand {
   spacing?: number;
   /** convert: the building becomes a greenhouse (arched steel frame) or a plain building. Interior is lost. */
   to?: 'greenhouse' | 'building';
+  /** set_facade / industrial_store: the bay pattern of a wall (doors = all full-height, panels = all lower panels, store = 2 panels + 1 door). */
+  facade?: FacadePattern;
+  /** Distance between piers (façade) and between column rows' columns (`step`), number of column `rows`, edge-row `inset`. */
+  bay?: number;
+  rows?: number;
+  step?: number;
+  inset?: number;
 }
 
 export interface RunResult {
@@ -77,7 +86,7 @@ export interface RunResult {
   interior: boolean;
 }
 
-const INTERIOR: readonly AiOp[] = ['add_door', 'add_window', 'remove_openings', 'split_rooms', 'add_partition', 'clear_partitions', 'set_openings', 'add_columns'];
+const INTERIOR: readonly AiOp[] = ['add_door', 'add_window', 'remove_openings', 'split_rooms', 'add_partition', 'clear_partitions', 'set_openings', 'add_columns', 'set_facade', 'set_columns', 'industrial_store'];
 const DIR: Record<Compass, [number, number]> = {
   north: [0, -1], northeast: [0.7071, -0.7071], east: [1, 0], southeast: [0.7071, 0.7071],
   south: [0, 1], southwest: [-0.7071, 0.7071], west: [-1, 0], northwest: [-0.7071, -0.7071],
@@ -111,6 +120,7 @@ export function normalizeCommands(raw: unknown): { cmds: AiCommand[]; errors: st
     if (o['state'] === 'open' || o['state'] === 'closed') c.state = o['state'];
     if (o['what'] === 'door' || o['what'] === 'window') c.what = o['what'];
     if (o['pattern'] === 'row' || o['pattern'] === 'grid') c.pattern = o['pattern'];
+    if (typeof o['facade'] === 'string' && (FACADE_PATTERNS as readonly string[]).includes(o['facade'])) c.facade = o['facade'] as FacadePattern;
     if (o['to'] === 'greenhouse' || o['to'] === 'building') c.to = o['to'];
     const level = num(o['level']);
     if (level !== undefined) c.level = clamp(Math.round(level), 1, 20);
@@ -120,7 +130,7 @@ export function normalizeCommands(raw: unknown): { cmds: AiCommand[]; errors: st
       const v = num(o[k]);
       if (v !== undefined) c[k] = clamp(v, 0, 1);
     }
-    for (const [k, lo, hi] of [['width', 0.4, 20], ['height', 0.3, 6], ['sill', 0, 5], ['size', 0.5, 200], ['depth', 0.5, 200], ['length', 2, 400], ['value', 1, 30], ['spacing', 0.8, 60]] as const) {
+    for (const [k, lo, hi] of [['width', 0.4, 20], ['height', 0.3, 6], ['sill', 0, 5], ['size', 0.5, 200], ['depth', 0.5, 200], ['length', 2, 400], ['value', 1, 30], ['spacing', 0.8, 60], ['bay', 2, 20], ['rows', 1, 8], ['step', 2, 40], ['inset', 1, 30]] as const) {
       const v = num(o[k]);
       if (v !== undefined) c[k] = clamp(v, lo, hi);
     }
@@ -399,6 +409,33 @@ export function runCommands(spec: SiteSpec, cmds: AiCommand[], selectedId: strin
         if (axis === 'z' && pattern === 'row') lev.columns[seed] = { x: b.length / 2, z: margin + 1, size };
         const added = pattern === 'grid' ? columnGrid(b, li, seed, spacing, spacing, 0.8) : columnRow(b, li, seed, c.count ?? 4, spacing, axis) + 1;
         ok(`${added} column(s) on floor ${li + 1} of ${label}`);
+        break;
+      }
+      case 'set_facade': {
+        const pat = c.facade ?? 'store';
+        const sides = c.side ? [c.side] : (['north', 'south', 'east', 'west'] as Compass[]);
+        let n = 0;
+        for (const sd of sides) {
+          const w = wallFacing(b, sd);
+          if (w) n += setFacade(b, li, w, pat, { bay: c.bay });
+        }
+        if (n) ok(`${n} bays (${pat}) on ${c.side ? `the ${c.side} wall` : 'all walls'} of ${label}`);
+        else res.errors.push(`set_facade: no wall long enough in ${label}`);
+        break;
+      }
+      case 'set_columns': {
+        const n = setColumnRows(b, li, { rows: c.rows, step: c.step, inset: c.inset, size: c.size });
+        if (n) ok(`${n} columns in ${c.rows ?? 3} rows on floor ${li + 1} of ${label}`);
+        else res.errors.push(`set_columns: no room for columns in ${label}`);
+        break;
+      }
+      case 'industrial_store': {
+        if (b.footprint) {
+          res.errors.push(`industrial_store: ${label} is a shaped building; use set_facade on its walls`);
+          break;
+        }
+        const done = applyStore(b, li, { bay: c.bay, rows: c.rows, step: c.step, inset: c.inset, size: c.size });
+        ok(`industrial store shell on ${label}: ${done.join(', ')}`);
         break;
       }
       case 'convert':

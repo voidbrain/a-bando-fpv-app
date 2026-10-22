@@ -110,3 +110,8 @@ npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
   therefore lives in `SiteSpec.calibration`; an effect in `SiteService` copies live changes into the spec. Do not set the
   calibration anywhere without going through the store, or it will be undone on the next edit.
 - Meshes that can be clicked in the 3D editor carry `userData.pick` (`{ kind, id | i }`); keep it when adding a new builder.
+
+## Modules and the tree brush
+- `core/modules.ts`: façade patterns (`doors` / `panels` / `store` = 2 lower-panel bays + 1 full-height door, repeated), column rows and the "industrial store" preset. They only write ordinary openings and columns, and replace what was there, so applying twice never stacks. AI ops: `set_facade`, `set_columns`, `industrial_store`.
+- `core/scatter.ts`: random trees inside a pen strip / square / circle / lasso outline (dart throwing, seedable). One stroke = one undo step.
+- Level 0 is labelled "G" in the UI (`levelName`), the others L1, L2 ...

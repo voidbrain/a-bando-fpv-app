@@ -41,6 +41,11 @@ export const AI_SCHEMA = {
           pattern: { type: 'string', enum: ['row', 'grid'] },
           spacing: { type: 'number' },
           to: { type: 'string', enum: ['greenhouse', 'building'] },
+          facade: { type: 'string', enum: ['doors', 'panels', 'store'] },
+          bay: { type: 'number' },
+          rows: { type: 'integer' },
+          step: { type: 'number' },
+          inset: { type: 'number' },
           degrees: { type: 'number' },
           east: { type: 'number' },
           north: { type: 'number' },
@@ -67,6 +72,9 @@ Commands (all fields optional except op; distances in metres; "position" and x0.
 - add_structure: structure (chimney|silo|tank|water_tower|lattice_tower|bridge|stairs|ramp|tower_crane|container|car|truck|excavator), east / north (metres from the building, default beside it), height, size (radius or width), length, degrees, level (puts it on that floor), name. remove_structure: name or structure.
 - set_openings: state (open|closed), what (door|window), side, level: opens or closes existing doors / windows. Doors and windows are open (just a hole) unless closed.
 - add_columns: pattern (row|grid), count, spacing, axis (length|width), size, level. convert: to (greenhouse|building): the building is rebuilt, its interior is lost.
+- set_facade: facade (doors = every bay a full-height door, panels = every bay a lower panel with an opening above, store = repeated 2 panels + 1 door), side (omit = all walls), bay (metres between piers, default 5), level.
+- set_columns: rows (default 3), step (metres between columns along the hall), inset (edge rows from the long walls), size, level. Replaces the columns of that floor.
+- industrial_store: the standard warehouse shell on a rectangular building (long walls = repeated 2 panels + 1 door, one end all doors, the other all lower panels, 3 rows of columns). Optional bay, rows, step, inset, size, level.
 "building" is the building's name; leave it out for the selected one.
 
 Rules: use only these commands. Do not invent buildings. Prefer a few simple commands. If the request is unclear or impossible, return "commands": [] and ask one short question in "reply". Windows go on walls, doors on walls; a door gap is the way to connect rooms.
