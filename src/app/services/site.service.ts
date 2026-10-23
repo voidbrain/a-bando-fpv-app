@@ -19,6 +19,7 @@ import { SiteEditor } from '../core/site-editor';
 import { CalibrationStore } from '../state/calibration.store';
 import { GeoService } from './geo.service';
 import { SceneService } from './scene.service';
+import { isVoidSpec } from '../three/scene-host';
 import { SiteLibraryService } from './site-library.service';
 import { ToastService } from './toast.service';
 
@@ -481,6 +482,8 @@ export class SiteService {
     }
     this.calibration.apply(spec.calibration ?? calibrationForSpec(spec)); // the pilot's own alignment wins over the solved one
     if (resetView) this.scene.resetCamera();
+    // nothing built yet: the empty world turns slowly; a bando with something in it stands still
+    this.scene.autoOrbit.set(isVoidSpec(spec));
     if (this.scene.host) {
       const site = this.scene.host.setSite(spec);
       // the x-ray and the simulator collider point at the old model object graph: re-arm them

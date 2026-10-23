@@ -4,7 +4,7 @@ import base from './playwright.config';
 /** `npm run clips`: record every guide step as a video clip (docs/guide/clips/<step>.webm). */
 export default defineConfig({
   ...base,
-  testMatch: 'clips.record.ts',
+  testMatch: '*.record.ts',
   fullyParallel: true,
   workers: 2,
   retries: 0,

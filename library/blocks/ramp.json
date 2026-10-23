@@ -5,7 +5,7 @@
   "name": "Ramp",
   "kind": "structure",
   "tags": ["ramp", "skate"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A straight concrete ramp.",
   "thumbnail": "icon:ramp",

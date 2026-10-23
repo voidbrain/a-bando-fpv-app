@@ -9,6 +9,8 @@ export interface ControlTarget {
   calRot(): number;
   /** Called on a click (a press and release that barely moved); the caller decides whether a pin is armed. */
   onClick?(clientX: number, clientY: number, alt: boolean): void;
+  /** Any press or wheel on the surface (the main view stops its idle orbit). */
+  onInput?(): void;
 }
 
 interface Pointer {
@@ -73,16 +75,21 @@ export function attachOrbitControls(el: HTMLElement, target: ControlTarget): () 
     if (interactive()) target.state().manual = false;
   };
 
+  const touched = (): void => target.onInput?.();
+  el.addEventListener('pointerdown', touched);
   el.addEventListener('pointerdown', down);
   el.addEventListener('pointerup', up);
   el.addEventListener('pointercancel', up);
   el.addEventListener('pointermove', move);
+  el.addEventListener('wheel', touched, { passive: true });
   el.addEventListener('wheel', wheel, { passive: false });
   el.addEventListener('contextmenu', menu);
   el.addEventListener('dblclick', dbl);
   return () => {
     el.removeEventListener('dblclick', dbl);
+    el.removeEventListener('pointerdown', touched);
     el.removeEventListener('pointerdown', down);
+    el.removeEventListener('wheel', touched);
     el.removeEventListener('pointerup', up);
     el.removeEventListener('pointercancel', up);
     el.removeEventListener('pointermove', move);

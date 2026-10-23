@@ -2308,7 +2308,7 @@
    "id": "example-chiari-e-forti-st-29",
    "kind": "shapes",
    "name": "Cuore tower",
-   "x": 41.303,
+   "x": 41.302,
    "z": -147.879,
    "rotDeg": 33,
    "height": 45,
@@ -2380,7 +2380,7 @@
      "w": 5
     },
     "at": {
-     "x": 41.303,
+     "x": 41.302,
      "z": -147.879
     },
     "rot": 33

@@ -1,108 +1,113 @@
-<!-- Draft for Medium. Clips: docs/guide/clips/*.webm (npm run clips); Medium takes GIFs: ffmpeg -i step.webm -vf "fps=12,scale=720:-1" step.gif -->
+<!-- Draft for Medium. Media are the guide's own clips (docs/guide/clips/*.webm, `npm run clips`); Medium takes GIFs:
+     ffmpeg -i step.webm -vf "fps=12,scale=720:-1" step.gif -->
 
-# Flying the places nobody goes anymore: building A Bando
+# OpenBando: build your bando in 3D, then fly it
 
-*A browser app that turns an abandoned building into a 3D model you can fly, replay and share, without giving the place away.*
+*Build, Fly, Share: a free browser app that turns an abandoned place into a 3D model you can edit, fly through and
+replay your real flights in.*
 
-<!-- Cover: a frame from docs/guide/clips/look-3d.webm, or a still of Chiari e Forti in the 3D view -->
+<!-- Cover: docs/guide/clips/look-3d.webm (or a still of Chiari e Forti in the 3D view) -->
 
-FPV pilots have a name for the places we love most: *bandos*. Abandoned factories, half-collapsed farm sheds, the old
-oil mill by the river with no roof left. They are wonderful to fly and terrible to plan for. You arrive, look up at a
-gap between two beams, and wonder whether the quad fits. You fly, and back home the video tells you what happened but
-not where. And when a friend asks where it is, you hesitate, because a good bando stays good only while nobody
-vandalises it.
+OpenBando runs in the browser: no install, no account. Everything you make stays on your computer until you export it.
+This article walks through building a bando from scratch, the way you would on a free evening before a session.
 
-A Bando started as a way to answer three questions: what does the place look like before I get there, where exactly
-did I fly, and how do I share all of that without sharing the address.
+## 1. Create the bando and find the place
 
-## From a map to a model in a minute
+Open the **Bandos** panel and press **＋ New bando**. A map opens with a dashed frame on it.
 
-You open a new bando, search the place (or paste its coordinates), frame the area on the map and press **Generate**.
-The app asks OpenStreetMap for the buildings, roads, trees and water inside the frame, downloads the real ground
-heights, and builds a 3D model in the browser.
+- Type the place in the search box, or paste its coordinates (`45.6469, 12.3002`, or `45°38'49"N 12°18'01"E`
+  straight from Google Maps), and press **Go**.
+- Pan the map until the frame sits on the place. Drag the frame's edges and corners to size it: the size is written
+  under it in metres. Turn it with the yellow knob if the buildings run at an angle.
+- A long site, or two buildings far apart? **Add area** pins the frame and lets you draw another one; they are
+  downloaded together.
 
-<!-- clip: docs/guide/clips/place.webm, then generate.webm -->
+<!-- clip: docs/guide/clips/place.webm -->
 
-OpenStreetMap knows footprints, not ruins. So the model is a starting point, and the editor is where it becomes your
-bando:
+## 2. Generate the model
 
-- **Buildings** can be moved, resized, reshaped (cut a notch, add a wing), given floors, roofs, doors and windows.
-  Indoors you draw walls, voids and columns, floor by floor.
-- **Ruins are a property**, not a separate kind of building. Push a building to 40 % ruined and its roof gets holes you
-  can fly through; past 60 % the roof is gone and the walls lose their upper part along a broken line, never with
-  random holes lower down, because that is not how walls fall.
-- **The ground** is real terrain you can sculpt: raise, lower, flatten, stamp a ramp, dig a tunnel that opens where
-  the ground is cut. Roads, water and surfaces are outlines you can reshape point by point, and the satellite picture
-  can be laid on the 3D ground to check the model against reality.
-- **A library** of ready-made blocks (a water tower, a sign tower, a race gate, a caged roof ladder) places in one
-  click, and each block can be updated when the catalogue gets a newer version.
+Press **Generate 3D**. OpenBando downloads, from OpenStreetMap, every building footprint, road, tree row and water
+inside the frame, and the real ground heights from the free worldwide elevation tiles, then builds the model. A
+factory block of 300 × 300 m takes a few seconds.
 
-Anything can be put at exact coordinates (right-click → *Move to coordinates…*), which is how a surveyed ladder on a
-roof ends up exactly where it is.
+The result is drawn over the map, in true position, on the **2 · Model** tab. The map can be the street map or the
+satellite picture, at any opacity; **3D** switches to an orbit view of the whole bando, and the satellite picture can
+be laid on the 3D ground too, which is the quickest way to see what OpenStreetMap got wrong.
 
-Everything you change is an ordinary edit of one plain data file, the *spec*. The 3D view, the 2D plan, the
-inspector's little preview and the collisions of the simulator are all built from it, so they never disagree.
+<!-- clip: docs/guide/clips/generate.webm -->
 
-## An assistant that edits, and does not claim
+## 3. Make it look like the real place
 
-There is an AI assistant, and it is deliberately humble. You select a building and write "a door in the middle of the
-north wall, and eight windows on the east side". The model answers with commands, the app runs them through the same
-code the mouse tools use, and the review list shows what *actually* changed, with a link to each change and one-click
-Undo. The model's own reply is only a claim; the app reports what it did.
+OpenStreetMap knows footprints, not ruins. This is where the bando becomes yours. The tools sit in a palette on the
+left, one button per group; the options of the active tool appear next to it.
 
-It runs on a model in your browser, or on your own server (Ollama, LM Studio, any OpenAI-compatible endpoint).
-Nothing has to leave your machine.
+**Buildings.** Select one and the inspector shows its length, width, rotation, wall height, floors and roof. Drag it to
+move it, pull its corners to resize it, turn it with its knob; with the magnet on, it snaps flush to its neighbours.
+**Cut** takes a notch out (U, L and H shapes), **Wing** adds one, **Merge** joins two buildings into one outline.
 
-<!-- clip: docs/guide/clips/ai.webm -->
+- *Floors and roofs*: add floors (G, L1, L2…), choose a gable, a barrel vault, a flat roof or none.
+- *Façades*: the Modules section repeats doors, windows and panels along a wall, so a 60 m shed gets its twelve bays
+  in one click.
+- *Indoors*: **Edit indoors** takes the roof off and lets you draw interior walls, doors, windows, holes in the floor,
+  columns and stairs, floor by floor. Columns snap to each other and can be copied as a row or a grid.
+- *Ruins*: set a building to 40 % ruined and its roof gets holes you can fly through; past 60 % the roof is gone and
+  the walls lose their top along a broken line. One wall can be more ruined than the others; battlements are a tick
+  box.
 
-## Replaying a flight where it happened
+**Structures and the library.** Water towers, sign towers, chimneys, silos, cranes, containers, bridges, race gates and
+a caged roof ladder are ready-made blocks: open the **Library**, pick one, click the map. A block placed on a
+building belongs to it and moves with it.
 
-Drop a Betaflight Blackbox log (or a GPX, or JSON) on the page and the flight appears as a coloured path through the
-model, blue where you were slow and red where you were not. Load the video of the same flight and press
-**Auto-sync**: the app measures how the picture pans and rolls and lines it up with the gyro in the log. Flips and
-rolls are the best markers. Then press play: the drone flies its real path through the model, with the video in step,
-the sticks, motors and attitude beside it.
+<!-- clip: docs/guide/clips/library.webm -->
 
-<!-- clip: docs/guide/clips/sync.webm, replay.webm -->
+**The ground.** The terrain is real, and you can sculpt it the way Populous did: hold the left button to raise the
+ground, the right one to lower it, longer for higher and wider. Ramps, hills, craters, flattening and smoothing are
+brushes of their own; a ramp shows its slope while you draw it. **Tunnel** digs a culvert or an underground room that
+opens where the ground cuts it.
 
-GPS is never quite right, so two pins fix it: pin where the flight started and where it ended, and the path turns
-into place. The alignment is saved with the bando.
+**Roads, water, trees.** Roads, surfaces (asphalt, gravel, rubble…) and water are outlines you can reshape point by
+point; a canal is drawn as a line with a width. The tree brush plants along a stroke or fills a square, a circle or a
+hand-drawn area, broadleaf, conifer or mixed.
 
-A few things made this work on real flights rather than demos: the log is parsed off the main thread (a 30 MB
-Blackbox CSV no longer freezes the page), a 4K video is scanned at a speed the browser can actually decode, and the 3D
-view merges each building into one mesh per material, so a large factory draws in about a hundred calls instead of
-over a thousand.
+**Exact positions.** Surveyed a ladder or a corner on site? Right-click it → *Move to coordinates…* and paste the
+point. The **Measure** tool chains distances and shows the angles between them, snapping to corners and columns.
 
-## Sharing a bando without sharing the place
+**The AI assistant.** Select a building and write what you want: "a door in the middle of the north wall, and eight
+windows on the east side". The assistant turns it into the same edits the tools make, and the review list shows what
+actually changed, with Undo one click away. It can run on a model in your browser or on your own server (Ollama, LM
+Studio); nothing is sent anywhere you did not choose.
 
-This is the part I care about most. Every bando can be exported as a file. A bando can also be **hidden**: the copy
-drops its coordinates, the map area, the GPS landmarks, the pilot's alignment and every name that came from the map
-(street names give a place away faster than coordinates). Its real ground travels inside the file, since nobody could
-download it again without knowing where it is.
+Every change is one Undo step, and **Save** keeps the bando in the browser.
 
-Open a hidden bando and there is no map under it, just the model. Load your own flight on it and the app puts its
-start on the take-off pad; the pins and the compass do the rest. A hidden bando stays hidden: exporting it again can
-never put a place back.
+## 4. Fly it
 
-The app ships with two examples: Chiari e Forti, an old oil factory on the river Sile with its battlemented mill
-tower, in public; and Villetta, shared without its place.
+Your real flights go back into the model. Drop a Betaflight Blackbox log (or a GPX, or JSON) on the page: the flight
+appears as a path through the bando, coloured by speed. Load the DVR of the same flight and press **Auto-sync**: the
+app matches how the picture moves with the gyro in the log. Press play and the drone flies its real line, with the
+video, the sticks, the motors, the attitude and four cameras (chase, FPV, top, orbit) in step. Two pins (start and
+end) fix the GPS drift.
 
-## Learning it by watching it
+No flight yet? Plug in your radio (USB joystick mode) and fly the bando in the simulator, with collisions.
 
-The app has a guide that plays on the real interface: a drawn cursor moves, clicks and drags, and a caption next to
-the action says what happens. Every step plays on its own, and every step is also a short clip, recorded by a script
-that plays the same steps in a headless browser. The same script checks, on every pull request, that each step still
-works and that the main screens pass the accessibility checks.
+<!-- clip: docs/guide/clips/replay.webm -->
 
-## What is next
+## 5. Share it, or keep the place to yourself
 
-National elevation models would give sharper ground than the free worldwide tiles. A shared library where any pilot
-can publish blocks and bandos needs accounts and moderation, and a careful answer to the question this whole app is
-built around: what should travel with a place, and what should not.
+**Export** writes the bando as a file. **Export hidden** writes a copy without its place: no coordinates, no map, no
+street names, its ground carried inside the file. Whoever opens it gets the model and can replay their own flights on
+it (they start on the take-off pad), but cannot find the place. A hidden bando stays hidden: exporting it again can
+never put the address back.
 
-A Bando is open source. Fly safe, leave the place as you found it, and keep the good ones to yourself.
+**Back up all** saves every bando and your own blocks in one file, and the replay can be rendered as an MP4 at 1080p
+or 4K.
+
+## Try it
+
+Open OpenBando, close the welcome screen, and open **Chiari e Forti** from the examples: an old oil factory on the
+river Sile with its battlemented mill tower. Or play the one-minute tour from the welcome screen.
+
+OpenBando is open source. Build your bando, fly it, and share it only with the people who should know where it is.
 
 ---
 
-*Built with Angular, Three.js and OpenStreetMap data (© OpenStreetMap contributors, ODbL). Elevation from the AWS
-Terrain Tiles.*
+*Map data © OpenStreetMap contributors (ODbL). Elevation: AWS Terrain Tiles. Satellite imagery © Esri, Maxar.*

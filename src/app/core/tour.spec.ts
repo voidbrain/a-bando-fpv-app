@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cloneSpec, emptySpec } from './site-spec';
 import { parseReply } from './ai-prompt';
 import { runCommands } from './ai-commands';
-import { backTarget, captionPlace, AI_SCRIPTS, SNIPPETS, TOURS, checkGuide, playTime, snippetForMark, tourBeats } from './tour';
+import { backTarget, captionPlace, showcaseLink, SHOWCASE, AI_SCRIPTS, SNIPPETS, TOURS, checkGuide, playTime, snippetForMark, tourBeats } from './tour';
 
 describe('guided tour', () => {
   it('every tour uses known snippets, every snippet has captions and known hooks', () => {
@@ -16,7 +16,7 @@ describe('guided tour', () => {
 
   it('the full tour plays every snippet once, in a few minutes', () => {
     const full = TOURS.find((t) => t.id === 'full')!;
-    expect(new Set(full.snippets).size).toBe(SNIPPETS.length);
+    expect(new Set(full.snippets).size).toBe(SNIPPETS.filter((s) => s.section !== 'showcase').length); // the showcase has its own steps
     const ms = playTime(tourBeats(full).map((b) => b.beat));
     expect(ms).toBeGreaterThan(60_000);
     expect(ms).toBeLessThan(300_000);
@@ -61,5 +61,19 @@ describe('guide caption place', () => {
   it('goes above a target near the bottom, and to the bottom without one', () => {
     expect(captionPlace({ x: 600, y: 700, w: 100, h: 40 }, view, bar).top).toBe(576);
     expect(captionPlace(null, view, bar)).toEqual({ left: 350, top: 642 });
+  });
+});
+
+describe('the showcase', () => {
+  it('plays from a link, in the language it asks for', () => {
+    expect(showcaseLink('?tour=showcase&lang=it')).toEqual({ lang: 'it' });
+    expect(showcaseLink('', '#tour=showcase&lang=en')).toEqual({ lang: 'en' });
+    expect(showcaseLink('?tour=showcase&lang=xx')).toEqual({ lang: null });
+    expect(showcaseLink('?lang=it')).toBeNull();
+  });
+  it('keeps its finished screen and stays out of the Guide sections', () => {
+    expect(SHOWCASE.keepLayout).toBe(true);
+    expect(SHOWCASE.snippets.every((id) => SNIPPETS.find((s) => s.id === id)?.section === 'showcase')).toBe(true);
+    expect(checkGuide()).toEqual([]);
   });
 });

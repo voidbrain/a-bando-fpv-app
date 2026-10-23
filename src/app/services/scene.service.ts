@@ -60,6 +60,8 @@ export class SceneService {
   host: SceneHost | null = null;
   readonly ready = signal(false);
   readonly mainOrbit: OrbitState = createOrbitState();
+  /** The main view turns slowly by itself (the empty world of a first visit); any touch on it stops it. */
+  readonly autoOrbit = signal(true);
   readonly viewports: Record<ViewportType, Viewport> = {
     orbit: this.makeViewport('orbit'),
     chase: this.makeViewport('chase'),
@@ -298,6 +300,7 @@ export class SceneService {
     if (!host) return;
     host.drones.syncSim(this.sim.state, dt);
     host.drones.syncGhost(this.playback.pose.p, this.playback.pose.q, this.flights.active);
+    if (this.autoOrbit() && this.view.cameraView() === 'orbit') this.mainOrbit.th += dt * 0.07;
     placeCamera(host.mainCamera, this.view.cameraView(), this.mainOrbit, this.subject(), this.placeOptions(), dt);
   }
 

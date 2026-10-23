@@ -1,10 +1,16 @@
-# a-bando-fpv-app
+# OpenBando
 
-A browser tool for **FPV drone pilots who fly in abandoned places** ("bandos"): replay your flights from Betaflight / Blackbox
-logs in a 3D model of the place, practise in a simulator, and build that model yourself from the map.
+**Build, Fly, Share.** A browser app for **FPV pilots who fly abandoned places** ("bandos"): build the place in 3D from the
+map, fly it (replay your real flights from Betaflight Blackbox logs and their DVR, or the simulator with your radio), and
+share it, with or without its address.
 
 Everything runs in the browser (Angular 22, Three.js, signals). There is no backend. Bandos, blocks and the cached real ground
 stay in the browser (IndexedDB); videos and logs are read from your disk and never uploaded.
+
+**The one-minute tour**, played by itself (for people who have a minute): 
+[English](https://voidbrain.github.io/a-bando-fpv-app/?tour=showcase&lang=en) ·
+[Italiano](https://voidbrain.github.io/a-bando-fpv-app/?tour=showcase&lang=it). Any address of the app takes
+`?tour=showcase` and `lang=en` / `lang=it`.
 
 ## What it does
 
@@ -22,8 +28,8 @@ stay in the browser (IndexedDB); videos and logs are read from your disk and nev
      other columns (same line, equal spacing, rhythm) and distances to walls and neighbours. Only the tools that make sense
      are shown: outdoor tools while outdoors, floor tools while editing a floor. The palette groups related tools Photoshop-style (hold or use the corner mark for the others) and a right click offers what can be done with whatever is under the pointer. 2D / 3D switch (3D: click to select, draw and place on the ground, roofs on / off), compass, chained measures with angle arcs (select, move, delete), the flight path with start / end markers,
      flight-path start / end pins, floating inspector with a 3D preview of the selection.
-- **Terrain**: the real ground (AWS Terrain Tiles) under every bando, shaped with brushes (raise, lower, smooth, flatten,
-  hill, crater, ramp); roads, surfaces and water (drawn as an outline or along a canal's centre line); tunnels and basements.
+- **Terrain**: the real ground (AWS Terrain Tiles) under every bando, sculpted by holding the mouse (left raises, right
+  lowers) or with brushes (raise, lower, smooth, flatten, hill, crater, ramp, with construction lines); roads, surfaces and water (drawn as an outline or along a canal's centre line); tunnels and basements.
 - **Library**: ready-made blocks (objects, buildings, façade and column patterns, FPV gates) from an online catalogue that
   works offline, plus your own blocks made from a selection.
 - **Ruins**: any building can be ruined (holes in the roof, then walls broken along their top), an open shell, or carry
@@ -35,8 +41,10 @@ stay in the browser (IndexedDB); videos and logs are read from your disk and nev
 - **Video**: load the flight's video, sync it with the log automatically, replay both together, render an MP4.
 - **AI assistant** (optional): a chat that turns sentences like "3 rooms with doors, close the north windows, add a crane"
   into editor commands. See *AI assistant* below.
-- **Guide me**: animated tours that use the real interface, every step on its own too, hover tips; help pages in
-  `docs/guide/`.
+- **Welcome**: a first visit opens on the empty world turning slowly, with Build / Fly / Share and their short films
+  (`public/welcome/`, recorded by `npm run films`), and the one-minute tour.
+- **Guide me**: animated tours that use the real interface, every step on its own too, hover tips; help pages and clips in
+  `docs/guide/` (`npm run clips`).
 - **Languages**: English and Italian (the flag next to the version); the AI answers in the chosen language.
 
 ## Structure types

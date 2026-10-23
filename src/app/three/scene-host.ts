@@ -9,7 +9,26 @@ import type { CameraView } from '../core/models';
 
 const SKY = '#b8d0c5';
 
-/** A text sprite (dark plate, light text) that always faces the camera. */
+/** A spec with nothing built yet (the empty bando a first visit opens on). */
+export function isVoidSpec(spec: SiteSpec): boolean {
+  return !spec.buildings.length && !spec.trees.length && !spec.structures?.length && !spec.terrain && !spec.walls?.length;
+}
+
+/** The floor of the empty world: a fine and a coarse grid fading into the fog. */
+function voidFloor(): THREE.Group {
+  const g = new THREE.Group();
+  const fine = new THREE.GridHelper(2400, 240, '#7fa58f', '#7fa58f');
+  const coarse = new THREE.GridHelper(2400, 24, '#2f6b4a', '#2f6b4a');
+  for (const [h, op] of [[fine, 0.35], [coarse, 0.7]] as const) {
+    const m = h.material as THREE.LineBasicMaterial;
+    m.transparent = true;
+    m.opacity = op;
+    h.position.y = 0.02;
+    g.add(h);
+  }
+  return g;
+}
+
 /** The badge at the tip of the north arrow: a round "N" (a sprite, so it always faces the camera). */
 function makeNorthBadge(): THREE.Sprite {
   const c = document.createElement('canvas');
@@ -96,7 +115,8 @@ export class SceneHost {
     this.scene.add(this.site.group);
     this.drones = new DroneRig(this.scene);
     this.paths = new PathRenderer(this.scene);
-    this.scene.add(this.northArrow, this.northLabel);
+    this.scene.add(this.northArrow, this.northLabel, this.voidGrid);
+    this.setVoid(true);
   }
 
   /**
@@ -111,7 +131,16 @@ export class SceneHost {
     });
     this.site = buildSiteFromSpec(spec, { merge: true });
     this.scene.add(this.site.group);
+    this.setVoid(isVoidSpec(spec));
     return this.site;
+  }
+
+  /** No bando yet: a wireframe floor to the horizon instead of a meadow, no north arrow. */
+  private readonly voidGrid = voidFloor();
+  private setVoid(on: boolean): void {
+    this.voidGrid.visible = on;
+    this.site.group.visible = !on;
+    this.northArrow.visible = this.northLabel.visible = !on;
   }
 
   /** Point the north arrow (a landmark on the west apron) at true north for a model rotated by `rotDeg`. */

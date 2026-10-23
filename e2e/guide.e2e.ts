@@ -13,11 +13,12 @@ function watch(page: Page): string[] {
   return problems;
 }
 
-// every step must play on its own, from a first visit (the Guide me panel is open then)
-for (const s of SNIPPETS) {
+// every step must play on its own, from a first visit (opened from Welcome's Guide me)
+for (const s of SNIPPETS.filter((x) => x.section !== 'showcase')) {
   test(`guide step plays alone: ${s.title}`, async ({ page }) => {
     const problems = watch(page);
     await page.goto('/');
+    await page.getByRole('button', { name: 'Guide me', exact: true }).click(); // from Welcome
     await page.getByRole('button', { name: `Play: ${s.title}`, exact: true }).click();
     const bar = page.locator('app-tour-overlay .bar');
     await expect(bar).toBeVisible();

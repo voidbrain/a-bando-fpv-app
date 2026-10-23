@@ -148,11 +148,7 @@ export class VideoService {
         this.toast.show('Auto-sync failed');
         return;
       }
-      this.setOffset(outcome.offset);
-      this.playback.seekTo(lift ?? 0);
-      this.element.currentTime = Math.max(0, this.playback.time + outcome.offset);
-      this.status.set(`offset ${outcome.offset.toFixed(2)} s · ${outcome.description}`);
-      this.toast.show(`Auto-synced: offset ${outcome.offset.toFixed(2)} s`);
+      this.applySync(outcome.offset, outcome.description, lift ?? 0);
     } catch (e) {
       this.status.set('');
       this.toast.show(`Auto-sync: ${(e as Error).message}`);
@@ -161,6 +157,15 @@ export class VideoService {
       v.removeAttribute('src');
       v.load();
     }
+  }
+
+  /** A sync found: the offset, the replay back to `from` (the lift-off), the video on the same moment, the result line. */
+  applySync(offset: number, description: string, from: number): void {
+    this.setOffset(offset);
+    this.playback.seekTo(from);
+    this.element.currentTime = Math.max(0, this.playback.time + offset);
+    this.status.set(`offset ${offset.toFixed(2)} s · ${description}`);
+    this.toast.show(`Auto-synced: offset ${offset.toFixed(2)} s`);
   }
 
   /** Seek to an exact video time and wait until that frame is ready to be drawn (for frame-exact rendering). */

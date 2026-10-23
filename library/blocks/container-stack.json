@@ -5,7 +5,7 @@
   "name": "Container stack",
   "kind": "group",
   "tags": ["container", "yard", "port"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "Three shipping containers: two side by side, one on top.",
   "thumbnail": "icon:container",

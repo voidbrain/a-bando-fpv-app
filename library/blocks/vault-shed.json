@@ -5,7 +5,7 @@
   "name": "Barrel-vault shed",
   "kind": "building",
   "tags": ["industrial", "shed", "vault"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A long industrial shed of parallel barrel-vault halls, with a big door at both ends of every hall.",
   "thumbnail": "icon:building",

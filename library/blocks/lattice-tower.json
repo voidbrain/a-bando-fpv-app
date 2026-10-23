@@ -5,7 +5,7 @@
   "name": "Lattice tower / pylon",
   "kind": "structure",
   "tags": ["tower", "steel", "power"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A steel lattice mast or power pylon.",
   "thumbnail": "icon:lattice",

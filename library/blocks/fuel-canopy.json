@@ -5,7 +5,7 @@
   "name": "Fuel station canopy",
   "kind": "structure",
   "tags": ["station", "canopy", "roof"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A flat canopy on columns, over the pumps.",
   "thumbnail": "icon:structure",

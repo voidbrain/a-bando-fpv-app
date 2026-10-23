@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-A Bando bridge: ELRS / CRSF telemetry  ->  WebSocket (JSON)  for the A Bando FPV page.
+OpenBando bridge: ELRS / CRSF telemetry  ->  WebSocket (JSON)  for the OpenBando page.
 
 A browser cannot read UDP, ESP-NOW or a serial telemetry stream by itself, so this small
 program (Python 3, standard library only) reads it and re-publishes it as JSON over a WebSocket
@@ -158,7 +158,7 @@ async def ws_handler(reader, writer, clients):
             if ':' in ln:
                 k, v = ln.split(':', 1); h[k.strip().lower()] = v.strip()
         if h.get('upgrade', '').lower() != 'websocket':
-            body = b'A Bando bridge is running. Connect a WebSocket to this port.\n'
+            body = b'OpenBando bridge is running. Connect a WebSocket to this port.\n'
             writer.write(b'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\nContent-Length: %d\r\n\r\n' % len(body) + body)
             await writer.drain(); writer.close(); return
         acc = base64.b64encode(hashlib.sha1((h['sec-websocket-key'] + GUID).encode()).digest()).decode()
@@ -197,7 +197,7 @@ async def serve(parser, port, hz):
                 except Exception: clients.discard(w)
 
 def main():
-    ap = argparse.ArgumentParser(description='ELRS/CRSF telemetry -> WebSocket bridge for the A Bando FPV page')
+    ap = argparse.ArgumentParser(description='ELRS/CRSF telemetry -> WebSocket bridge for the OpenBando page')
     ap.add_argument('--udp', type=int, metavar='PORT'); ap.add_argument('--tcp', metavar='HOST:PORT')
     ap.add_argument('--serial', metavar='DEVICE'); ap.add_argument('--baud', type=int, default=420000)
     ap.add_argument('--simulate', action='store_true'); ap.add_argument('--dump', action='store_true', help='print every incoming packet')

@@ -5,7 +5,7 @@
   "name": "Scaffolding",
   "kind": "structure",
   "tags": ["construction", "steel"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A scaffold tower with planks every 2 m.",
   "thumbnail": "icon:lattice",
