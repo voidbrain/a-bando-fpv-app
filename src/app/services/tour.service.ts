@@ -1,5 +1,5 @@
 import { Service, inject, signal } from '@angular/core';
-import { AI_SCRIPTS, SNIPPET_BY_ID, type At, type Beat, type Hook, type Need, type Snippet, type Tour, type TourAction } from '../core/tour';
+import { AI_SCRIPTS, SNIPPET_BY_ID, backTarget, type At, type Beat, type Hook, type Need, type Snippet, type Tour, type TourAction } from '../core/tour';
 import { sanitizeSpec } from '../core/site-spec';
 import type { PanelId } from '../ui/panel-defs';
 import { LayoutStore } from '../state/layout.store';
@@ -31,6 +31,8 @@ export interface TourState {
   total: number;
   say: string;
   paused: boolean;
+  /** Back has somewhere to go. */
+  canBack: boolean;
   /** Recording the screen for a clip. */
   recording: boolean;
 }
@@ -74,6 +76,8 @@ export class TourService {
   private stop = false;
   private paused = false;
   private skip = false;
+  /** Set by Back: the beat to play next. */
+  private jump: number | null = null;
 
   setTips(on: boolean): void {
     this.tips.set(on);
@@ -124,21 +128,37 @@ export class TourService {
     if (this.paused) this.togglePause();
   }
 
+  /** Play the current step again from its start; from a step's start, the step before it. */
+  back(): void {
+    const s = this.state();
+    if (!s) return;
+    this.jump = backTarget(this.firsts, s.index - 1);
+    this.next();
+  }
+  private firsts: boolean[] = [];
+
   private async run(title: string, snippets: readonly Snippet[], recording = false): Promise<void> {
     const beats: { beat: Beat; snippet: Snippet; first: boolean }[] = snippets.flatMap((s) => s.beats.map((beat, k) => ({ beat, snippet: s, first: k === 0 })));
     if (this.state()) this.end();
     while (this.state()) await new Promise((r) => setTimeout(r, 50));
     this.stop = this.paused = this.skip = false;
+    this.jump = null;
+    this.firsts = beats.map((b) => b.first);
     const c = this.cursor() ?? { x: innerWidth / 2, y: innerHeight / 2, down: false };
     this.cursor.set({ ...c, down: false });
     try {
-      for (const [i, { beat: b, snippet, first }] of beats.entries()) {
-        this.state.set({ title, index: i + 1, total: beats.length, say: b.say ?? this.state()?.say ?? '', paused: this.paused, recording });
+      for (let i = 0; i < beats.length; i++) {
+        const { beat: b, snippet, first } = beats[i]!;
+        this.state.set({ title, index: i + 1, total: beats.length, say: b.say ?? this.state()?.say ?? '', paused: this.paused, canBack: i > 0, recording });
         this.skip = false;
         if (first) await this.prepare(snippet.needs ?? []);
         for (const a of b.actions) {
           if (this.skip) break;
           await this.act(a);
+        }
+        if (this.jump !== null) {
+          i = this.jump - 1;
+          this.jump = null;
         }
       }
       await this.sleep(400);

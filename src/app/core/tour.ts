@@ -272,6 +272,20 @@ export function tourBeats(t: Tour, by: ReadonlyMap<string, Snippet> = SNIPPET_BY
   });
 }
 
+/**
+ * Where Back goes from beat `i` (0-based) of a list whose snippet starts are flagged in `first`: past a snippet's first
+ * beat, to that first beat (the snippet plays again from the start, as it can on its own); on a first beat, to the
+ * previous snippet's first beat; on the very first beat, nowhere else.
+ */
+export function backTarget(first: readonly boolean[], i: number): number {
+  const startOf = (k: number): number => {
+    while (k > 0 && !first[k]) k--;
+    return Math.max(0, k);
+  };
+  const s = startOf(i);
+  return s < i ? s : startOf(Math.max(0, s - 1));
+}
+
 /** Roughly how long beats take to play, milliseconds (waits, drags, typing, cursor moves). */
 export function playTime(beats: readonly Beat[]): number {
   let ms = 0;

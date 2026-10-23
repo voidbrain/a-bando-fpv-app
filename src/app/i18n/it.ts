@@ -810,6 +810,8 @@ export const IT: Readonly<Record<string, string>> = {
   '▶ Resume': '▶ Riprendi',
   '❚❚ Pause': '❚❚ Pausa',
   'Next ›': 'Avanti ›',
+  '‹ Back': '‹ Indietro',
+  'Back: this step again from its start (from its start, the step before)': 'Indietro: di nuovo questo passo dall’inizio (dall’inizio, il passo precedente)',
   'Skip to the next step': 'Passa al passo successivo',
   'Stop the tour (Esc)': 'Ferma il tour (Esc)',
   '▶ Show me': '▶ Mostrami',

@@ -37,6 +37,7 @@ import { TourService } from '../services/tour.service';
           <span class="dim small mono">{{ s.index }} / {{ s.total }}</span>
           <span class="sp"></span>
           @if (!s.recording) {
+            <button class="btn" (click)="tour.back()" [disabled]="!s.canBack" title="Back: this step again from its start (from its start, the step before)">‹ Back</button>
             <button class="btn" (click)="tour.togglePause()">{{ s.paused ? '▶ Resume' : '❚❚ Pause' }}</button>
             <button class="btn" (click)="tour.next()" title="Skip to the next step">Next ›</button>
           }

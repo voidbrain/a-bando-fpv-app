@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cloneSpec, emptySpec } from './site-spec';
 import { parseReply } from './ai-prompt';
 import { runCommands } from './ai-commands';
-import { AI_SCRIPTS, SNIPPETS, TOURS, checkGuide, playTime, snippetForMark, tourBeats } from './tour';
+import { backTarget, AI_SCRIPTS, SNIPPETS, TOURS, checkGuide, playTime, snippetForMark, tourBeats } from './tour';
 
 describe('guided tour', () => {
   it('every tour uses known snippets, every snippet has captions and known hooks', () => {
@@ -38,5 +38,16 @@ describe('guided tour', () => {
     const l = s.buildings[0]!.levels[0]!;
     expect(Object.values(l.doors).flat().filter((o) => o.kind === 'window').length).toBe(8);
     expect(Object.values(l.doors).flat().some((o) => o.kind === 'door')).toBe(true);
+  });
+});
+
+describe('guide Back', () => {
+  // two snippets: beats 0-2 and 3-4
+  const first = [true, false, false, true, false];
+  it('replays the current step from its start, or goes to the step before', () => {
+    expect(backTarget(first, 2)).toBe(0);
+    expect(backTarget(first, 4)).toBe(3);
+    expect(backTarget(first, 3)).toBe(0);
+    expect(backTarget(first, 0)).toBe(0);
   });
 });
