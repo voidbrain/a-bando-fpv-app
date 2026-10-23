@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "id": "abando/water-tower",
+  "version": 1,
+  "name": "Water tower",
+  "kind": "structure",
+  "tags": ["tower", "water"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A concrete water tower on a column.",
+  "thumbnail": "icon:waterTower",
+  "params": [
+    {
+      "key": "h",
+      "label": "Height",
+      "type": "number",
+      "default": 24,
+      "min": 10,
+      "max": 50,
+      "step": 1
+    },
+    {
+      "key": "r",
+      "label": "Tank radius",
+      "type": "number",
+      "default": 4.5,
+      "min": 2,
+      "max": 10,
+      "step": 0.5
+    }
+  ],
+  "content": {
+    "structures": [
+      {
+        "id": "s",
+        "kind": "water_tower",
+        "name": "Water tower",
+        "x": 0,
+        "z": 0,
+        "rotDeg": 0,
+        "height": {
+          "$": "h"
+        },
+        "size": {
+          "$": "r"
+        }
+      }
+    ]
+  }
+}

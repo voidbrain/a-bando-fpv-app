@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "id": "abando/storage-tank",
+  "version": 1,
+  "name": "Storage tank",
+  "kind": "structure",
+  "tags": ["industrial", "tank"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A squat fuel or water tank.",
+  "thumbnail": "icon:tank",
+  "params": [
+    {
+      "key": "h",
+      "label": "Height",
+      "type": "number",
+      "default": 8,
+      "min": 3,
+      "max": 25,
+      "step": 0.5
+    },
+    {
+      "key": "r",
+      "label": "Radius",
+      "type": "number",
+      "default": 6,
+      "min": 2,
+      "max": 25,
+      "step": 0.5
+    }
+  ],
+  "content": {
+    "structures": [
+      {
+        "id": "s",
+        "kind": "tank",
+        "name": "Storage tank",
+        "x": 0,
+        "z": 0,
+        "rotDeg": 0,
+        "height": {
+          "$": "h"
+        },
+        "size": {
+          "$": "r"
+        }
+      }
+    ]
+  }
+}

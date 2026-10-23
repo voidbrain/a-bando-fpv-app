@@ -1,0 +1,122 @@
+{
+  "schema": 1,
+  "id": "abando/dive-gate",
+  "version": 1,
+  "name": "Dive gate",
+  "kind": "structure",
+  "tags": ["fpv", "race", "gate"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "An FPV dive gate: a square frame up on legs, flown through from above.",
+  "thumbnail": "icon:diveGate",
+  "params": [
+    {
+      "key": "h",
+      "label": "Height",
+      "type": "number",
+      "default": 3,
+      "min": 1.5,
+      "max": 8,
+      "step": 0.5
+    }
+  ],
+  "content": {
+    "shapes": [
+      {
+        "prim": "array",
+        "of": {
+          "prim": "array",
+          "of": {
+            "prim": "cylinder",
+            "at": {
+              "x": -1.3,
+              "y": 0,
+              "z": -1.3
+            },
+            "radius": 0.06,
+            "height": {
+              "$": "h"
+            },
+            "color": "#5f6a6e"
+          },
+          "count": 2,
+          "step": {
+            "x": 2.6,
+            "y": 0,
+            "z": 0
+          }
+        },
+        "count": 2,
+        "step": {
+          "x": 0,
+          "y": 0,
+          "z": 2.6
+        }
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": 0,
+          "y": {
+            "$": "h"
+          },
+          "z": -1.2
+        },
+        "size": {
+          "x": 2.6,
+          "y": 0.2,
+          "z": 0.2
+        },
+        "color": "#e8742a"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": 0,
+          "y": {
+            "$": "h"
+          },
+          "z": 1.2
+        },
+        "size": {
+          "x": 2.6,
+          "y": 0.2,
+          "z": 0.2
+        },
+        "color": "#e8742a"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": -1.2,
+          "y": {
+            "$": "h"
+          },
+          "z": 0
+        },
+        "size": {
+          "x": 0.2,
+          "y": 0.2,
+          "z": 2.2
+        },
+        "color": "#e8742a"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": 1.2,
+          "y": {
+            "$": "h"
+          },
+          "z": 0
+        },
+        "size": {
+          "x": 0.2,
+          "y": 0.2,
+          "z": 2.2
+        },
+        "color": "#e8742a"
+      }
+    ]
+  }
+}

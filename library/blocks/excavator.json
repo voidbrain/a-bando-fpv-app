@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "id": "abando/excavator",
+  "version": 1,
+  "name": "Excavator",
+  "kind": "structure",
+  "tags": ["vehicle", "construction"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A tracked excavator with its arm up.",
+  "thumbnail": "icon:excavator",
+  "params": [],
+  "content": {
+    "structures": [
+      {
+        "id": "s",
+        "kind": "excavator",
+        "name": "Excavator",
+        "x": 0,
+        "z": 0,
+        "rotDeg": 0,
+        "height": 3,
+        "size": 2.8,
+        "length": 6
+      }
+    ]
+  }
+}

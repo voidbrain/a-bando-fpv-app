@@ -66,5 +66,17 @@ describe('OpenStreetMap import of other structure types', () => {
     expect(d.waters).toHaveLength(1);
     expect(d.waters[0]!.pts).toHaveLength(4); // the closing point is dropped
   });
-});
 
+  it('survives ways with gaps (null points) where they cross the edge of the box', async () => {
+    const elements = [
+      { id: 1, type: 'way', tags: { highway: 'residential' }, geometry: [pt(-50, 0), null, pt(50, 0)] },
+      { id: 2, type: 'way', tags: { landuse: 'grass' }, geometry: [pt(0, 0), pt(10, 0), null, pt(10, 10), pt(0, 10), pt(0, 0)] },
+      { id: 3, type: 'way', tags: { building: 'yes' }, geometry: [...rect(20, 10, 20, 10).slice(0, 2), null, ...rect(20, 10, 20, 10).slice(2)] },
+    ];
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ elements }), { status: 200 })));
+    const d = await new GeoService().areaData(LAT, LON, 150, 120);
+    expect(d.roads[0]!.pts).toHaveLength(2);
+    expect(d.surfaces).toHaveLength(1);
+    expect(d.footprints).toHaveLength(1);
+  });
+});

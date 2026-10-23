@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "id": "abando/ruined-wall",
+  "version": 1,
+  "name": "Broken wall",
+  "kind": "structure",
+  "tags": ["ruin", "brick"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "What is left of a brick wall: uneven, with gaps.",
+  "thumbnail": "icon:brick",
+  "params": [],
+  "content": {
+    "shapes": [
+      {
+        "prim": "box",
+        "at": {
+          "x": -3.2,
+          "y": 1.5,
+          "z": 0
+        },
+        "size": {
+          "x": 1.6,
+          "y": 3,
+          "z": 0.4
+        },
+        "color": "#9a5a40"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": -1.6,
+          "y": 1.1,
+          "z": 0
+        },
+        "size": {
+          "x": 1.6,
+          "y": 2.2,
+          "z": 0.4
+        },
+        "color": "#a65a3f"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": 0,
+          "y": 1.7,
+          "z": 0
+        },
+        "size": {
+          "x": 1.6,
+          "y": 3.4,
+          "z": 0.4
+        },
+        "color": "#9a5a40"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": 1.6,
+          "y": 0.7,
+          "z": 0
+        },
+        "size": {
+          "x": 1.6,
+          "y": 1.4,
+          "z": 0.4
+        },
+        "color": "#a65a3f"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": 3.6,
+          "y": 1.3,
+          "z": 0
+        },
+        "size": {
+          "x": 1.2,
+          "y": 2.6,
+          "z": 0.4
+        },
+        "color": "#9a5a40"
+      }
+    ]
+  }
+}

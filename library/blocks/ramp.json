@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "id": "abando/ramp",
+  "version": 1,
+  "name": "Ramp",
+  "kind": "structure",
+  "tags": ["ramp", "skate"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A straight concrete ramp.",
+  "thumbnail": "icon:ramp",
+  "params": [
+    {
+      "key": "h",
+      "label": "Rise",
+      "type": "number",
+      "default": 2,
+      "min": 0.5,
+      "max": 8,
+      "step": 0.1
+    },
+    {
+      "key": "l",
+      "label": "Length",
+      "type": "number",
+      "default": 10,
+      "min": 3,
+      "max": 30,
+      "step": 0.5
+    },
+    {
+      "key": "w",
+      "label": "Width",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 10,
+      "step": 0.5
+    }
+  ],
+  "content": {
+    "structures": [
+      {
+        "id": "s",
+        "kind": "ramp",
+        "name": "Ramp",
+        "x": 0,
+        "z": 0,
+        "rotDeg": 0,
+        "height": {
+          "$": "h"
+        },
+        "size": {
+          "$": "w"
+        },
+        "length": {
+          "$": "l"
+        }
+      }
+    ]
+  }
+}

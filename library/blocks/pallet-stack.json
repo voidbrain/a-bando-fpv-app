@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "id": "abando/pallet-stack",
+  "version": 1,
+  "name": "Pallet stack",
+  "kind": "structure",
+  "tags": ["yard", "wood"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "Wooden pallets stacked up.",
+  "thumbnail": "icon:container",
+  "params": [
+    {
+      "key": "n",
+      "label": "Pallets",
+      "type": "int",
+      "default": 8,
+      "min": 1,
+      "max": 20
+    }
+  ],
+  "content": {
+    "shapes": [
+      {
+        "prim": "array",
+        "of": {
+          "prim": "box",
+          "at": {
+            "x": 0,
+            "y": 0.075,
+            "z": 0
+          },
+          "size": {
+            "x": 1.2,
+            "y": 0.14,
+            "z": 0.8
+          },
+          "color": "#a07a4f"
+        },
+        "count": {
+          "$": "n"
+        },
+        "step": {
+          "x": 0,
+          "y": 0.15,
+          "z": 0
+        }
+      }
+    ]
+  }
+}

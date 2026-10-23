@@ -4,7 +4,9 @@
  * heights live in a registry here, keyed by {@link TerrainBase.key}. Plain TypeScript, no three.js.
  *
  * Grid: vertices every `cell` metres from (-half.e, -half.n) to (+half.e, +half.n), row-major along x (east), rows
- * along z (south). Outside the grid the ground is flat at y = 0; the last {@link FEATHER} metres blend into it.
+ * along z (south). Outside the grid the ground continues at the height of the nearest edge. A terrain made only of
+ * strokes (no real ground) blends its last {@link FEATHER} metres back to y = 0, so the world around it stays flat; real
+ * ground keeps its own heights to the edge (forcing a hillside down to the centre's height made walls and pits).
  */
 import type { Vec2 } from './site-spec';
 
@@ -122,11 +124,10 @@ export function emptyGrid(t: Pick<TerrainSpec, 'cell' | 'half'>): HeightGrid {
   return { cell: t.cell, x0: -t.half.e, z0: -t.half.n, nx, nz, h: new Float32Array(nx * nz) };
 }
 
-/** Ground height at (x, z), bilinear; 0 outside the grid. */
+/** Ground height at (x, z), bilinear; outside the grid, the height of the nearest edge. */
 export function heightAt(g: HeightGrid | null | undefined, x: number, z: number): number {
   if (!g) return 0;
-  const fx = (x - g.x0) / g.cell, fz = (z - g.z0) / g.cell;
-  if (fx < 0 || fz < 0 || fx > g.nx - 1 || fz > g.nz - 1) return 0;
+  const fx = Math.min(g.nx - 1, Math.max(0, (x - g.x0) / g.cell)), fz = Math.min(g.nz - 1, Math.max(0, (z - g.z0) / g.cell));
   const i = Math.min(g.nx - 2, Math.floor(fx)), j = Math.min(g.nz - 2, Math.floor(fz));
   const u = fx - i, v = fz - j;
   const h = g.h, k = j * g.nx + i;
@@ -282,7 +283,7 @@ export function featherEdges(g: HeightGrid): void {
 }
 
 /**
- * The finished grid: base (or flat) + strokes + feathered edges + levelled pads. The pads come last so a building
+ * The finished grid: base (or flat) + strokes (+ feathered edges when there is no real ground) + levelled pads. The pads come last so a building
  * always stands on level ground; the returned `pads` are the heights they were levelled to, in the same order.
  */
 export function buildHeights(t: TerrainSpec, pads: readonly FlatPad[] = []): { grid: HeightGrid; pads: number[] } {
@@ -290,7 +291,7 @@ export function buildHeights(t: TerrainSpec, pads: readonly FlatPad[] = []): { g
   const base = t.base ? bases.get(t.base.key) : undefined;
   if (base && base.length === g.h.length) g.h.set(base);
   for (const s of t.strokes) applyStroke(g, s);
-  featherEdges(g);
+  if (!base || base.length !== g.h.length) featherEdges(g);
   return { grid: g, pads: pads.map((p) => flattenPad(g, p)) };
 }
 

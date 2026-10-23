@@ -72,7 +72,8 @@ export async function cacheBase(key: string, h: Float32Array): Promise<void> {
 
 /** PNG bytes to RGBA pixels (via an ImageBitmap on an offscreen canvas). */
 async function decode(blob: Blob): Promise<Uint8ClampedArray> {
-  const img = await createImageBitmap(blob);
+  // no colour management: the pixel values ARE the heights (one step of red is 256 m)
+  const img = await createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
   const c = new OffscreenCanvas(img.width, img.height);
   const g = c.getContext('2d', { willReadFrequently: true });
   if (!g) throw new Error('No 2D canvas');

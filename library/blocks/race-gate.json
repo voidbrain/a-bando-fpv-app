@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "id": "abando/race-gate",
+  "version": 1,
+  "name": "Race gate",
+  "kind": "structure",
+  "tags": ["fpv", "race", "gate"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "An FPV race gate: fly through it.",
+  "thumbnail": "icon:gate",
+  "params": [
+    {
+      "key": "w",
+      "label": "Inside width",
+      "type": "number",
+      "default": 2,
+      "min": 1,
+      "max": 5,
+      "step": 0.1
+    },
+    {
+      "key": "h",
+      "label": "Inside height",
+      "type": "number",
+      "default": 2,
+      "min": 1,
+      "max": 5,
+      "step": 0.1
+    }
+  ],
+  "content": {
+    "shapes": [
+      {
+        "prim": "box",
+        "at": {
+          "x": {
+            "$": "w",
+            "mul": -0.5,
+            "add": -0.1
+          },
+          "y": {
+            "$": "h",
+            "mul": 0.5,
+            "add": 0.1
+          },
+          "z": 0
+        },
+        "size": {
+          "x": 0.2,
+          "y": {
+            "$": "h",
+            "mul": 1,
+            "add": 0.2
+          },
+          "z": 0.2
+        },
+        "color": "#e8742a"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": {
+            "$": "w",
+            "mul": 0.5,
+            "add": 0.1
+          },
+          "y": {
+            "$": "h",
+            "mul": 0.5,
+            "add": 0.1
+          },
+          "z": 0
+        },
+        "size": {
+          "x": 0.2,
+          "y": {
+            "$": "h",
+            "mul": 1,
+            "add": 0.2
+          },
+          "z": 0.2
+        },
+        "color": "#e8742a"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": 0,
+          "y": {
+            "$": "h",
+            "mul": 1,
+            "add": 0.1
+          },
+          "z": 0
+        },
+        "size": {
+          "x": {
+            "$": "w",
+            "mul": 1,
+            "add": 0.4
+          },
+          "y": 0.2,
+          "z": 0.2
+        },
+        "color": "#e8742a"
+      }
+    ]
+  }
+}

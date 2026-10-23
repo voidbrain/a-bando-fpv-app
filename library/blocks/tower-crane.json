@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "id": "abando/tower-crane",
+  "version": 1,
+  "name": "Tower crane",
+  "kind": "structure",
+  "tags": ["crane", "construction"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A construction tower crane with its jib.",
+  "thumbnail": "icon:crane",
+  "params": [
+    {
+      "key": "h",
+      "label": "Height",
+      "type": "number",
+      "default": 40,
+      "min": 15,
+      "max": 80,
+      "step": 1
+    },
+    {
+      "key": "jib",
+      "label": "Jib length",
+      "type": "number",
+      "default": 45,
+      "min": 15,
+      "max": 80,
+      "step": 1
+    }
+  ],
+  "content": {
+    "structures": [
+      {
+        "id": "s",
+        "kind": "tower_crane",
+        "name": "Tower crane",
+        "x": 0,
+        "z": 0,
+        "rotDeg": 0,
+        "height": {
+          "$": "h"
+        },
+        "size": 1.2,
+        "length": {
+          "$": "jib"
+        }
+      }
+    ]
+  }
+}

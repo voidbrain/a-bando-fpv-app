@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "id": "abando/barrels",
+  "version": 1,
+  "name": "Oil barrels",
+  "kind": "structure",
+  "tags": ["yard", "barrel"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A cluster of rusty and blue drums.",
+  "thumbnail": "icon:tank",
+  "params": [],
+  "content": {
+    "shapes": [
+      {
+        "prim": "cylinder",
+        "at": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radius": 0.3,
+        "height": 0.9,
+        "color": "#8b4a2b"
+      },
+      {
+        "prim": "cylinder",
+        "at": {
+          "x": 0.65,
+          "y": 0,
+          "z": 0.1
+        },
+        "radius": 0.3,
+        "height": 0.9,
+        "color": "#2f5d8a"
+      },
+      {
+        "prim": "cylinder",
+        "at": {
+          "x": 0.3,
+          "y": 0,
+          "z": 0.6
+        },
+        "radius": 0.3,
+        "height": 0.9,
+        "color": "#8b4a2b"
+      },
+      {
+        "prim": "cylinder",
+        "at": {
+          "x": -0.6,
+          "y": 0,
+          "z": 0.35
+        },
+        "radius": 0.3,
+        "height": 0.9,
+        "color": "#2f5d8a"
+      },
+      {
+        "prim": "cylinder",
+        "at": {
+          "x": 0.32,
+          "y": 0.9,
+          "z": 0.2
+        },
+        "radius": 0.3,
+        "height": 0.9,
+        "color": "#8b4a2b"
+      }
+    ]
+  }
+}

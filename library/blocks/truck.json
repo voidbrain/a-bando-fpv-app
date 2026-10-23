@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "id": "abando/truck",
+  "version": 1,
+  "name": "Truck",
+  "kind": "structure",
+  "tags": ["vehicle", "truck"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A box truck.",
+  "thumbnail": "icon:truck",
+  "params": [],
+  "content": {
+    "structures": [
+      {
+        "id": "s",
+        "kind": "truck",
+        "name": "Truck",
+        "x": 0,
+        "z": 0,
+        "rotDeg": 0,
+        "height": 3.2,
+        "size": 2.5,
+        "length": 8.5
+      }
+    ]
+  }
+}
