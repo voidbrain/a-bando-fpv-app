@@ -1,5 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import type { Privacy } from '../../core/share';
+import { BackupService } from '../../services/backup.service';
 import { DownloadService } from '../../services/download.service';
 import { tr } from '../../services/i18n.service';
 import { ExampleBandosService } from '../../services/example-bandos.service';
@@ -26,6 +27,8 @@ import { BandoEditor } from './bando-editor';
           <button class="btn primary" (click)="studio.create()" data-tour="new-bando">＋ New bando</button>
           <label class="btn">Import<input type="file" accept=".json,application/json" hidden (change)="importFile($event)" /></label>
           <span class="grow"></span>
+          <button class="btn" (click)="backupAll()" [disabled]="!site.bandos().length" title="Save every bando and your own blocks in one file (keep it somewhere safe: the browser can lose what it stores)">Back up all</button>
+          <label class="btn" title="Bring back a backup file: bandos it has that are missing here are added, an older copy here is replaced, a newer one is kept">Restore…<input type="file" accept=".json,application/json" hidden (change)="restoreFile($event)" /></label>
         </div>
         @if (site.bandos().length === 0) {
           <div class="empty dim">
@@ -155,6 +158,7 @@ export class StudioPanel {
   protected readonly site = inject(SiteService);
   private readonly toast = inject(ToastService);
   private readonly downloads = inject(DownloadService);
+  private readonly backups = inject(BackupService);
   protected readonly examples = inject(ExampleBandosService);
   /** The example being downloaded. */
   protected readonly opening = signal<string | null>(null);
@@ -188,6 +192,29 @@ export class StudioPanel {
 
   protected remove(id: string, name: string): void {
     if (confirm(tr(`Delete “${name}”? This cannot be undone.`))) this.site.remove(id);
+  }
+
+  protected async backupAll(): Promise<void> {
+    const b = await this.backups.backup();
+    this.downloads.save(b.name, b.text, 'application/json');
+    this.toast.show(`Backed up ${b.bandos} bandos and ${b.blocks} own blocks in ${b.name}.`);
+  }
+
+  protected async restoreFile(e: Event): Promise<void> {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    const r = await this.backups.restore(await file.text());
+    if (!r) return void this.toast.show('That file is not an A Bando backup.');
+    const parts = [
+      r.added && `${r.added} added`,
+      r.replaced && `${r.replaced} replaced by the backup's newer copy`,
+      r.kept && `${r.kept} kept (newer here)`,
+      r.blocks && `${r.blocks} own blocks`,
+      r.dropped && `${r.dropped} broken entries skipped`,
+    ].filter((x): x is string => !!x);
+    this.toast.show(parts.length ? `Restored: ${parts.join(' · ')}.` : 'Nothing to restore: the backup is empty.', 5000);
   }
 
   protected async importFile(e: Event): Promise<void> {

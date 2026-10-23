@@ -75,6 +75,15 @@ export class BlockLibraryService {
     return out;
   }
 
+  /** A block from a backup, kept as it was unless a newer version of it is already here. True when it was stored. */
+  restoreOwn(b: BlockSpec): boolean {
+    if (!b.id.startsWith('local/')) return false;
+    const prev = this.store.get<BlockSpec>('blocks', b.id);
+    if (prev && prev.version >= b.version) return false;
+    this.store.put('blocks', b.id, b);
+    return true;
+  }
+
   /** An editable copy of a catalogue block. */
   fork(id: string, author = 'me'): BlockSpec | null {
     const b = this.get(id);
