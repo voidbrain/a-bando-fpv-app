@@ -116,6 +116,24 @@ function vault(len: number, r: number, k: number, mat: THREE.Material, seg = 8):
   return m;
 }
 
+/** The wall that closes one end of a barrel vault: a half ellipse `r` wide each way and `r·k` high, 0.3 m thick (in XY). */
+function vaultEnd(r: number, k: number, mat: THREE.Material): THREE.Mesh {
+  const s = new THREE.Shape();
+  const seg = 16;
+  s.moveTo(-r, 0);
+  for (let i = 1; i <= seg; i++) {
+    const t = Math.PI - (Math.PI * i) / seg;
+    s.lineTo(r * Math.cos(t), r * k * Math.sin(t));
+  }
+  s.lineTo(-r, 0);
+  const g = new THREE.ExtrudeGeometry(s, { depth: 0.3, bevelEnabled: false });
+  g.translate(0, 0, -0.15);
+  const m = new THREE.Mesh(g, mat);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
+
 /** Three-prism gable roof spanning `w` along X, `d` deep, ridge over the long axis. */
 /**
  * A gable roof: a triangular prism whose ridge runs along local x (length `w`), spanning `d` across z. Its base is at
@@ -326,8 +344,22 @@ function buildRoof(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.Object
   const run = turn ? b.length : b.width; // barrel length
   const across = turn ? b.width : b.length;
   const VW = across / n, VR = VW / 2, VK = l.vaultK ?? 0.58;
+  // the ends of each barrel are closed by the end walls, carried up into the arch (where that wall exists)
+  const ends: [number, boolean][] = turn ? [[-run / 2, l.sides.w], [run / 2, l.sides.e]] : [[-run / 2, l.sides.n], [run / 2, l.sides.s]];
   for (let i = 0; i < n; i++) {
     const c = -across / 2 + VW / 2 + i * VW;
+    for (const [at, wall] of ends) {
+      if (!wall) continue;
+      const cap = vaultEnd(VR, VK, ctx.mat.wall);
+      if (turn) {
+        cap.rotation.y = Math.PI / 2;
+        ctx.addMesh(target, cap, at, top, c);
+        roofSolid(ctx, at, c, 0.3, VW * 0.8, top, top + VR * VK * 0.8);
+      } else {
+        ctx.addMesh(target, cap, c, top, at);
+        roofSolid(ctx, c, at, VW * 0.8, 0.3, top, top + VR * VK * 0.8);
+      }
+    }
     if (ruin > 0.01) {
       for (const r of runs(run)) {
         const m = vault(r.len, VR, VK, rc), off = -run / 2 + r.from + r.len / 2;

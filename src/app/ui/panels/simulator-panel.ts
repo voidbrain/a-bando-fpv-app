@@ -1,5 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { SimulatorService } from '../../services/simulator.service';
+import { ViewStore } from '../../state/view.store';
 import { Panel } from '../panel/panel';
 
 @Component({
@@ -11,6 +12,7 @@ import { Panel } from '../panel/panel';
         <button class="btn" [class.primary]="!sim.armed()" [class.danger]="sim.armed()" (click)="sim.toggleArmed()">{{ sim.armed() ? 'Disarm + stop' : 'Arm + record' }}</button>
         <button class="btn" (click)="sim.toggleMode()">Mode: {{ sim.mode() === 'angle' ? 'Angle' : 'Acro' }}</button>
         <button class="btn" [class.on]="sim.altitudeHold()" title="H" (click)="sim.toggleHold()">Alt hold</button>
+        <button class="btn" [class.on]="view.collisions()" (click)="view.toggleCollisions()" title="The drone hits buildings, trees and the ground (off: it flies through them)">Collisions</button>
       </div>
       <div class="row mono hud">
         <span><b>{{ sim.hud().speedKmh }}</b> km/h</span>
@@ -37,4 +39,5 @@ import { Panel } from '../panel/panel';
 })
 export class SimulatorPanel {
   protected readonly sim = inject(SimulatorService);
+  protected readonly view = inject(ViewStore);
 }

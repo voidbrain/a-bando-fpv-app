@@ -341,3 +341,21 @@ describe('ruin by wall', () => {
     expect(count({ ruinWalls: { s: 0.8 } })).toBe(count({})); // under a roof the walls stand whole
   });
 });
+
+describe('barrel vault ends', () => {
+  it('each barrel is closed by its end walls, and an open end stays open', () => {
+    const caps = (sides: { n: boolean; s: boolean; e: boolean; w: boolean }): number => {
+      const s = spec();
+      s.structures = [];
+      const l = { ...s.buildings[0]!.levels[0]!, roof: 'vault' as const, roofTurn: true, roofCount: 3, vaultK: 0.58, sides };
+      s.buildings = [{ ...s.buildings[0]!, levels: [l] }];
+      let n = 0;
+      buildSiteFromSpec(s).roof.traverse((o) => {
+        if (o instanceof THREE.Mesh && o.geometry instanceof THREE.ExtrudeGeometry) n++;
+      });
+      return n;
+    };
+    expect(caps({ n: true, s: true, e: true, w: true })).toBe(6); // 3 barrels × 2 ends
+    expect(caps({ n: true, s: true, e: false, w: true })).toBe(3); // the east end is open
+  });
+});

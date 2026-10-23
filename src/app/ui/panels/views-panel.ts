@@ -8,16 +8,24 @@ import { checkedFrom } from '../dom';
 import { Panel } from '../panel/panel';
 import { PANELS, type PanelDef } from '../panel-defs';
 
+/** The sections below the camera controls: one per kind of work, each with a show / hide-all box. */
 const GROUPS: readonly { key: PanelDef['group']; title: string }[] = [
-  { key: 'cameras', title: 'Camera panels' },
-  { key: 'instruments', title: 'Instruments' },
-  { key: 'data', title: 'Data' },
+  { key: 'views', title: 'View panels' },
+  { key: 'telemetry', title: 'Telemetry' },
+  { key: 'simulator', title: 'Simulator' },
   { key: 'tools', title: 'Tools' },
 ];
 
 @Component({
   selector: 'app-views-panel',
   imports: [Panel],
+  styles: `
+    h4 .all {
+      font: inherit;
+      letter-spacing: inherit;
+      text-transform: inherit;
+    }
+  `,
   template: `
     <app-panel id="views">
       <h4>Main page</h4>
@@ -38,19 +46,27 @@ const GROUPS: readonly { key: PanelDef['group']; title: string }[] = [
       </div>
       <div class="row">
         <button class="btn" (click)="view.toggleRoof()">{{ view.roofHidden() ? 'Show roof' : 'Hide roof' }}</button>
-        <button class="btn" [class.on]="view.collisions()" (click)="view.toggleCollisions()">Collisions</button>
         <button class="btn" [class.on]="view.xray()" (click)="toggleXray()">X-ray</button>
         <button class="btn" (click)="scene.resetCamera()">Reset</button>
       </div>
       @for (g of groups(); track g.key) {
-        <h4>{{ g.title }}</h4>
+        <h4>
+          <label class="check all" [title]="'Show or hide every panel in ' + g.title">
+            <input type="checkbox" [checked]="g.all" [indeterminate]="g.some && !g.all" (change)="setGroup(g.key, checked($event))" />
+            {{ g.title }}
+          </label>
+        </h4>
         <div class="row">
           @for (p of g.panels; track p.id) {
             <label class="check"><input type="checkbox" [checked]="layout.panels()[p.id].visible" (change)="layout.setVisible(p.id, checked($event))" /> {{ short(p) }}</label>
           }
         </div>
       }
-      <div class="row"><button class="btn" (click)="resetLayout()">Reset UI</button></div>
+      <div class="row">
+        <button class="btn" (click)="setAll(true)" title="Show every panel">Show all</button>
+        <button class="btn" (click)="setAll(false)" title="Hide every panel but this one">Hide all</button>
+        <button class="btn" (click)="resetLayout()" title="Every panel back to its first place, size and visibility">Reset UI</button>
+      </div>
     </app-panel>
   `,
 })
@@ -66,11 +82,29 @@ export class ViewsPanel {
     { value: 'video', label: 'Video' },
   ];
   protected readonly checked = checkedFrom;
-  protected readonly groups = computed(() => GROUPS.map((g) => ({ ...g, panels: PANELS.filter((p) => p.group === g.key && p.id !== 'views') })).filter((g) => g.panels.length));
+  protected readonly groups = computed(() => {
+    const vis = this.layout.panels();
+    return GROUPS.map((g) => {
+      const panels = PANELS.filter((p) => p.group === g.key && p.id !== 'views');
+      const shown = panels.filter((p) => vis[p.id].visible).length;
+      return { ...g, panels, all: shown === panels.length, some: shown > 0 };
+    }).filter((g) => g.panels.length);
+  });
+
+  /** Show or hide every panel of a section. */
+  protected setGroup(key: PanelDef['group'], on: boolean): void {
+    for (const p of PANELS) if (p.group === key && p.id !== 'views') this.layout.setVisible(p.id, on);
+  }
+
+  /** Every panel at once; Views itself always stays, or there would be no way back. */
+  protected setAll(on: boolean): void {
+    for (const p of PANELS) if (p.id !== 'views') this.layout.setVisible(p.id, on);
+  }
 
   protected short(p: PanelDef): string {
     return p.title.replace(' view', '').replace(' · north up', '');
   }
+
 
   protected toggleXray(): void {
     this.view.toggleXray();
