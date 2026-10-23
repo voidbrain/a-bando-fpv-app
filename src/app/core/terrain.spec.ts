@@ -7,12 +7,14 @@ const flat = (half = 50): TerrainSpec => ({ cell: 1, half: { e: half, n: half },
 const bld = (x: number, z: number, l: number, w: number, rot = 0): BuildingSpec => ({ id: `b${x}`, name: 'b', pos: { x, z }, rotDeg: rot, length: l, width: w, levels: [] });
 
 describe('terrain grid', () => {
-  it('is flat by default and 0 outside', () => {
+  it('is flat by default; outside the grid it continues at the nearest edge', () => {
     const g = emptyGrid(flat(10));
     expect(g.nx).toBe(21);
     expect(heightAt(g, 3.3, -2)).toBe(0);
     expect(heightAt(g, 500, 0)).toBe(0);
     expect(heightAt(null, 1, 1)).toBe(0);
+    g.h[10 * g.nx + 20] = 7; // east edge, z = 0
+    expect(heightAt(g, 500, 0)).toBeCloseTo(7);
   });
 
   it('interpolates between grid points', () => {
@@ -79,6 +81,17 @@ describe('buildHeights', () => {
     const y = flattenPad(slope, { poly: [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 5 }, { x: 0, z: 5 }] });
     expect(y).toBeCloseTo(5);
     expect(rangeUnder(slope, [{ x: 1, z: 1 }, { x: 9, z: 1 }, { x: 9, z: 4 }, { x: 1, z: 4 }]).max).toBeCloseTo(5);
+  });
+
+  it('real ground keeps its slope up to the edge (it used to be forced down there, making walls and pits)', () => {
+    const t: TerrainSpec = { ...flat(30), base: { source: 'aws-terrarium', key: 'test-slope', fetchedAt: 1, datum: 100 } };
+    const g = emptyGrid(t);
+    for (let j = 0; j < g.nz; j++) for (let i = 0; i < g.nx; i++) g.h[j * g.nx + i] = (i - 30) * 0.5; // 0.5 m per metre eastwards
+    setTerrainBase('test-slope', g.h.slice());
+    const built = buildHeights(t).grid;
+    expect(heightAt(built, 29, 0)).toBeCloseTo(14.5);
+    expect(heightAt(built, -29, 0)).toBeCloseTo(-14.5);
+    expect(heightAt(built, 80, 0)).toBeCloseTo(15); // beyond the edge: the edge's height
   });
 
   it('uses the registered base heights when present', () => {

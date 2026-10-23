@@ -449,6 +449,58 @@ function drapedPad(ground: SiteGround, x: number, z: number, w: number, d: numbe
   return m;
 }
 
+/**
+ * The ground around the terrain grid, out to ±`outer` metres: every edge vertex is carried straight outwards at its own
+ * height, the corners at the corner's height, so a hillside does not end in a wall (the grid edge is not forced down).
+ */
+function skirtMesh(g: HeightGrid, outer: number, mat: THREE.Material): THREE.Mesh {
+  const pos: number[] = [], idx: number[] = [];
+  const x1 = g.x0 + (g.nx - 1) * g.cell, z1 = g.z0 + (g.nz - 1) * g.cell;
+  const at = (i: number, j: number): number => g.h[j * g.nx + i]!;
+  const step = Math.max(1, Math.round(4 / g.cell)); // a vertex every ~4 m is plenty out here
+  /** A strip between `inner` points on the grid edge and the same points pushed out to the outer square. */
+  const strip = (inner: [number, number, number][], push: (x: number, z: number) => [number, number]): void => {
+    const base = pos.length / 3;
+    for (const [x, y, z] of inner) {
+      const [ox, oz] = push(x, z);
+      pos.push(x, y - 0.02, z, ox, y - 0.02, oz);
+    }
+    for (let k = 0; k + 1 < inner.length; k++) {
+      const a = base + k * 2;
+      idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+  };
+  const along = (n: number): number[] => {
+    const out: number[] = [];
+    for (let k = 0; k < n - 1; k += step) out.push(k);
+    out.push(n - 1);
+    return out;
+  };
+  const xs = along(g.nx), zs = along(g.nz);
+  strip(xs.map((i): [number, number, number] => [g.x0 + i * g.cell, at(i, 0), g.z0]), (x) => [x, -outer]); // north
+  strip(xs.map((i): [number, number, number] => [g.x0 + i * g.cell, at(i, g.nz - 1), z1]).reverse(), (x) => [x, outer]); // south
+  strip(zs.map((j): [number, number, number] => [g.x0, at(0, j), g.z0 + j * g.cell]).reverse(), (_x, z) => [-outer, z]); // west
+  strip(zs.map((j): [number, number, number] => [x1, at(g.nx - 1, j), g.z0 + j * g.cell]), (_x, z) => [outer, z]); // east
+  // the four corners: a flat square at the corner's height
+  const corner = (x: number, z: number, y: number, ox: number, oz: number): void => {
+    const b = pos.length / 3;
+    pos.push(x, y - 0.02, z, ox, y - 0.02, z, ox, y - 0.02, oz, x, y - 0.02, oz);
+    idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+  };
+  corner(g.x0, g.z0, at(0, 0), -outer, -outer);
+  corner(x1, g.z0, at(g.nx - 1, 0), outer, -outer);
+  corner(x1, z1, at(g.nx - 1, g.nz - 1), outer, outer);
+  corner(g.x0, z1, at(0, g.nz - 1), -outer, outer);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, mat);
+  (m.material as THREE.Material).side = THREE.DoubleSide;
+  m.receiveShadow = true;
+  return m;
+}
+
 /** A flat polygon (site metres) as a horizontal mesh at y = 0. */
 function flatShape(pts: readonly { x: number; z: number }[], mat: THREE.Material): THREE.Mesh {
   const shape = new THREE.Shape(pts.map((q) => new THREE.Vector2(q.x, -q.z)));
@@ -629,23 +681,9 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     const g = ground.grid;
     terrain = terrainMesh(g, spec.groundColor, rnd, spec.surfaces, ground.cut);
     group.add(terrain);
-    const outer = spec.extent * 1.1, gx = -g.x0, gz = -g.z0;
-    const grass = material(spec.groundColor);
-    if (outer > Math.min(gx, gz)) {
-      const ring: [number, number, number, number][] = [
-        [0, -(outer + gz) / 2, outer * 2, outer - gz],
-        [0, (outer + gz) / 2, outer * 2, outer - gz],
-        [-(outer + gx) / 2, 0, outer - gx, gz * 2],
-        [(outer + gx) / 2, 0, outer - gx, gz * 2],
-      ];
-      for (const [x, z, w, d] of ring) {
-        if (w <= 0 || d <= 0) continue;
-        const o = new THREE.Mesh(new THREE.BoxGeometry(w, 1, d), grass);
-        o.position.set(x, -0.5, z);
-        o.receiveShadow = true;
-        group.add(o);
-      }
-    }
+    // around the grid the ground carries on at the height of its edge, out to the site's extent
+    const outer = spec.extent * 1.1;
+    if (outer > Math.min(-g.x0, -g.z0)) group.add(skirtMesh(g, outer, material(spec.groundColor)));
     for (const pd of spec.pads) group.add(drapedPad(ground, pd.x, pd.z, pd.w, pd.d, pd.rotDeg ?? 0, material(pd.color ?? '#a9aaa0')));
     for (const r of spec.roads ?? []) group.add(roadMesh(ground, r, 0));
     const start = new THREE.Mesh(new THREE.BoxGeometry(4, 0.04, 4), material('#e8c65a'));

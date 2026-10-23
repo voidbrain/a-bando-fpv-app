@@ -35,6 +35,7 @@ interface OsmElement {
   lat?: number;
   lon?: number;
   tags?: Record<string, string>;
+  /** May hold nulls from the server (cleaned in areaData before use). */
   geometry?: { lat: number; lon: number }[];
   center?: { lat: number; lon: number };
 }
@@ -201,6 +202,8 @@ export class GeoService {
       const u = dx * Math.cos(rr) + dz * Math.sin(rr), v = -dx * Math.sin(rr) + dz * Math.cos(rr); // in the frame's own axes
       return Math.abs(u) <= halfE + 8 && Math.abs(v) <= halfN + 8;
     };
+    // a way crossing the edge of the box can come back with gaps (null points): drop them before anything reads them
+    for (const el of data.elements) if (el.geometry) el.geometry = (el.geometry as unknown[]).filter((p): p is { lat: number; lon: number } => !!p && typeof (p as { lat?: unknown }).lat === 'number' && typeof (p as { lon?: unknown }).lon === 'number');
     const footprints: Footprint[] = [];
     const trees: TreeSpec[] = [];
     const roads: RoadSpec[] = [];
