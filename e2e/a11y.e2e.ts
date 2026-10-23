@@ -23,7 +23,7 @@ test('after Welcome: Views and Guide me', async ({ page }) => {
 
 test('the editor with a model, the inspector and the library', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Open the bandos →' }).click();
+  await page.getByRole('button', { name: 'Open the bandos' }).click();
   await page.locator('app-studio-panel .card.ex').filter({ hasText: /^Chiari e Forti/ }).getByRole('button', { name: 'Open a copy' }).click();
   await page.locator('app-studio-panel .card:not(.ex)').filter({ hasText: 'Chiari e Forti' }).getByRole('button', { name: 'Edit area' }).click();
   await page.getByRole('button', { name: '2 · Model' }).click();

@@ -103,7 +103,7 @@ export interface WallSpec {
   thick: number;
   color?: string;
   /** What it is made of (see core/fences.ts); absent = a masonry wall. */
-  material?: 'masonry' | 'concrete' | 'brick' | 'wood' | 'metal' | 'chainlink';
+  material?: 'masonry' | 'concrete' | 'brick' | 'wood' | 'metal' | 'chainlink' | 'hedge' | 'bramble' | 'wires';
   /** Placed from a library block. */
   block?: BlockRef;
 }

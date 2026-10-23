@@ -1,13 +1,13 @@
 import { cutRect, edgesOf, slabs } from '../core/footprint';
 import { buildStructure } from './structures';
-import { fenceDef, postsAlong } from '../core/fences';
+import { fenceDef, hedgeLumps, postsAlong, wireSag, type FenceDef } from '../core/fences';
 import { WATER_COLOR, insidePolygon, roadDef, surfaceDef } from '../core/layers';
 import { BASEMENT_WALL, tunnelAxis, volumeSolids } from '../core/underground';
 import { NO_SLABS, ROOFLESS, roofCells, roofRuns, ruinRandom, wallPieces, wallTop } from '../core/ruin';
 import * as THREE from 'three';
 import { mergeUnit } from './merge';
 import { satelliteTexture } from './satellite-ground';
-import { type BuildingSpec, type LevelSpec, type RoadSpec, type SiteSpec, type SurfaceSpec, type TreeSpec, type UndergroundSpec, createRandom, fixturesInSite } from '../core/site-spec';
+import { type BuildingSpec, type LevelSpec, type RoadSpec, type SiteSpec, type SurfaceSpec, type TreeSpec, type UndergroundSpec, type WallSpec, createRandom, fixturesInSite } from '../core/site-spec';
 import { SiteCollider, type SolidBox, type TreeCylinder } from '../core/sim/collider';
 import { siteGround, type SiteGround } from '../core/site-ground';
 import { heightColor, heightRange, type HeightGrid } from '../core/terrain';
@@ -940,6 +940,10 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean; merge?
     const y0 = Math.min(...ys), wh = w.height + Math.max(...ys) - y0;
     const def = fenceDef(w.material);
     const pick = { kind: 'fence', i: spec.walls?.indexOf(w) ?? 0 };
+    if (def.look) {
+      units.push(buildLine(group, solids, w, def, { len, dx, dz, pick, ground })); // merged like a building
+      continue;
+    }
     const panel = def.mesh ? new THREE.MeshStandardMaterial({ color: w.color ?? def.color, transparent: true, opacity: 0.35, roughness: 0.6, metalness: 0.4, depthWrite: false }) : material(w.color ?? def.color);
     const m = new THREE.Mesh(new THREE.BoxGeometry(len, wh, w.thick), panel);
     m.position.set((w.a.x + w.b.x) / 2, y0 + wh / 2, (w.a.z + w.b.z) / 2);
@@ -1075,4 +1079,82 @@ function mergeUnits(units: readonly THREE.Object3D[], occluders: THREE.Mesh[]): 
   for (const u of units) for (const [a, b] of mergeUnit(u)) replaced.set(a, b);
   const next = [...new Set(occluders.map((m) => replaced.get(m) ?? m))];
   occluders.splice(0, occluders.length, ...next);
+}
+
+/**
+ * A fence that is not a wall: a hedge or a bramble thicket (lumps of foliage every metre, solid for the drone), or a
+ * phone / power line (poles, a cross-arm, three wires sagging between poles; the wires collide too).
+ */
+function buildLine(
+  group: THREE.Group,
+  solids: SolidBox[],
+  w: WallSpec,
+  def: FenceDef,
+  o: { len: number; dx: number; dz: number; pick: unknown; ground: SiteGround },
+): THREE.Group {
+  const { len, dx, dz, pick, ground } = o;
+  const own = new THREE.Group();
+  own.userData['pick'] = pick;
+  group.add(own);
+  const rot = -Math.atan2(dz, dx), ux = dx / len, uz = dz / len;
+  const at = (t: number): [number, number] => [w.a.x + dx * t, w.a.z + dz * t];
+  const box = (cx: number, cz: number, bw: number, bd: number, z0: number, z1: number): void => {
+    const ca = Math.abs(ux), sa = Math.abs(uz), hw = (bw * ca + bd * sa) / 2, hd = (bw * sa + bd * ca) / 2;
+    solids.push([cx - hw, cx + hw, z0, z1, cz - hd, cz + hd, false]);
+  };
+  if (def.look === 'hedge') {
+    const wild = def.id === 'bramble';
+    const leaf = material(w.color ?? def.color, { roughness: 1 });
+    const dark = material(wild ? '#3a4a22' : '#33582c', { roughness: 1 });
+    for (const [i, l] of hedgeLumps(len, w.a.x * 7.3 + w.a.z * 3.1, wild).entries()) {
+      const [cx, cz] = at(l.t), gy = ground.at(cx, cz), h = w.height * l.h, th = w.thick * l.w;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(len / Math.max(1, Math.round(len)) + 0.25, h, th), i % 3 === 0 ? dark : leaf);
+      m.position.set(cx, gy + h / 2, cz);
+      m.rotation.y = rot + (wild ? (l.w - 1) * 0.6 : 0);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      m.userData['pick'] = pick;
+      own.add(m);
+      box(cx, cz, len / Math.max(1, Math.round(len)), th, gy, gy + h);
+    }
+    return own;
+  }
+  // a phone / power line: poles at the posts, wires from pole to pole
+  const posts = postsAlong(len, w.material);
+  const poleMat = material(w.color ?? def.color), wireMat = material('#22272a', { roughness: 0.6 });
+  const tops: THREE.Vector3[] = [];
+  for (const t of posts) {
+    const [cx, cz] = at(t), gy = ground.at(cx, cz);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.15, w.height, 8), poleMat);
+    pole.position.set(cx, gy + w.height / 2, cz);
+    pole.castShadow = true;
+    pole.userData['pick'] = pick;
+    own.add(pole);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 1.6), poleMat);
+    arm.position.set(cx, gy + w.height - 0.35, cz);
+    arm.rotation.y = rot;
+    arm.userData['pick'] = pick;
+    own.add(arm);
+    tops.push(new THREE.Vector3(cx, gy + w.height - 0.3, cz));
+    solids.push([cx - 0.15, cx + 0.15, gy, gy + w.height, cz - 0.15, cz + 0.15, false]);
+  }
+  // three wires: the middle one on the pole's axis, the others at the ends of the cross-arm
+  for (const off of [-0.7, 0, 0.7]) {
+    for (const [s, span] of wireSag(len, posts).entries()) {
+      const a = tops[s]!, b = tops[s + 1]!;
+      const pts = span.map((p, k) => {
+        const u = k / (span.length - 1);
+        return new THREE.Vector3(a.x + (b.x - a.x) * u - uz * off, a.y + (b.y - a.y) * u - p.drop, a.z + (b.z - a.z) * u + ux * off);
+      });
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), pts.length * 2, 0.025, 4, false), wireMat);
+      tube.userData['pick'] = pick;
+      own.add(tube);
+      // the drone hits the wires too: a short box every couple of metres along them
+      for (let k = 0; k + 1 < pts.length; k++) {
+        const p = pts[k]!, q = pts[k + 1]!;
+        solids.push([Math.min(p.x, q.x) - 0.05, Math.max(p.x, q.x) + 0.05, Math.min(p.y, q.y) - 0.05, Math.max(p.y, q.y) + 0.05, Math.min(p.z, q.z) - 0.05, Math.max(p.z, q.z) + 0.05, false]);
+      }
+    }
+  }
+  return own;
 }

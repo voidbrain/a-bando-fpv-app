@@ -5,7 +5,12 @@ and kind.
 
 ## Use
 
-- Opened from the editor bar (`▦ Library`; the float box is titled Library). A row shows the block's picture (a tool icon), name and `vN` (or "mine").
+- Opened from the editor bar (`▦ Library`; the float box is titled Library). The list is grouped under small caption
+  headers (`groupBlocks` in `core/catalog.ts`): My blocks, FPV gates and poles, Bridges ramps and lines, Bushes and
+  hedges, Vehicles, Street, Yard and building site, Towers, Industrial, Ruins, Buildings, Patterns, Other. A block's
+  group comes from its tags; a new block needs a tag one of the groups knows, or it lands in Other.
+- A row shows the block's picture (a tool icon), name, its size (`w × d × h m`, measured from the built model,
+  `three/block-size.ts`) and `vN` (or "mine").
   Clicking a row expands it: description, author and licence, its parameters as fields, then the actions.
 - Actions: **Place** (then click the map; the hint and a dashed ring follow the pointer; Esc stops), **Apply to floor**
   for patterns (needs a selected building), **Copy to mine**, **Export**, **Delete** (own blocks only).

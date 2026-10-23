@@ -1,0 +1,100 @@
+{
+  "id": "abando/hurdle",
+  "name": "Hurdle",
+  "kind": "structure",
+  "tags": [
+    "fpv",
+    "freestyle",
+    "gate"
+  ],
+  "description": "A low bar between two posts: dive under it, or skim over it.",
+  "thumbnail": "icon:gate",
+  "params": [
+    {
+      "key": "h",
+      "label": "Bar height",
+      "type": "number",
+      "default": 1,
+      "min": 0.4,
+      "max": 3,
+      "step": 0.1
+    },
+    {
+      "key": "w",
+      "label": "Width",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 8,
+      "step": 0.5
+    }
+  ],
+  "content": {
+    "shapes": [
+      {
+        "prim": "cylinder",
+        "at": {
+          "x": {
+            "$": "w",
+            "mul": -0.5,
+            "add": 0
+          },
+          "y": 0,
+          "z": 0
+        },
+        "radius": 0.06,
+        "height": {
+          "$": "h",
+          "mul": 1,
+          "add": 0.1
+        },
+        "color": "#5f6a6e"
+      },
+      {
+        "prim": "cylinder",
+        "at": {
+          "x": {
+            "$": "w",
+            "mul": 0.5,
+            "add": 0
+          },
+          "y": 0,
+          "z": 0
+        },
+        "radius": 0.06,
+        "height": {
+          "$": "h",
+          "mul": 1,
+          "add": 0.1
+        },
+        "color": "#5f6a6e"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": 0,
+          "y": {
+            "$": "h",
+            "mul": 1,
+            "add": 0
+          },
+          "z": 0
+        },
+        "size": {
+          "x": {
+            "$": "w",
+            "mul": 1,
+            "add": 0
+          },
+          "y": 0.12,
+          "z": 0.12
+        },
+        "color": "#e8742a"
+      }
+    ]
+  },
+  "schema": 1,
+  "version": 1,
+  "author": "OpenBando",
+  "licence": "CC-BY-4.0"
+}

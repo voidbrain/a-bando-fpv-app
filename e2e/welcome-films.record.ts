@@ -27,7 +27,7 @@ async function save(page: Page, name: string): Promise<string> {
 test('film: build', async ({ page }) => {
   const t0 = Date.now();
   await page.goto('/');
-  await page.getByRole('button', { name: 'Open the bandos →' }).click();
+  await page.getByRole('button', { name: 'Open the bandos' }).click();
   await page.locator('app-studio-panel .card.ex').filter({ hasText: /^Chiari e Forti/ }).getByRole('button', { name: 'Open a copy' }).click();
   await page.waitForTimeout(3500);
   await page.getByRole('button', { name: 'Hide every panel but this one' }).click();
@@ -56,7 +56,7 @@ test('films: fly and share (from the showcase)', async ({ page }) => {
   const say = page.locator('app-tour-overlay .bar .say');
   await expect(say).toContainText('every number of the flight', { timeout: 120_000 });
   const relive = (Date.now() - t0) / 1000 + 1.5;
-  await expect(say).toContainText('Clear the glass', { timeout: 120_000 });
+  await expect(say).toContainText('The video turns to glass', { timeout: 120_000 });
   const pro = (Date.now() - t0) / 1000 + 1.5;
   await page.waitForTimeout(9000);
   const raw = await save(page, 'showcase');

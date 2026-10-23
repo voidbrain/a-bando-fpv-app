@@ -246,6 +246,25 @@ npm run check:i18n                        # every UI text has its Italian
 - The showcase (`SHOWCASE` in core/tour.ts, section `showcase`, kept out of Guide me and the docs) plays the welcome tour (about a minute): Welcome, the place-hidden Villetta, the demo log and video, Auto-sync (faked: `DEMO_OFFSET`, checked against a real scan in `e2e/showcase.e2e.ts`), the replay screen arranged against the window (`arrange('replay')`), the four cameras appearing one by one (`arrange('cameras')`), every panel turned to glass. `keepLayout`: it ends on that screen. `?tour=showcase&lang=it|en` (or the same in the hash) plays it on load (`showcaseLink`).
 - Flights on a bando without its place: `toLocalAt` measures east metres at the point's own latitude, so a flight far from the origin (0, 0) keeps its shape until it is moved onto the take-off pad. (It used the origin's latitude, which stretched such flights about 1.4× east–west at 45°.)
 
+## Library groups, gates, living fences
+- `core/catalog.ts` `BLOCK_CATEGORIES` / `blockCategory` / `groupBlocks`: the Library is grouped by the blocks' tags (FPV gates and poles, lines, vegetation, vehicles, street, yard, towers, industrial, ruins; then buildings, patterns, other). A new catalogue block needs a tag a group knows. Rows show the block's size (`three/block-size.ts`, measured once from the built model and cached by id + version).
+- The Gates tool (group `fpv`, colour `tool-gate`) places any FPV-group block on a click, turned by the options' "turn"; it is a shortcut over `blocks.place`, the result is an ordinary placed block.
+- Fence materials with a `look` (`core/fences.ts`): `hedge` / `bramble` are lumpy living walls (`hedgeLumps`), `wires` is a phone / power line, poles every `post` m with sagging wires between them (`wireSag`); `buildLine` in `site-model.ts` draws both, with colliders (the wires as short boxes). The `bush` block is the single shrub.
+
 ## Not done yet (future)
 - National elevation data: the terrain uses the free worldwide AWS terrarium tiles; per-country high-resolution DEMs could replace them where available (an `ElevationService` source).
 - Multi-user authoring: the catalogue is published only by the maintainer (`library/` in this repo, read-only in the app). Letting any pilot publish blocks or bandos needs accounts, per-user rights and moderation (a server such as Supabase), plus queued offline edits that never overwrite another pilot's work.
+- Smarter AI editing: preview an edit before it is applied, a visual diff of what changed, overlap detection, multi-step
+  plans with rollback, and saying why a command was rejected. Already there: the review list (`AiService.changes`, one
+  entry per real change, Undo) and reports from `RunResult`, never from the model's words.
+- Site and block workflows: search / filter / bulk actions in the Elements tree; align and distribute for a selection;
+  more parametric blocks; collision previews while placing; an asset validation report for the catalogue. Already
+  there: block parameters, Library groups and sizes, `sanitizeBlock` and `core/catalog.spec.ts` checking every block.
+- Presentation and sharing: camera bookmarks, cinematic camera paths, saved scenes (panel layout + camera + time),
+  shareable packages (bando + flight + video), video overlays, a guided first flight in the simulator. Already there:
+  the welcome tour, MP4 render, hidden / rounded exports, example releases.
+- Roadmap: (1) stabilize: done in large part (storage failures reported, undo restores the selection, the AI proxy fails
+  closed, deploy runs every check); the browser e2e still times out now and then on CI. (2) Validate core behaviour: a
+  regression matrix of the example bandos (load, build, collide, export / import round trip) on top of
+  `core/examples.spec.ts`. (3) Maintainability: keep splitting `bando-editor.ts` into tools under `ui/studio/editor/`
+  (terrain, layers, underground, measure, blocks and the host are split already).

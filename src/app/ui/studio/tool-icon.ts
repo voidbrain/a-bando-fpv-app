@@ -83,6 +83,9 @@ export const TOOL_ICONS: Readonly<Record<string, readonly Stroke[]>> = {
   terrainFlatten: [{ p: 'M2 20 L7 11 H17 L22 20' }, { p: 'M5 8 H19', d: true }],
   terrainHill: [{ p: 'M2 19 Q12 1 22 19' }, { p: 'M2 19 H22', d: true }],
   terrainCrater: [{ p: 'M2 11 H5 Q12 25 19 11 H22' }, { p: 'M5 11 L6 9 M19 11 L18 9' }],
+  hedge: [{ p: 'M2 18 C2 12 5 9 7 11 C8 7 12 7 13 10 C15 7 19 8 19 12 C22 12 22 18 22 18 Z' }, { p: 'M2 20 H22' }],
+  bramble: [{ p: 'M3 18 C4 12 6 15 8 10 C9 14 11 8 13 12 C15 9 16 14 18 10 C19 14 21 13 21 18' }, { p: 'M5 16 l2 -1 M10 13 l2 1 M15 14 l2 -1', d: true }, { p: 'M2 20 H22' }],
+  wires: [{ p: 'M5 21 V5 M19 21 V5 M3 6 H7 M17 6 H21' }, { p: 'M5 6 Q12 11 19 6 M5 8 Q12 13 19 8' }],
   // ---- views panel: cameras, view toggles, show / hide ----
   eye: [{ p: 'M2 12 C5 6 19 6 22 12 C19 18 5 18 2 12 Z' }, { p: 'M9 12 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0' }],
   eyeOff: [{ p: 'M2 12 C5 6 19 6 22 12 C19 18 5 18 2 12 Z' }, { p: 'M4 20 L20 4' }],

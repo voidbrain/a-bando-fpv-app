@@ -1,7 +1,8 @@
 import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { tr } from '../../services/i18n.service';
 import { blockFrom, detachInstance, outdated, paramValues, removeInstance, updateInstance, type BlockKind, type BlockSpec, type ParamValue } from '../../core/blocks';
-import { searchBlocks } from '../../core/catalog';
+import { groupBlocks, searchBlocks } from '../../core/catalog';
+import { blockSize, sizeText } from '../../three/block-size';
 import type { BuildingSpec, StructureSpec } from '../../core/site-spec';
 import { AiService } from '../../services/ai.service';
 import { BlockLibraryService } from '../../services/block-library.service';
@@ -53,59 +54,64 @@ export interface BlockArm {
             }
           </div>
         }
-        @for (b of shown(); track b.id) {
-          <div class="item" [class.sel]="b.id === selId()">
-            <button class="row" (click)="pick(b)" [attr.aria-expanded]="b.id === selId()" [attr.data-tour]="'block-' + b.id">
-              <span class="th">
-                @if (iconOf(b); as ic) {
-                  <app-tool-icon [name]="ic" />
-                } @else if (b.thumbnail) {
-                  <img [src]="b.thumbnail" alt="" width="28" height="28" />
-                }
-              </span>
-              <span class="nm">{{ b.name }}</span>
-              <span class="dim small">{{ b.id.startsWith('local/') ? 'mine' : 'v' + b.version }}</span>
-            </button>
-            @if (b.id === selId()) {
-              <div class="det">
-                @if (b.description) {
-                  <div class="dim small">{{ b.description }}</div>
-                }
-                <div class="dim small">{{ kindLabel(b.kind) }} · {{ b.author }} · {{ b.licence }}</div>
-                @for (p of b.params; track p.key) {
-                  <label class="fld">
-                    {{ p.label }}
-                    @if (p.type === 'bool') {
-                      <input type="checkbox" [checked]="!!values()[p.key]" (change)="setValue(p.key, checked($event))" />
-                    } @else if (p.type === 'choice') {
-                      <select [attr.aria-label]="p.label" (change)="setValue(p.key, val($event))">
-                        @for (o of p.options ?? []; track o) {
-                          <option [value]="o" [selected]="values()[p.key] === o">{{ o }}</option>
-                        }
-                      </select>
+        @for (g of groups(); track g.id) {
+          @if (g.label) {
+            <div class="cat">{{ g.label }}</div>
+          }
+          @for (b of g.blocks; track b.id) {
+            <div class="item" [class.sel]="b.id === selId()">
+              <button class="row" (click)="pick(b)" [attr.aria-expanded]="b.id === selId()" [attr.data-tour]="'block-' + b.id">
+                <span class="th">
+                  @if (iconOf(b); as ic) {
+                    <app-tool-icon [name]="ic" />
+                  } @else if (b.thumbnail) {
+                    <img [src]="b.thumbnail" alt="" width="28" height="28" />
+                  }
+                </span>
+                <span class="nm">{{ b.name }}@if (size(b); as sz) { <span class="dim small sz">{{ sz }}</span>}</span>
+                <span class="dim small">{{ b.id.startsWith('local/') ? 'mine' : 'v' + b.version }}</span>
+              </button>
+              @if (b.id === selId()) {
+                <div class="det">
+                  @if (b.description) {
+                    <div class="dim small">{{ b.description }}</div>
+                  }
+                  <div class="dim small">{{ kindLabel(b.kind) }} · {{ b.author }} · {{ b.licence }}</div>
+                  @for (p of b.params; track p.key) {
+                    <label class="fld">
+                      {{ p.label }}
+                      @if (p.type === 'bool') {
+                        <input type="checkbox" [checked]="!!values()[p.key]" (change)="setValue(p.key, checked($event))" />
+                      } @else if (p.type === 'choice') {
+                        <select [attr.aria-label]="p.label" (change)="setValue(p.key, val($event))">
+                          @for (o of p.options ?? []; track o) {
+                            <option [value]="o" [selected]="values()[p.key] === o">{{ o }}</option>
+                          }
+                        </select>
+                      } @else {
+                        <input type="number" [min]="p.min ?? null" [max]="p.max ?? null" [step]="p.step ?? (p.type === 'int' ? 1 : 0.5)" [value]="values()[p.key]" (change)="setValue(p.key, num($event))" />
+                      }
+                    </label>
+                  }
+                  <div class="acts">
+                    @if (b.kind === 'pattern') {
+                      <button class="btn primary" [disabled]="!building()" (click)="apply.emit({ block: b, params: values(), rot: 0 })" [title]="building() ? 'Apply to the selected building, this floor' : 'Select a building first'">Apply to floor</button>
                     } @else {
-                      <input type="number" [min]="p.min ?? null" [max]="p.max ?? null" [step]="p.step ?? (p.type === 'int' ? 1 : 0.5)" [value]="values()[p.key]" (change)="setValue(p.key, num($event))" />
+                      <label class="lay">turn <input class="mini" type="number" step="15" [value]="rot()" (change)="rot.set(num($event))" />°</label>
+                      <button class="btn primary" (click)="arm.emit({ block: b, params: values(), rot: rot() })" data-tour="block-place" title="Then click the map where it goes (Esc stops)">Place</button>
                     }
-                  </label>
-                }
-                <div class="acts">
-                  @if (b.kind === 'pattern') {
-                    <button class="btn primary" [disabled]="!building()" (click)="apply.emit({ block: b, params: values(), rot: 0 })" [title]="building() ? 'Apply to the selected building, this floor' : 'Select a building first'">Apply to floor</button>
-                  } @else {
-                    <label class="lay">turn <input class="mini" type="number" step="15" [value]="rot()" (change)="rot.set(num($event))" />°</label>
-                    <button class="btn primary" (click)="arm.emit({ block: b, params: values(), rot: rot() })" data-tour="block-place" title="Then click the map where it goes (Esc stops)">Place</button>
-                  }
-                  @if (b.id.startsWith('local/')) {
-                    <button class="btn" (click)="exportOne(b)">Export</button>
-                    <button class="btn danger" (click)="lib.removeOwn(b.id)">Delete</button>
-                  } @else {
-                    <button class="btn" (click)="fork(b)" title="An editable copy among your own blocks">Copy to mine</button>
-                  }
+                    @if (b.id.startsWith('local/')) {
+                      <button class="btn" (click)="exportOne(b)">Export</button>
+                      <button class="btn danger" (click)="lib.removeOwn(b.id)">Delete</button>
+                    } @else {
+                      <button class="btn" (click)="fork(b)" title="An editable copy among your own blocks">Copy to mine</button>
+                    }
+                  </div>
                 </div>
-              </div>
-            }
-          </div>
-          } @empty {
+              }
+            </div>
+          }
+        } @empty {
             <div class="dim small">{{ lib.all().length ? 'Nothing matches.' : 'No blocks yet: check the catalogue (↻) or import a file.' }}</div>
           }
         </div>
@@ -129,6 +135,18 @@ export interface BlockArm {
     </app-float-box>
   `,
   styles: `
+    .cat {
+      margin: 8px 2px 2px;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--dim);
+      font-weight: 600;
+    }
+    .sz {
+      margin-left: 6px;
+      white-space: nowrap;
+    }
     .top { display: flex; gap: 4px; }
     .q { flex: 1; min-width: 0; }
     .tabs { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
@@ -184,6 +202,12 @@ export class BlocksBox {
   protected readonly aiError = signal(false);
 
   protected readonly shown = computed(() => searchBlocks(this.lib.all(), this.q(), this.kind()));
+  /** Under their sub-category headings; a search keeps its own order (best match first). */
+  protected readonly groups = computed(() => (this.q().trim() ? [{ id: 'found', label: '', blocks: this.shown() }] : groupBlocks(this.shown())));
+  protected size = (b: BlockSpec): string | null => {
+    const s = blockSize(b);
+    return s ? sizeText(s) : null;
+  };
   protected readonly selected = computed(() => this.lib.all().find((b) => b.id === this.selId()) ?? null);
   protected readonly values = computed(() => {
     const b = this.selected();

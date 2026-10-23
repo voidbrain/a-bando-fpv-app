@@ -1,0 +1,105 @@
+{
+  "id": "abando/ladder-gate",
+  "name": "Ladder gate",
+  "kind": "structure",
+  "tags": [
+    "fpv",
+    "race",
+    "gate"
+  ],
+  "description": "Two gates stacked: through the bottom one, then the top one on the way back.",
+  "thumbnail": "icon:gate",
+  "params": [],
+  "content": {
+    "shapes": [
+      {
+        "prim": "box",
+        "at": {
+          "x": -1.1,
+          "y": 1.1,
+          "z": 0
+        },
+        "size": {
+          "x": 0.2,
+          "y": 2.2,
+          "z": 0.2
+        },
+        "color": "#e8742a"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": 1.1,
+          "y": 1.1,
+          "z": 0
+        },
+        "size": {
+          "x": 0.2,
+          "y": 2.2,
+          "z": 0.2
+        },
+        "color": "#e8742a"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": 0,
+          "y": 2.1,
+          "z": 0
+        },
+        "size": {
+          "x": 2.4,
+          "y": 0.2,
+          "z": 0.2
+        },
+        "color": "#e8742a"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": -1.1,
+          "y": 3.3,
+          "z": 0
+        },
+        "size": {
+          "x": 0.2,
+          "y": 2.2,
+          "z": 0.2
+        },
+        "color": "#e8742a"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": 1.1,
+          "y": 3.3,
+          "z": 0
+        },
+        "size": {
+          "x": 0.2,
+          "y": 2.2,
+          "z": 0.2
+        },
+        "color": "#e8742a"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": 0,
+          "y": 4.5,
+          "z": 0
+        },
+        "size": {
+          "x": 2.4,
+          "y": 0.2,
+          "z": 0.2
+        },
+        "color": "#e8742a"
+      }
+    ]
+  },
+  "schema": 1,
+  "version": 1,
+  "author": "OpenBando",
+  "licence": "CC-BY-4.0"
+}

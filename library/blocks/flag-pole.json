@@ -1,0 +1,64 @@
+{
+  "id": "abando/flag-pole",
+  "name": "Flag pole",
+  "kind": "structure",
+  "tags": [
+    "fpv",
+    "pole",
+    "race"
+  ],
+  "description": "A tall pole with a flag: a turn marker on a track.",
+  "thumbnail": "icon:structure",
+  "params": [
+    {
+      "key": "h",
+      "label": "Height",
+      "type": "number",
+      "default": 3.5,
+      "min": 1.5,
+      "max": 8,
+      "step": 0.5
+    }
+  ],
+  "content": {
+    "shapes": [
+      {
+        "prim": "cylinder",
+        "at": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radius": 0.04,
+        "height": {
+          "$": "h",
+          "mul": 1,
+          "add": 0
+        },
+        "color": "#f2f2ee"
+      },
+      {
+        "prim": "box",
+        "at": {
+          "x": 0.45,
+          "y": {
+            "$": "h",
+            "mul": 1,
+            "add": -0.45
+          },
+          "z": 0
+        },
+        "size": {
+          "x": 0.8,
+          "y": 0.7,
+          "z": 0.02
+        },
+        "color": "#e8742a"
+      }
+    ]
+  },
+  "schema": 1,
+  "version": 1,
+  "author": "OpenBando",
+  "licence": "CC-BY-4.0"
+}

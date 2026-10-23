@@ -1,0 +1,68 @@
+{
+  "id": "abando/slalom-poles",
+  "name": "Slalom poles",
+  "kind": "structure",
+  "tags": [
+    "fpv",
+    "pole",
+    "freestyle"
+  ],
+  "description": "A row of poles to weave through.",
+  "thumbnail": "icon:structure",
+  "params": [
+    {
+      "key": "n",
+      "label": "Poles",
+      "type": "number",
+      "default": 5,
+      "min": 2,
+      "max": 12,
+      "step": 1
+    },
+    {
+      "key": "gap",
+      "label": "Gap",
+      "type": "number",
+      "default": 4,
+      "min": 2,
+      "max": 12,
+      "step": 0.5
+    }
+  ],
+  "content": {
+    "shapes": [
+      {
+        "prim": "array",
+        "of": {
+          "prim": "cylinder",
+          "at": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "radius": 0.05,
+          "height": 3,
+          "color": "#e8742a"
+        },
+        "count": {
+          "$": "n",
+          "mul": 1,
+          "add": 0
+        },
+        "step": {
+          "x": {
+            "$": "gap",
+            "mul": 1,
+            "add": 0
+          },
+          "y": 0,
+          "z": 0
+        }
+      }
+    ]
+  },
+  "schema": 1,
+  "version": 1,
+  "author": "OpenBando",
+  "licence": "CC-BY-4.0"
+}
