@@ -288,3 +288,17 @@ describe('ruined buildings', () => {
     expect(count(0.7)).toEqual(ruined);
   });
 });
+
+describe('building colour', () => {
+  it('the walls take the building colour', () => {
+    const s = spec();
+    s.structures = [];
+    s.buildings = [{ ...s.buildings[0]!, color: '#123456' }];
+    const m = buildSiteFromSpec(s);
+    const colours = new Set<number>();
+    m.group.traverse((o) => {
+      if (o instanceof THREE.Mesh && o.material instanceof THREE.MeshStandardMaterial) colours.add(o.material.color.getHex());
+    });
+    expect(colours.has(new THREE.Color('#123456').getHex())).toBe(true);
+  });
+});

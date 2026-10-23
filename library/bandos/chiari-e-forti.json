@@ -1,5 +1,5 @@
 {
- "about": "The old Chiari e Forti oil factory on the Sile river: brick and yellow blocks, a ruined factory, the water tower and the \"cuore\" lantern tower.",
+ "about": "The old Chiari e Forti oil factory on the Sile river: brick blocks with broken roofs, roofless galleries by the river, the water tower and the \"cuore\" lantern tower.",
  "version": 1,
  "id": "example-chiari-e-forti",
  "name": "Chiari e Forti",
@@ -19,122 +19,8 @@
  "groundColor": "#789b52",
  "buildings": [
   {
-   "id": "b-mvkphvga-fi3t",
-   "name": "Building 1",
-   "pos": {
-    "x": -152.69,
-    "z": -101.439
-   },
-   "rotDeg": 23.757,
-   "length": 72.334,
-   "width": 55.125,
-   "footprint": [
-    {
-     "x": 36.167,
-     "z": -7.908
-    },
-    {
-     "x": 36.167,
-     "z": 27.563
-    },
-    {
-     "x": 12.04,
-     "z": 27.563
-    },
-    {
-     "x": 12.04,
-     "z": 12.93
-    },
-    {
-     "x": -36.167,
-     "z": 12.93
-    },
-    {
-     "x": -36.167,
-     "z": -7.351
-    },
-    {
-     "x": -30.034,
-     "z": -7.351
-    },
-    {
-     "x": -30.034,
-     "z": -27.563
-    },
-    {
-     "x": 23.918,
-     "z": -27.563
-    },
-    {
-     "x": 23.918,
-     "z": -7.908
-    }
-   ],
-   "color": "#a65d42",
-   "floorColor": "#a9aaa0",
-   "levels": [
-    {
-     "baseY": 0,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {},
-     "partitions": [],
-     "roof": "none",
-     "roofRise": 2.5
-    },
-    {
-     "baseY": 4,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {},
-     "partitions": [],
-     "roof": "none",
-     "roofRise": 2.5
-    },
-    {
-     "baseY": 8,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {},
-     "partitions": [],
-     "roof": "none",
-     "roofRise": 2.5
-    },
-    {
-     "baseY": 12,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {},
-     "partitions": [],
-     "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
-  },
-  {
    "id": "b-mvkphvga-8981",
-   "name": "Building 2",
+   "name": "North wing",
    "pos": {
     "x": 99.317,
     "z": -146.182
@@ -142,7 +28,7 @@
    "rotDeg": 303.565,
    "length": 54.148,
    "width": 17.979,
-   "color": "#d6b45f",
+   "color": "#a65d42",
    "floorColor": "#a9aaa0",
    "levels": [
     {
@@ -216,14 +102,15 @@
      "doors": {},
      "partitions": [],
      "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 3,
+     "roofColor": "#8f8d86"
     }
-   ]
+   ],
+   "ruin": 0.45
   },
   {
    "id": "b-mvkphvga-cdu1",
-   "name": "Ruined factory",
+   "name": "Mill",
    "pos": {
     "x": -86.228,
     "z": -18.945
@@ -263,6 +150,119 @@
     {
      "x": -1.482,
      "z": -1.392
+    }
+   ],
+   "color": "#d9d5cc",
+   "floorColor": "#a9aaa0",
+   "levels": [
+    {
+     "baseY": 0,
+     "height": 4,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 4,
+     "height": 4,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 8,
+     "height": 4,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 12,
+     "height": 4,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 16,
+     "height": 4,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
+     "roof": "flat",
+     "roofRise": 1,
+     "roofColor": "#8f8d86"
+    }
+   ],
+   "ruin": 0.15
+  },
+  {
+   "id": "b-mvkphvga-4exx",
+   "name": "Cuore block",
+   "pos": {
+    "x": 46.021,
+    "z": -131.172
+   },
+   "rotDeg": 32.976,
+   "length": 34.518,
+   "width": 30.767,
+   "footprint": [
+    {
+     "x": -0.149,
+     "z": 15.383
+    },
+    {
+     "x": -17.259,
+     "z": 15.383
+    },
+    {
+     "x": -17.259,
+     "z": -15.383
+    },
+    {
+     "x": 17.259,
+     "z": -15.383
+    },
+    {
+     "x": 17.259,
+     "z": 5.74
+    },
+    {
+     "x": -0.149,
+     "z": 5.74
     }
    ],
    "color": "#a65d42",
@@ -322,109 +322,11 @@
      "doors": {},
      "partitions": [],
      "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 1,
+     "roofColor": "#8f8d86"
     }
    ],
-   "ruin": 0.7
-  },
-  {
-   "id": "b-mvkphvga-4exx",
-   "name": "Building 4",
-   "pos": {
-    "x": 46.021,
-    "z": -131.172
-   },
-   "rotDeg": 32.976,
-   "length": 34.518,
-   "width": 30.767,
-   "footprint": [
-    {
-     "x": -0.149,
-     "z": 15.383
-    },
-    {
-     "x": -17.259,
-     "z": 15.383
-    },
-    {
-     "x": -17.259,
-     "z": -15.383
-    },
-    {
-     "x": 17.259,
-     "z": -15.383
-    },
-    {
-     "x": 17.259,
-     "z": 5.74
-    },
-    {
-     "x": -0.149,
-     "z": 5.74
-    }
-   ],
-   "color": "#cfc6b4",
-   "floorColor": "#a9aaa0",
-   "levels": [
-    {
-     "baseY": 0,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {},
-     "partitions": [],
-     "roof": "none",
-     "roofRise": 2.5
-    },
-    {
-     "baseY": 4,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {},
-     "partitions": [],
-     "roof": "none",
-     "roofRise": 2.5
-    },
-    {
-     "baseY": 8,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {},
-     "partitions": [],
-     "roof": "none",
-     "roofRise": 2.5
-    },
-    {
-     "baseY": 12,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {},
-     "partitions": [],
-     "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
+   "ruin": 0.4
   },
   {
    "id": "b-mvkphvga-cm1i",
@@ -527,10 +429,11 @@
      "doors": {},
      "partitions": [],
      "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 1,
+     "roofColor": "#a4553b"
     }
-   ]
+   ],
+   "ruin": 0.25
   },
   {
    "id": "b-mvkphvga-9umi",
@@ -558,28 +461,31 @@
       "s": [
        {
         "kind": "door",
-        "c": 10,
-        "w": 5,
-        "h": 5
-       },
+        "c": 4,
+        "w": 3,
+        "h": 3.2
+       }
+      ],
+      "n": [
        {
         "kind": "door",
-        "c": 30,
-        "w": 5,
-        "h": 5
+        "c": 32.69,
+        "w": 1.2,
+        "h": 2.3
        }
       ]
      },
      "partitions": [],
      "roof": "gable",
-     "roofRise": 2.5,
+     "roofRise": 3,
      "roofColor": "#c9c8c2"
     }
-   ]
+   ],
+   "ruin": 0.1
   },
   {
    "id": "b-mvkphvga-eh0e",
-   "name": "Building 7",
+   "name": "Ruined factory",
    "pos": {
     "x": -28.388,
     "z": 9.195
@@ -592,7 +498,7 @@
    "levels": [
     {
      "baseY": 0,
-     "height": 4,
+     "height": 4.5,
      "sides": {
       "n": true,
       "s": true,
@@ -622,8 +528,8 @@
      "roofRise": 2.5
     },
     {
-     "baseY": 4,
-     "height": 4,
+     "baseY": 4.5,
+     "height": 4.5,
      "sides": {
       "n": true,
       "s": true,
@@ -636,8 +542,22 @@
      "roofRise": 2.5
     },
     {
-     "baseY": 8,
-     "height": 4,
+     "baseY": 9,
+     "height": 4.5,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 13.5,
+     "height": 4.5,
      "sides": {
       "n": true,
       "s": true,
@@ -647,14 +567,15 @@
      "doors": {},
      "partitions": [],
      "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 3,
+     "roofColor": "#a4553b"
     }
-   ]
+   ],
+   "ruin": 0.72
   },
   {
    "id": "b-mvkphvga-f5gh",
-   "name": "Building 8",
+   "name": "Square block",
    "pos": {
     "x": 99.062,
     "z": -90.031
@@ -662,7 +583,7 @@
    "rotDeg": 303.252,
    "length": 39.256,
    "width": 18.327,
-   "color": "#cfc6b4",
+   "color": "#a65d42",
    "floorColor": "#a9aaa0",
    "levels": [
     {
@@ -721,11 +642,26 @@
      },
      "doors": {},
      "partitions": [],
-     "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 12,
+     "height": 4,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
+     "roof": "flat",
+     "roofRise": 1,
+     "roofColor": "#8f8d86"
     }
-   ]
+   ],
+   "ruin": 0.12
   },
   {
    "id": "b-mvkphvga-gm6k",
@@ -796,15 +732,30 @@
      },
      "doors": {},
      "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 12,
+     "height": 4,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
      "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 3,
+     "roofColor": "#d8d6cf"
     }
-   ]
+   ],
+   "ruin": 0.15
   },
   {
    "id": "b-mvkphvga-2nhz",
-   "name": "Building 10",
+   "name": "Yard block",
    "pos": {
     "x": 13.084,
     "z": -35.449
@@ -838,7 +789,7 @@
      "z": 1.534
     }
    ],
-   "color": "#d6b45f",
+   "color": "#a65d42",
    "floorColor": "#a9aaa0",
    "levels": [
     {
@@ -880,11 +831,40 @@
      },
      "doors": {},
      "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 12,
+     "height": 4,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 16,
+     "height": 4,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
      "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 3,
+     "roofColor": "#a4553b"
     }
-   ]
+   ],
+   "ruin": 0.1
   },
   {
    "id": "b-mvkphvga-amwh",
@@ -964,11 +944,26 @@
      },
      "doors": {},
      "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 12,
+     "height": 4,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
      "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 3,
+     "roofColor": "#8f8d86"
     }
-   ]
+   ],
+   "ruin": 0.2
   },
   {
    "id": "b-mvkphvga-4i60",
@@ -996,24 +991,27 @@
       "s": [
        {
         "kind": "door",
-        "c": 10,
-        "w": 5,
-        "h": 5
-       },
+        "c": 4,
+        "w": 3,
+        "h": 3.2
+       }
+      ],
+      "n": [
        {
         "kind": "door",
-        "c": 30,
-        "w": 5,
-        "h": 5
+        "c": 22.19,
+        "w": 1.2,
+        "h": 2.3
        }
       ]
      },
      "partitions": [],
      "roof": "gable",
-     "roofRise": 2.5,
+     "roofRise": 3,
      "roofColor": "#c9c8c2"
     }
-   ]
+   ],
+   "ruin": 0.1
   },
   {
    "id": "b-mvkphvga-4oj4",
@@ -1099,10 +1097,11 @@
      "doors": {},
      "partitions": [],
      "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 3,
+     "roofColor": "#a4553b"
     }
-   ]
+   ],
+   "ruin": 0.2
   },
   {
    "id": "b-mvkphvga-32mf",
@@ -1190,25 +1189,12 @@
      },
      "doors": {},
      "partitions": [],
-     "roof": "none",
-     "roofRise": 2.5
-    },
-    {
-     "baseY": 12,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {},
-     "partitions": [],
      "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 1,
+     "roofColor": "#8f8d86"
     }
-   ]
+   ],
+   "ruin": 0.2
   },
   {
    "id": "b-mvkphvga-al7m",
@@ -1265,116 +1251,6 @@
      },
      "doors": {},
      "partitions": [],
-     "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
-  },
-  {
-   "id": "b-mvkphvga-5yow",
-   "name": "Building 16",
-   "pos": {
-    "x": -169.023,
-    "z": -43.285
-   },
-   "rotDeg": 5.614,
-   "length": 41.58,
-   "width": 12.31,
-   "footprint": [
-    {
-     "x": -20.79,
-     "z": -3.329
-    },
-    {
-     "x": -14.213,
-     "z": -3.329
-    },
-    {
-     "x": -14.213,
-     "z": -6.155
-    },
-    {
-     "x": -11.228,
-     "z": -6.155
-    },
-    {
-     "x": -11.228,
-     "z": -3.597
-    },
-    {
-     "x": -7.087,
-     "z": -3.597
-    },
-    {
-     "x": -7.087,
-     "z": -5.447
-    },
-    {
-     "x": 5.733,
-     "z": -5.447
-    },
-    {
-     "x": 5.733,
-     "z": -3.676
-    },
-    {
-     "x": 20.79,
-     "z": -3.676
-    },
-    {
-     "x": 20.79,
-     "z": 4.263
-    },
-    {
-     "x": 5.916,
-     "z": 4.263
-    },
-    {
-     "x": 5.916,
-     "z": 6.155
-    },
-    {
-     "x": -6.917,
-     "z": 6.155
-    },
-    {
-     "x": -6.917,
-     "z": 4.348
-    },
-    {
-     "x": -20.79,
-     "z": 4.348
-    }
-   ],
-   "color": "#cfc6b4",
-   "floorColor": "#a9aaa0",
-   "levels": [
-    {
-     "baseY": 0,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {},
-     "partitions": [],
-     "roof": "none",
-     "roofRise": 2.5
-    },
-    {
-     "baseY": 4,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {},
-     "partitions": [],
      "roof": "none",
      "roofRise": 2.5
     },
@@ -1389,11 +1265,12 @@
      },
      "doors": {},
      "partitions": [],
-     "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roof": "gable",
+     "roofRise": 3,
+     "roofColor": "#d8d6cf"
     }
-   ]
+   ],
+   "ruin": 0.08
   },
   {
    "id": "b-mvkphvga-eulh",
@@ -1460,27 +1337,28 @@
      "doors": {},
      "partitions": [],
      "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 3,
+     "roofColor": "#a4553b"
     }
-   ]
+   ],
+   "ruin": 0.3
   },
   {
    "id": "b-mvkphvga-9dlk",
-   "name": "Building 18",
+   "name": "Ruined gallery",
    "pos": {
-    "x": -17.444,
-    "z": 13.485
+    "x": -16.789,
+    "z": 9.539
    },
    "rotDeg": 279.428,
-   "length": 51.357,
+   "length": 43.357,
    "width": 7.467,
-   "color": "#d6b45f",
+   "color": "#a65d42",
    "floorColor": "#a9aaa0",
    "levels": [
     {
      "baseY": 0,
-     "height": 4,
+     "height": 4.5,
      "sides": {
       "n": true,
       "s": true,
@@ -1510,8 +1388,22 @@
      "roofRise": 2.5
     },
     {
-     "baseY": 4,
-     "height": 4,
+     "baseY": 4.5,
+     "height": 4.5,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 9,
+     "height": 4.5,
      "sides": {
       "n": true,
       "s": true,
@@ -1521,10 +1413,11 @@
      "doors": {},
      "partitions": [],
      "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 3,
+     "roofColor": "#a4553b"
     }
-   ]
+   ],
+   "ruin": 0.65
   },
   {
    "id": "b-mvkphvga-djuf",
@@ -1536,7 +1429,7 @@
    "rotDeg": 303.123,
    "length": 20.645,
    "width": 17.097,
-   "color": "#a65d42",
+   "color": "#d9d5cc",
    "floorColor": "#a9aaa0",
    "levels": [
     {
@@ -1581,15 +1474,30 @@
      },
      "doors": {},
      "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 8,
+     "height": 4,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
      "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 3,
+     "roofColor": "#d8d6cf"
     }
-   ]
+   ],
+   "ruin": 0.15
   },
   {
    "id": "b-mvkphvga-4vne",
-   "name": "Building 20",
+   "name": "South wing",
    "pos": {
     "x": 41.531,
     "z": -59.082
@@ -1623,7 +1531,7 @@
      "z": -8.982
     }
    ],
-   "color": "#cfc6b4",
+   "color": "#a65d42",
    "floorColor": "#a9aaa0",
    "levels": [
     {
@@ -1665,11 +1573,26 @@
      },
      "doors": {},
      "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 12,
+     "height": 4,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
      "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 3,
+     "roofColor": "#a4553b"
     }
-   ]
+   ],
+   "ruin": 0.35
   },
   {
    "id": "b-mvkphvga-3war",
@@ -1726,67 +1649,11 @@
      },
      "doors": {},
      "partitions": [],
-     "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
-  },
-  {
-   "id": "b-mvkphvga-8vu5",
-   "name": "Building 22",
-   "pos": {
-    "x": -81.38,
-    "z": -123.825
-   },
-   "rotDeg": 285.775,
-   "length": 20.835,
-   "width": 11.571,
-   "footprint": [
-    {
-     "x": 10.417,
-     "z": -5.786
-    },
-    {
-     "x": 10.417,
-     "z": 5.786
-    },
-    {
-     "x": -10.417,
-     "z": 5.786
-    },
-    {
-     "x": -10.417,
-     "z": -2.605
-    },
-    {
-     "x": -1.81,
-     "z": -2.605
-    },
-    {
-     "x": -1.81,
-     "z": -5.786
-    }
-   ],
-   "color": "#d6b45f",
-   "floorColor": "#a9aaa0",
-   "levels": [
-    {
-     "baseY": 0,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {},
-     "partitions": [],
      "roof": "none",
      "roofRise": 2.5
     },
     {
-     "baseY": 4,
+     "baseY": 8,
      "height": 4,
      "sides": {
       "n": true,
@@ -1796,11 +1663,12 @@
      },
      "doors": {},
      "partitions": [],
-     "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roof": "gable",
+     "roofRise": 3,
+     "roofColor": "#a4553b"
     }
-   ]
+   ],
+   "ruin": 0.15
   },
   {
    "id": "b-mvkphvga-cp7h",
@@ -1857,15 +1725,16 @@
      },
      "doors": {},
      "partitions": [],
-     "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roof": "flat",
+     "roofRise": 1,
+     "roofColor": "#8f8d86"
     }
-   ]
+   ],
+   "ruin": 0.3
   },
   {
    "id": "b-mvkphvga-iagl",
-   "name": "Building 24",
+   "name": "Boat house",
    "pos": {
     "x": 35.503,
     "z": 43.81
@@ -1899,12 +1768,12 @@
      "z": 6.657
     }
    ],
-   "color": "#cfc6b4",
+   "color": "#d9d5cc",
    "floorColor": "#a9aaa0",
    "levels": [
     {
      "baseY": 0,
-     "height": 4,
+     "height": 3.5,
      "sides": {
       "n": true,
       "s": true,
@@ -1917,8 +1786,8 @@
      "roofRise": 2.5
     },
     {
-     "baseY": 4,
-     "height": 4,
+     "baseY": 3.5,
+     "height": 3.5,
      "sides": {
       "n": true,
       "s": true,
@@ -1928,8 +1797,8 @@
      "doors": {},
      "partitions": [],
      "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 3,
+     "roofColor": "#6f8a96"
     }
    ]
   },
@@ -1989,10 +1858,11 @@
      "doors": {},
      "partitions": [],
      "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 1,
+     "roofColor": "#8f8d86"
     }
-   ]
+   ],
+   "ruin": 0.3
   },
   {
    "id": "b-mvkphvga-ehgg",
@@ -2004,7 +1874,7 @@
    "rotDeg": 291.942,
    "length": 16.39,
    "width": 11.464,
-   "color": "#d6b45f",
+   "color": "#d9d5cc",
    "floorColor": "#a9aaa0",
    "levels": [
     {
@@ -2049,11 +1919,26 @@
      },
      "doors": {},
      "partitions": [],
-     "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 8,
+     "height": 4,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
+     "roof": "flat",
+     "roofRise": 1,
+     "roofColor": "#8f8d86"
     }
-   ]
+   ],
+   "ruin": 0.3
   },
   {
    "id": "b-mvkphvgb-lef9",
@@ -2110,15 +1995,44 @@
      },
      "doors": {},
      "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 8,
+     "height": 4,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 12,
+     "height": 4,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
      "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 3,
+     "roofColor": "#a4553b"
     }
-   ]
+   ],
+   "ruin": 0.1
   },
   {
    "id": "b-mvkphvgb-kp19",
-   "name": "Ruined shed",
+   "name": "Building 28",
    "pos": {
     "x": -70.802,
     "z": -6.57
@@ -2171,167 +2085,26 @@
      },
      "doors": {},
      "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 8,
+     "height": 4,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
      "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 3,
+     "roofColor": "#a4553b"
     }
    ],
-   "ruin": 0.45
-  },
-  {
-   "id": "b-mvkphvgb-83m7",
-   "name": "Building 29",
-   "pos": {
-    "x": -76.727,
-    "z": -140.273
-   },
-   "rotDeg": 285.762,
-   "length": 13.522,
-   "width": 11.572,
-   "color": "#a65d42",
-   "floorColor": "#a9aaa0",
-   "levels": [
-    {
-     "baseY": 0,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {
-      "s": [
-       {
-        "kind": "door",
-        "c": 4,
-        "w": 3,
-        "h": 3.2
-       }
-      ],
-      "n": [
-       {
-        "kind": "door",
-        "c": 6.761,
-        "w": 1.2,
-        "h": 2.3
-       }
-      ]
-     },
-     "partitions": [],
-     "roof": "none",
-     "roofRise": 2.5
-    },
-    {
-     "baseY": 4,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {},
-     "partitions": [],
-     "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
-  },
-  {
-   "id": "b-mvkphvgb-4t5n",
-   "name": "Building 30",
-   "pos": {
-    "x": -169.467,
-    "z": -49.639
-   },
-   "rotDeg": 5.935,
-   "length": 31.231,
-   "width": 5.967,
-   "footprint": [
-    {
-     "x": -15.615,
-     "z": -2.984
-    },
-    {
-     "x": 15.615,
-     "z": -2.984
-    },
-    {
-     "x": 15.615,
-     "z": 2.54
-    },
-    {
-     "x": 6.806,
-     "z": 2.54
-    },
-    {
-     "x": 6.806,
-     "z": 0.832
-    },
-    {
-     "x": -6.014,
-     "z": 0.832
-    },
-    {
-     "x": -6.014,
-     "z": 2.729
-    },
-    {
-     "x": -10.156,
-     "z": 2.729
-    },
-    {
-     "x": -10.156,
-     "z": 0.19
-    },
-    {
-     "x": -13.141,
-     "z": 0.19
-    },
-    {
-     "x": -13.141,
-     "z": 2.984
-    },
-    {
-     "x": -15.615,
-     "z": 2.984
-    }
-   ],
-   "color": "#d6b45f",
-   "floorColor": "#a9aaa0",
-   "levels": [
-    {
-     "baseY": 0,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {},
-     "partitions": [],
-     "roof": "none",
-     "roofRise": 2.5
-    },
-    {
-     "baseY": 4,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {},
-     "partitions": [],
-     "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
+   "ruin": 0.25
   },
   {
    "id": "b-mvkphvgb-cj2",
@@ -2348,7 +2121,7 @@
    "levels": [
     {
      "baseY": 0,
-     "height": 4,
+     "height": 3.5,
      "sides": {
       "n": true,
       "s": true,
@@ -2374,153 +2147,12 @@
       ]
      },
      "partitions": [],
-     "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
-  },
-  {
-   "id": "b-mvkphvgb-2dh4",
-   "name": "Building 32",
-   "pos": {
-    "x": -90.914,
-    "z": -59.207
-   },
-   "rotDeg": 300.031,
-   "length": 14.584,
-   "width": 8.064,
-   "color": "#cfc6b4",
-   "floorColor": "#a9aaa0",
-   "levels": [
-    {
-     "baseY": 0,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {
-      "s": [
-       {
-        "kind": "door",
-        "c": 4,
-        "w": 3,
-        "h": 3.2
-       }
-      ],
-      "n": [
-       {
-        "kind": "door",
-        "c": 7.292,
-        "w": 1.2,
-        "h": 2.3
-       }
-      ]
-     },
-     "partitions": [],
-     "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
-  },
-  {
-   "id": "b-mvkphvgb-fqoc",
-   "name": "Building 33",
-   "pos": {
-    "x": -97.844,
-    "z": -47.11
-   },
-   "rotDeg": 299.566,
-   "length": 13.416,
-   "width": 8.064,
-   "color": "#a65d42",
-   "floorColor": "#a9aaa0",
-   "levels": [
-    {
-     "baseY": 0,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {
-      "s": [
-       {
-        "kind": "door",
-        "c": 4,
-        "w": 3,
-        "h": 3.2
-       }
-      ],
-      "n": [
-       {
-        "kind": "door",
-        "c": 6.708,
-        "w": 1.2,
-        "h": 2.3
-       }
-      ]
-     },
-     "partitions": [],
-     "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
-  },
-  {
-   "id": "b-mvkphvgb-7zv0",
-   "name": "Building 34",
-   "pos": {
-    "x": -90.902,
-    "z": -85.134
-   },
-   "rotDeg": 293.787,
-   "length": 16.941,
-   "width": 9.151,
-   "color": "#d6b45f",
-   "floorColor": "#a9aaa0",
-   "levels": [
-    {
-     "baseY": 0,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {
-      "s": [
-       {
-        "kind": "door",
-        "c": 4,
-        "w": 3,
-        "h": 3.2
-       }
-      ],
-      "n": [
-       {
-        "kind": "door",
-        "c": 8.47,
-        "w": 1.2,
-        "h": 2.3
-       }
-      ]
-     },
-     "partitions": [],
      "roof": "none",
      "roofRise": 2.5
     },
     {
-     "baseY": 4,
-     "height": 4,
+     "baseY": 3.5,
+     "height": 3.5,
      "sides": {
       "n": true,
       "s": true,
@@ -2530,57 +2162,11 @@
      "doors": {},
      "partitions": [],
      "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 3,
+     "roofColor": "#a4553b"
     }
-   ]
-  },
-  {
-   "id": "b-mvkphvgb-9lkn",
-   "name": "Building 35",
-   "pos": {
-    "x": -175.303,
-    "z": -69.26
-   },
-   "rotDeg": 271.789,
-   "length": 11.719,
-   "width": 7.895,
-   "color": "#a65d42",
-   "floorColor": "#a9aaa0",
-   "levels": [
-    {
-     "baseY": 0,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {
-      "s": [
-       {
-        "kind": "door",
-        "c": 3.906,
-        "w": 3,
-        "h": 3.2
-       }
-      ],
-      "n": [
-       {
-        "kind": "door",
-        "c": 5.86,
-        "w": 1.2,
-        "h": 2.3
-       }
-      ]
-     },
-     "partitions": [],
-     "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
+   ],
+   "ruin": 0.2
   },
   {
    "id": "b-mvkphvgb-igqs",
@@ -2592,7 +2178,7 @@
    "rotDeg": 305.149,
    "length": 10.286,
    "width": 8.974,
-   "color": "#cfc6b4",
+   "color": "#a65d42",
    "floorColor": "#a9aaa0",
    "levels": [
     {
@@ -2624,254 +2210,11 @@
      },
      "partitions": [],
      "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
-  },
-  {
-   "id": "b-mvkphvgb-iyox",
-   "name": "Building 37",
-   "pos": {
-    "x": -165.509,
-    "z": -71.304
-   },
-   "rotDeg": 272.606,
-   "length": 24.285,
-   "width": 4.159,
-   "color": "#a65d42",
-   "floorColor": "#a9aaa0",
-   "levels": [
-    {
-     "baseY": 0,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {
-      "s": [
-       {
-        "kind": "door",
-        "c": 4,
-        "w": 3,
-        "h": 3.2
-       }
-      ],
-      "n": [
-       {
-        "kind": "door",
-        "c": 12.143,
-        "w": 1.2,
-        "h": 2.3
-       }
-      ]
-     },
-     "partitions": [],
-     "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
-  },
-  {
-   "id": "b-mvkphvgb-b6x",
-   "name": "Building 38",
-   "pos": {
-    "x": -133.962,
-    "z": -29.829
-   },
-   "rotDeg": 8.293,
-   "length": 12.176,
-   "width": 6.492,
-   "footprint": [
-    {
-     "x": -6.088,
-     "z": -3.246
-    },
-    {
-     "x": 6.088,
-     "z": -3.246
-    },
-    {
-     "x": 6.088,
-     "z": 3.246
-    },
-    {
-     "x": -0.559,
-     "z": 3.246
-    },
-    {
-     "x": -0.559,
-     "z": 1.759
-    },
-    {
-     "x": -6.088,
-     "z": 1.759
+     "roofRise": 1,
+     "roofColor": "#8f8d86"
     }
    ],
-   "color": "#d6b45f",
-   "floorColor": "#a9aaa0",
-   "levels": [
-    {
-     "baseY": 0,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {},
-     "partitions": [],
-     "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
-  },
-  {
-   "id": "b-mvkphvgb-963u",
-   "name": "Building 39",
-   "pos": {
-    "x": -131.316,
-    "z": -45.488
-   },
-   "rotDeg": 10.633,
-   "length": 12.408,
-   "width": 5.428,
-   "color": "#a65d42",
-   "floorColor": "#a9aaa0",
-   "levels": [
-    {
-     "baseY": 0,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {
-      "s": [
-       {
-        "kind": "door",
-        "c": 4,
-        "w": 3,
-        "h": 3.2
-       }
-      ],
-      "n": [
-       {
-        "kind": "door",
-        "c": 6.204,
-        "w": 1.2,
-        "h": 2.3
-       }
-      ]
-     },
-     "partitions": [],
-     "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
-  },
-  {
-   "id": "b-mvkphvgb-cdvw",
-   "name": "Building 40",
-   "pos": {
-    "x": -149.07,
-    "z": -47.795
-   },
-   "rotDeg": 5.512,
-   "length": 9.811,
-   "width": 5.532,
-   "color": "#cfc6b4",
-   "floorColor": "#a9aaa0",
-   "levels": [
-    {
-     "baseY": 0,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {
-      "s": [
-       {
-        "kind": "door",
-        "c": 3.27,
-        "w": 3,
-        "h": 3.2
-       }
-      ],
-      "n": [
-       {
-        "kind": "door",
-        "c": 4.906,
-        "w": 1.2,
-        "h": 2.3
-       }
-      ]
-     },
-     "partitions": [],
-     "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
-  },
-  {
-   "id": "b-mvkphvgb-b6k",
-   "name": "Building 41",
-   "pos": {
-    "x": -157.011,
-    "z": -24.811
-   },
-   "rotDeg": 6.852,
-   "length": 7.266,
-   "width": 4.11,
-   "color": "#a65d42",
-   "floorColor": "#a9aaa0",
-   "levels": [
-    {
-     "baseY": 0,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {
-      "s": [
-       {
-        "kind": "door",
-        "c": 2.422,
-        "w": 3,
-        "h": 3.2
-       }
-      ],
-      "n": [
-       {
-        "kind": "door",
-        "c": 3.633,
-        "w": 1.2,
-        "h": 2.3
-       }
-      ]
-     },
-     "partitions": [],
-     "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
+   "ruin": 0.4
   },
   {
    "id": "b-mvkphvgb-h4mi",
@@ -2883,7 +2226,7 @@
    "rotDeg": 39.238,
    "length": 6.355,
    "width": 4.517,
-   "color": "#d6b45f",
+   "color": "#a65d42",
    "floorColor": "#a9aaa0",
    "levels": [
     {
@@ -2914,181 +2257,133 @@
       ]
      },
      "partitions": [],
-     "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roof": "flat",
+     "roofRise": 1,
+     "roofColor": "#8f8d86"
     }
-   ]
+   ],
+   "ruin": 0.4
   },
   {
-   "id": "b-mvkphvgb-jb0r",
-   "name": "Building 43",
+   "id": "b-gallery-tower",
+   "name": "Gallery tower",
    "pos": {
-    "x": -150.201,
-    "z": -11.671
+    "x": -20.995,
+    "z": 34.87
    },
-   "rotDeg": 281.93,
-   "length": 5.27,
-   "width": 4.627,
+   "rotDeg": 279.428,
+   "length": 8,
+   "width": 7.467,
    "color": "#a65d42",
-   "floorColor": "#a9aaa0",
+   "ruin": 0.12,
    "levels": [
     {
      "baseY": 0,
-     "height": 4,
+     "height": 4.5,
      "sides": {
       "n": true,
       "s": true,
       "e": true,
       "w": true
      },
-     "doors": {
-      "s": [
-       {
-        "kind": "door",
-        "c": 1.757,
-        "w": 3,
-        "h": 3.2
-       }
-      ],
-      "n": [
-       {
-        "kind": "door",
-        "c": 2.635,
-        "w": 1.2,
-        "h": 2.3
-       }
-      ]
-     },
+     "doors": {},
      "partitions": [],
-     "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
-  },
-  {
-   "id": "b-mvkphvgb-7ala",
-   "name": "Building 44",
-   "pos": {
-    "x": -38.982,
-    "z": -100.219
-   },
-   "rotDeg": 297.064,
-   "length": 4.755,
-   "width": 4.33,
-   "color": "#cfc6b4",
-   "floorColor": "#a9aaa0",
-   "levels": [
+     "roof": "none",
+     "roofRise": 2.5
+    },
     {
-     "baseY": 0,
-     "height": 4,
+     "baseY": 4.5,
+     "height": 4.5,
      "sides": {
       "n": true,
       "s": true,
       "e": true,
       "w": true
      },
-     "doors": {
-      "s": [
-       {
-        "kind": "door",
-        "c": 1.585,
-        "w": 3,
-        "h": 3.2
-       }
-      ],
-      "n": [
-       {
-        "kind": "door",
-        "c": 2.377,
-        "w": 1.2,
-        "h": 2.3
-       }
-      ]
+     "doors": {},
+     "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 9,
+     "height": 4.5,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
      },
+     "doors": {},
+     "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 13.5,
+     "height": 4.5,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 18,
+     "height": 4.5,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
+     "partitions": [],
+     "roof": "none",
+     "roofRise": 2.5
+    },
+    {
+     "baseY": 22.5,
+     "height": 4.5,
+     "sides": {
+      "n": true,
+      "s": true,
+      "e": true,
+      "w": true
+     },
+     "doors": {},
      "partitions": [],
      "roof": "flat",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
-    }
-   ]
-  },
-  {
-   "id": "b-mvkphvgb-61ef",
-   "name": "Building 45",
-   "pos": {
-    "x": -128.988,
-    "z": -17.614
-   },
-   "rotDeg": 270.517,
-   "length": 6.035,
-   "width": 3.261,
-   "color": "#a65d42",
-   "floorColor": "#a9aaa0",
-   "levels": [
-    {
-     "baseY": 0,
-     "height": 4,
-     "sides": {
-      "n": true,
-      "s": true,
-      "e": true,
-      "w": true
-     },
-     "doors": {
-      "s": [
-       {
-        "kind": "door",
-        "c": 2.012,
-        "w": 3,
-        "h": 3.2
-       }
-      ],
-      "n": [
-       {
-        "kind": "door",
-        "c": 3.017,
-        "w": 1.2,
-        "h": 2.3
-       }
-      ]
-     },
-     "partitions": [],
-     "roof": "gable",
-     "roofRise": 2.5,
-     "roofColor": "#7f4636"
+     "roofRise": 1,
+     "roofColor": "#8f8d86"
     }
    ]
   }
  ],
- "pads": [
-  {
-   "x": 0,
-   "z": 0,
-   "w": 6,
-   "d": 6,
-   "color": "#a9aaa0"
-  }
- ],
+ "pads": [],
  "walls": [],
  "structures": [
   {
-   "id": "st-mvkpodil-fln",
+   "id": "st-mvks3cku-92ct",
    "kind": "water_tower",
    "name": "Water tower",
    "x": 12.143,
    "z": -63.101,
    "rotDeg": 0,
-   "height": 30,
-   "size": 5,
+   "height": 26,
+   "size": 4.5,
    "block": {
     "id": "abando/water-tower",
     "v": 1,
-    "inst": "blk-mvkpodil-bixj",
+    "inst": "blk-mvks3cku-8gzv",
     "params": {
-     "h": 30,
-     "r": 5
+     "h": 26,
+     "r": 4.5
     },
     "at": {
      "x": 12.143,
@@ -3098,26 +2393,26 @@
    }
   },
   {
-   "id": "st-mvkpodil-blx4",
+   "id": "st-mvks3ckv-eqbz",
    "kind": "shapes",
    "name": "Cuore tower",
-   "x": 173.522,
-   "z": -85.684,
+   "x": 41.303,
+   "z": -147.879,
    "rotDeg": 33,
-   "height": 38,
+   "height": 45,
    "size": 1,
    "shapes": [
     {
      "prim": "box",
      "at": {
       "x": 0,
-      "y": 15.5,
+      "y": 19,
       "z": 0
      },
      "size": {
-      "x": 7.5,
-      "y": 31,
-      "z": 7.5
+      "x": 7,
+      "y": 38,
+      "z": 7
      },
      "color": "#b9b5ab"
     },
@@ -3125,22 +2420,22 @@
      "prim": "box",
      "at": {
       "x": 0,
-      "y": 31.2,
+      "y": 38.2,
       "z": 0
      },
      "size": {
-      "x": 8.9,
+      "x": 8.4,
       "y": 0.4,
-      "z": 8.9
+      "z": 8.4
      },
      "color": "#a19d94"
     },
     {
      "prim": "box",
      "at": {
-      "x": -3.15,
-      "y": 33.4,
-      "z": -3.15
+      "x": -2.94,
+      "y": 40.4,
+      "z": -2.94
      },
      "size": {
       "x": 0.7,
@@ -3152,9 +2447,9 @@
     {
      "prim": "box",
      "at": {
-      "x": 3.15,
-      "y": 33.4,
-      "z": -3.15
+      "x": 2.94,
+      "y": 40.4,
+      "z": -2.94
      },
      "size": {
       "x": 0.7,
@@ -3166,9 +2461,9 @@
     {
      "prim": "box",
      "at": {
-      "x": -3.15,
-      "y": 33.4,
-      "z": 3.15
+      "x": -2.94,
+      "y": 40.4,
+      "z": 2.94
      },
      "size": {
       "x": 0.7,
@@ -3180,9 +2475,9 @@
     {
      "prim": "box",
      "at": {
-      "x": 3.15,
-      "y": 33.4,
-      "z": 3.15
+      "x": 2.94,
+      "y": 40.4,
+      "z": 2.94
      },
      "size": {
       "x": 0.7,
@@ -3195,13 +2490,13 @@
      "prim": "box",
      "at": {
       "x": 0,
-      "y": 35.7,
+      "y": 42.7,
       "z": 0
      },
      "size": {
-      "x": 8.1,
+      "x": 7.6,
       "y": 0.6,
-      "z": 8.1
+      "z": 7.6
      },
      "color": "#a19d94"
     },
@@ -3209,13 +2504,13 @@
      "prim": "box",
      "at": {
       "x": 0,
-      "y": 37,
+      "y": 44,
       "z": 0
      },
      "size": {
-      "x": 4.5,
+      "x": 4.2,
       "y": 2,
-      "z": 4.5
+      "z": 4.2
      },
      "color": "#b9b5ab"
     }
@@ -3223,173 +2518,25 @@
    "block": {
     "id": "abando/lantern-tower",
     "v": 1,
-    "inst": "blk-mvkpodil-bt33",
+    "inst": "blk-mvks3cku-asj7",
     "params": {
-     "h": 38,
-     "w": 7.5
+     "h": 45,
+     "w": 7
     },
     "at": {
-     "x": 173.522,
-     "z": -85.684
+     "x": 41.303,
+     "z": -147.879
     },
     "rot": 33
    }
   }
  ],
- "trees": [
-  {
-   "x": -179,
-   "z": 75,
-   "h": 14.999,
-   "r": 4.2,
-   "kind": "d"
-  },
-  {
-   "x": -169.511,
-   "z": 77.989,
-   "h": 11.468,
-   "r": 3.258,
-   "kind": "d"
-  },
-  {
-   "x": -158.363,
-   "z": 82.637,
-   "h": 12.91,
-   "r": 3.643,
-   "kind": "d"
-  },
-  {
-   "x": -147.074,
-   "z": 87.426,
-   "h": 14.778,
-   "r": 4.141,
-   "kind": "d"
-  },
-  {
-   "x": -138.006,
-   "z": 89.994,
-   "h": 9.983,
-   "r": 2.862,
-   "kind": "d"
-  },
-  {
-   "x": -126.018,
-   "z": 95.482,
-   "h": 13.946,
-   "r": 3.919,
-   "kind": "d"
-  },
-  {
-   "x": -115.276,
-   "z": 99.724,
-   "h": 14.171,
-   "r": 3.979,
-   "kind": "d"
-  },
-  {
-   "x": -109.14,
-   "z": 101.86,
-   "h": 14.581,
-   "r": 4.088,
-   "kind": "d"
-  },
-  {
-   "x": -100.147,
-   "z": 105.853,
-   "h": 13.359,
-   "r": 3.762,
-   "kind": "d"
-  },
-  {
-   "x": -91.57,
-   "z": 109.43,
-   "h": 10.89,
-   "r": 3.104,
-   "kind": "d"
-  },
-  {
-   "x": -80.814,
-   "z": 115.186,
-   "h": 14.959,
-   "r": 4.189,
-   "kind": "d"
-  },
-  {
-   "x": -72.348,
-   "z": 118.652,
-   "h": 12.156,
-   "r": 3.442,
-   "kind": "d"
-  },
-  {
-   "x": -62.904,
-   "z": 123.096,
-   "h": 12.287,
-   "r": 3.476,
-   "kind": "d"
-  },
-  {
-   "x": -56.558,
-   "z": 126.442,
-   "h": 13.326,
-   "r": 3.754,
-   "kind": "d"
-  },
-  {
-   "x": -46.848,
-   "z": 131.295,
-   "h": 14.598,
-   "r": 4.093,
-   "kind": "d"
-  },
-  {
-   "x": -39.291,
-   "z": 133.995,
-   "h": 9.414,
-   "r": 2.71,
-   "kind": "d"
-  },
-  {
-   "x": -28.394,
-   "z": 140.035,
-   "h": 14.248,
-   "r": 3.999,
-   "kind": "d"
-  },
-  {
-   "x": -19.238,
-   "z": 144.333,
-   "h": 13.857,
-   "r": 3.895,
-   "kind": "d"
-  },
-  {
-   "x": -11.193,
-   "z": 147.521,
-   "h": 10.135,
-   "r": 2.903,
-   "kind": "d"
-  },
-  {
-   "x": -0.346,
-   "z": 153.511,
-   "h": 14.818,
-   "r": 4.152,
-   "kind": "d"
-  },
-  {
-   "x": 8.264,
-   "z": 157.264,
-   "h": 12.791,
-   "r": 3.611,
-   "kind": "d"
-  }
- ],
+ "trees": [],
  "seed": 7,
  "extent": 295,
  "droneStart": {
-  "x": 60,
-  "z": 5
+  "x": 25,
+  "z": 25
  },
  "terrain": {
   "cell": 1,
@@ -3405,1793 +2552,44 @@
   },
   "strokes": []
  },
- "roads": [
-  {
-   "pts": [
-    {
-     "x": -265.043,
-     "z": 8.011
-    },
-    {
-     "x": -212.148,
-     "z": 47.796
-    },
-    {
-     "x": -202.008,
-     "z": 53.786
-    },
-    {
-     "x": -200.062,
-     "z": 54.931
-    },
-    {
-     "x": -179.984,
-     "z": 65.744
-    },
-    {
-     "x": -116.498,
-     "z": 90.715
-    },
-    {
-     "x": -63.361,
-     "z": 115.131
-    },
-    {
-     "x": 11.417,
-     "z": 148.904
-    },
-    {
-     "x": 29.293,
-     "z": 158.028
-    },
-    {
-     "x": 46.671,
-     "z": 173.253
-    },
-    {
-     "x": 56.881,
-     "z": 191.412
-    },
-    {
-     "x": 60.344,
-     "z": 205.037
-    },
-    {
-     "x": 60.173,
-     "z": 217.862
-    },
-    {
-     "x": 56.647,
-     "z": 228.975
-    },
-    {
-     "x": 52.46,
-     "z": 238.488
-    },
-    {
-     "x": 45.145,
-     "z": 248.523
-    },
-    {
-     "x": 5.363,
-     "z": 272.727
-    },
-    {
-     "x": -37.229,
-     "z": 295.076
-    },
-    {
-     "x": -89.011,
-     "z": 328.282
-    }
-   ],
-   "kind": "path",
-   "width": 3,
-   "surface": "gravel"
-  },
-  {
-   "pts": [
-    {
-     "x": -118.466,
-     "z": -128.715
-    },
-    {
-     "x": -183.494,
-     "z": -157.387
-    }
-   ],
-   "kind": "road",
-   "width": 6
-  },
-  {
-   "pts": [
-    {
-     "x": -35.314,
-     "z": -237.024
-    },
-    {
-     "x": -40.746,
-     "z": -221.565
-    },
-    {
-     "x": -42.521,
-     "z": -211.041
-    },
-    {
-     "x": -42.941,
-     "z": -197.917
-    },
-    {
-     "x": -41.898,
-     "z": -188.437
-    },
-    {
-     "x": -40.847,
-     "z": -176.557
-    },
-    {
-     "x": -41.478,
-     "z": -165.41
-    },
-    {
-     "x": -45.338,
-     "z": -148.329
-    },
-    {
-     "x": -47.844,
-     "z": -136.349
-    },
-    {
-     "x": -52.124,
-     "z": -119.78
-    },
-    {
-     "x": -60.155,
-     "z": -99.665
-    },
-    {
-     "x": -70.279,
-     "z": -81.65
-    },
-    {
-     "x": -75.501,
-     "z": -73.315
-    }
-   ],
-   "kind": "road",
-   "width": 6
-  },
-  {
-   "pts": [
-    {
-     "x": -202.008,
-     "z": 53.786
-    },
-    {
-     "x": -203.704,
-     "z": 58.865
-    },
-    {
-     "x": -200.327,
-     "z": 63.577
-    },
-    {
-     "x": -190.42,
-     "z": 68.756
-    },
-    {
-     "x": -175.556,
-     "z": 102.018
-    },
-    {
-     "x": -165.65,
-     "z": 174.398
-    },
-    {
-     "x": -168.576,
-     "z": 207.882
-    },
-    {
-     "x": -182.988,
-     "z": 264.526
-    },
-    {
-     "x": -180.062,
-     "z": 275.095
-    },
-    {
-     "x": -119.945,
-     "z": 301.166
-    },
-    {
-     "x": -108.692,
-     "z": 312.179
-    },
-    {
-     "x": -102.031,
-     "z": 337.373
-    }
-   ],
-   "kind": "path",
-   "width": 1.6,
-   "surface": "grass"
-  }
- ],
+ "roads": [],
  "surfaces": [
   {
    "pts": [
     {
-     "x": 338.54,
-     "z": 9.489
+     "x": -12,
+     "z": -5
     },
     {
-     "x": 326.547,
-     "z": 20.124
+     "x": 40,
+     "z": -15
     },
     {
-     "x": 262.524,
-     "z": 63.31
+     "x": 75,
+     "z": 10
     },
     {
-     "x": 241.45,
-     "z": 77.646
+     "x": 70,
+     "z": 45
     },
     {
-     "x": 221.24,
-     "z": 89.06
+     "x": 10,
+     "z": 55
     },
     {
-     "x": 210.212,
-     "z": 96.55
-    },
-    {
-     "x": 199.66,
-     "z": 110.764
-    },
-    {
-     "x": 183.862,
-     "z": 125.766
-    },
-    {
-     "x": 145.799,
-     "z": 99.15
-    },
-    {
-     "x": 118.29,
-     "z": 80.069
-    },
-    {
-     "x": -50.645,
-     "z": 31.771
-    },
-    {
-     "x": -70.614,
-     "z": 19.48
-    },
-    {
-     "x": -91.221,
-     "z": 17.635
-    },
-    {
-     "x": -96.692,
-     "z": 14.879
-    },
-    {
-     "x": -110.599,
-     "z": 8.867
-    },
-    {
-     "x": -110.754,
-     "z": 9.145
-    },
-    {
-     "x": -110.957,
-     "z": 8.767
-    },
-    {
-     "x": -112.801,
-     "z": 6.011
-    },
-    {
-     "x": -115.82,
-     "z": -3.124
-    },
-    {
-     "x": -116.77,
-     "z": -8.392
-    },
-    {
-     "x": -117.408,
-     "z": -16.671
-    },
-    {
-     "x": -117.05,
-     "z": -24.862
-    },
-    {
-     "x": -115.322,
-     "z": -32.352
-    },
-    {
-     "x": -112.941,
-     "z": -38.853
-    },
-    {
-     "x": -109.898,
-     "z": -36.053
-    },
-    {
-     "x": -89.455,
-     "z": -39.565
-    },
-    {
-     "x": -71.493,
-     "z": -53.345
-    },
-    {
-     "x": -42.054,
-     "z": -46.71
-    },
-    {
-     "x": -41.991,
-     "z": -46.355
-    },
-    {
-     "x": -41.836,
-     "z": -45.677
-    },
-    {
-     "x": -41.485,
-     "z": -44.688
-    },
-    {
-     "x": -41.174,
-     "z": -44.043
-    },
-    {
-     "x": -40.832,
-     "z": -43.488
-    },
-    {
-     "x": -40.388,
-     "z": -42.887
-    },
-    {
-     "x": -39.696,
-     "z": -42.143
-    },
-    {
-     "x": -38.801,
-     "z": -41.432
-    },
-    {
-     "x": -37.742,
-     "z": -39.798
-    },
-    {
-     "x": -37.229,
-     "z": -39.242
-    },
-    {
-     "x": -36.427,
-     "z": -38.564
-    },
-    {
-     "x": -35.812,
-     "z": -38.153
-    },
-    {
-     "x": -35.19,
-     "z": -37.82
-    },
-    {
-     "x": -34.52,
-     "z": -37.542
-    },
-    {
-     "x": -33.843,
-     "z": -37.331
-    },
-    {
-     "x": -32.801,
-     "z": -37.131
-    },
-    {
-     "x": -32.124,
-     "z": -37.086
-    },
-    {
-     "x": -31.369,
-     "z": -37.109
-    },
-    {
-     "x": -30.326,
-     "z": -37.253
-    },
-    {
-     "x": -29.664,
-     "z": -37.431
-    },
-    {
-     "x": -28.668,
-     "z": -37.82
-    },
-    {
-     "x": -28.279,
-     "z": -38.02
-    },
-    {
-     "x": -12.419,
-     "z": -50.511
-    },
-    {
-     "x": -11.921,
-     "z": -51.033
-    },
-    {
-     "x": -11.454,
-     "z": -51.611
-    },
-    {
-     "x": -10.863,
-     "z": -52.567
-    },
-    {
-     "x": -10.559,
-     "z": -53.223
-    },
-    {
-     "x": -10.248,
-     "z": -54.09
-    },
-    {
-     "x": -10.046,
-     "z": -55.001
-    },
-    {
-     "x": -9.944,
-     "z": -55.934
-    },
-    {
-     "x": -9.983,
-     "z": -57.035
-    },
-    {
-     "x": -10.17,
-     "z": -58.124
-    },
-    {
-     "x": -10.513,
-     "z": -59.168
-    },
-    {
-     "x": -10.995,
-     "z": -60.157
-    },
-    {
-     "x": -11.618,
-     "z": -61.069
-    },
-    {
-     "x": -12.209,
-     "z": -61.735
-    },
-    {
-     "x": -12.948,
-     "z": -62.391
-    },
-    {
-     "x": -14.684,
-     "z": -66.481
-    },
-    {
-     "x": -15.703,
-     "z": -69.881
-    },
-    {
-     "x": -16.178,
-     "z": -74.571
-    },
-    {
-     "x": -11.913,
-     "z": -98.776
-    },
-    {
-     "x": 0.522,
-     "z": -126.314
-    },
-    {
-     "x": 6.81,
-     "z": -137.016
-    },
-    {
-     "x": 9.993,
-     "z": -140.939
-    },
-    {
-     "x": 12.445,
-     "z": -142.873
-    },
-    {
-     "x": 18.546,
-     "z": -143.873
-    },
-    {
-     "x": 23.169,
-     "z": -145.573
-    },
-    {
-     "x": 26.951,
-     "z": -148.707
-    },
-    {
-     "x": 29.822,
-     "z": -152.386
-    },
-    {
-     "x": 32.157,
-     "z": -156.987
-    },
-    {
-     "x": 32.554,
-     "z": -166.811
-    },
-    {
-     "x": 31.519,
-     "z": -174.646
-    },
-    {
-     "x": 12.305,
-     "z": -230.334
-    },
-    {
-     "x": 6.608,
-     "z": -241.88
-    },
-    {
-     "x": -12.194,
-     "z": -304.314
-    },
-    {
-     "x": -16.559,
-     "z": -335.22
-    },
-    {
-     "x": -15.05,
-     "z": -339.632
-    },
-    {
-     "x": -16.754,
-     "z": -369.049
-    },
-    {
-     "x": -15.734,
-     "z": -392.364
-    },
-    {
-     "x": -10.357,
-     "z": -436.484
-    },
-    {
-     "x": 42.655,
-     "z": -429.271
-    },
-    {
-     "x": 113.838,
-     "z": -417.691
-    },
-    {
-     "x": 195.379,
-     "z": -402.133
-    },
-    {
-     "x": 203.901,
-     "z": -398.888
-    },
-    {
-     "x": 209.621,
-     "z": -395.187
-    },
-    {
-     "x": 211.348,
-     "z": -393.109
-    },
-    {
-     "x": 211.154,
-     "z": -390.186
-    },
-    {
-     "x": 209.644,
-     "z": -387.919
-    },
-    {
-     "x": 206.967,
-     "z": -386.985
-    },
-    {
-     "x": 204.874,
-     "z": -387.563
-    },
-    {
-     "x": 202.819,
-     "z": -370.749
-    },
-    {
-     "x": 211.325,
-     "z": -370.949
-    },
-    {
-     "x": 221.979,
-     "z": -343.133
-    },
-    {
-     "x": 224.43,
-     "z": -293.779
-    },
-    {
-     "x": 225.52,
-     "z": -270.941
-    },
-    {
-     "x": 230.22,
-     "z": -243.303
-    },
-    {
-     "x": 231.73,
-     "z": -206.174
-    },
-    {
-     "x": 188.29,
-     "z": -171.334
-    },
-    {
-     "x": 204.843,
-     "z": -141.639
-    },
-    {
-     "x": 240.563,
-     "z": -141.328
-    },
-    {
-     "x": 255.714,
-     "z": -106.322
-    },
-    {
-     "x": 264.586,
-     "z": -92.73
-    },
-    {
-     "x": 287.73,
-     "z": -59.557
+     "x": -15,
+     "z": 40
     }
    ],
-   "kind": "concrete"
-  },
-  {
-   "pts": [
-    {
-     "x": -168.07,
-     "z": -280.988
-    },
-    {
-     "x": -178.225,
-     "z": -257.728
-    },
-    {
-     "x": -181.938,
-     "z": -246.748
-    },
-    {
-     "x": -182.078,
-     "z": -245.97
-    },
-    {
-     "x": -182.249,
-     "z": -239.991
-    },
-    {
-     "x": -182.202,
-     "z": -239.48
-    },
-    {
-     "x": -181.183,
-     "z": -234.312
-    },
-    {
-     "x": -181.004,
-     "z": -233.823
-    },
-    {
-     "x": -178.498,
-     "z": -229.145
-    },
-    {
-     "x": -176.747,
-     "z": -226.833
-    },
-    {
-     "x": -176.568,
-     "z": -226.644
-    },
-    {
-     "x": -174.023,
-     "z": -224.522
-    },
-    {
-     "x": -171.323,
-     "z": -222.832
-    },
-    {
-     "x": -165.144,
-     "z": -220.421
-    },
-    {
-     "x": -139.704,
-     "z": -213.486
-    },
-    {
-     "x": -103.385,
-     "z": -199.039
-    },
-    {
-     "x": -92.972,
-     "z": -194.116
-    },
-    {
-     "x": -91.346,
-     "z": -192.671
-    },
-    {
-     "x": -90.957,
-     "z": -191.827
-    },
-    {
-     "x": -90.661,
-     "z": -190.437
-    },
-    {
-     "x": -91.68,
-     "z": -185.325
-    },
-    {
-     "x": -100.451,
-     "z": -160.665
-    },
-    {
-     "x": -102.404,
-     "z": -153.064
-    },
-    {
-     "x": -103.066,
-     "z": -148.607
-    },
-    {
-     "x": -103.634,
-     "z": -130.971
-    },
-    {
-     "x": -101.657,
-     "z": -110.222
-    },
-    {
-     "x": -101.081,
-     "z": -92.741
-    },
-    {
-     "x": -104.91,
-     "z": -68.492
-    },
-    {
-     "x": -106.054,
-     "z": -64.847
-    },
-    {
-     "x": -108.046,
-     "z": -60.724
-    },
-    {
-     "x": -109.587,
-     "z": -58.313
-    },
-    {
-     "x": -113.478,
-     "z": -53.678
-    },
-    {
-     "x": -116.171,
-     "z": -51.545
-    },
-    {
-     "x": -118.653,
-     "z": -48.789
-    },
-    {
-     "x": -161.105,
-     "z": -59.946
-    },
-    {
-     "x": -160.264,
-     "z": -80.239
-    },
-    {
-     "x": -201.463,
-     "z": -100.821
-    },
-    {
-     "x": -221.175,
-     "z": -79.85
-    },
-    {
-     "x": -246.031,
-     "z": -109.911
-    },
-    {
-     "x": -226.521,
-     "z": -161.387
-    },
-    {
-     "x": -256.553,
-     "z": -171.334
-    },
-    {
-     "x": -272.358,
-     "z": -174.89
-    },
-    {
-     "x": -307.02,
-     "z": -148.452
-    },
-    {
-     "x": -321.814,
-     "z": -167.689
-    },
-    {
-     "x": -319.253,
-     "z": -171.078
-    },
-    {
-     "x": -309.79,
-     "z": -183.392
-    },
-    {
-     "x": -259.16,
-     "z": -258.772
-    },
-    {
-     "x": -234.195,
-     "z": -298.702
-    },
-    {
-     "x": -231.611,
-     "z": -301.492
-    },
-    {
-     "x": -229.377,
-     "z": -302.481
-    },
-    {
-     "x": -226.296,
-     "z": -302.847
-    },
-    {
-     "x": -218.724,
-     "z": -302.081
-    }
-   ],
-   "kind": "concrete"
-  },
-  {
-   "pts": [
-    {
-     "x": -78.186,
-     "z": 326.793
-    },
-    {
-     "x": -110.023,
-     "z": 352.742
-    },
-    {
-     "x": -108.692,
-     "z": 320.292
-    },
-    {
-     "x": -112.155,
-     "z": 317.114
-    },
-    {
-     "x": -143.377,
-     "z": 288.497
-    },
-    {
-     "x": -190.739,
-     "z": 288.442
-    },
-    {
-     "x": -205.891,
-     "z": 279.895
-    },
-    {
-     "x": -203.953,
-     "z": 274.228
-    },
-    {
-     "x": -200.615,
-     "z": 270.127
-    },
-    {
-     "x": -197.253,
-     "z": 265.504
-    },
-    {
-     "x": -193.914,
-     "z": 261.414
-    },
-    {
-     "x": -193.696,
-     "z": 256.124
-    },
-    {
-     "x": -191.922,
-     "z": 251.435
-    },
-    {
-     "x": -189.611,
-     "z": 246.767
-    },
-    {
-     "x": -188.342,
-     "z": 241.522
-    },
-    {
-     "x": -187.066,
-     "z": 236.287
-    },
-    {
-     "x": -184.762,
-     "z": 231.62
-    },
-    {
-     "x": -181.377,
-     "z": 226.463
-    },
-    {
-     "x": -180.591,
-     "z": 220.14
-    },
-    {
-     "x": -179.844,
-     "z": 214.883
-    },
-    {
-     "x": -179.611,
-     "z": 209.071
-    },
-    {
-     "x": -179.393,
-     "z": 203.781
-    },
-    {
-     "x": -179.175,
-     "z": 198.502
-    },
-    {
-     "x": -178.957,
-     "z": 193.212
-    },
-    {
-     "x": -178.716,
-     "z": 187.4
-    },
-    {
-     "x": -178.498,
-     "z": 182.122
-    },
-    {
-     "x": -178.28,
-     "z": 176.832
-    },
-    {
-     "x": -178.062,
-     "z": 171.553
-    },
-    {
-     "x": -177.844,
-     "z": 166.263
-    },
-    {
-     "x": -177.626,
-     "z": 160.984
-    },
-    {
-     "x": -177.416,
-     "z": 155.694
-    },
-    {
-     "x": -178.249,
-     "z": 150.371
-    },
-    {
-     "x": -180.101,
-     "z": 143.937
-    },
-    {
-     "x": -180.412,
-     "z": 138.636
-    },
-    {
-     "x": -181.245,
-     "z": 133.301
-    },
-    {
-     "x": -183.689,
-     "z": 128.445
-    },
-    {
-     "x": -185.603,
-     "z": 123.599
-    },
-    {
-     "x": -186.988,
-     "z": 118.776
-    },
-    {
-     "x": -187.299,
-     "z": 113.475
-    },
-    {
-     "x": -188.669,
-     "z": 108.119
-    },
-    {
-     "x": -190.054,
-     "z": 103.296
-    },
-    {
-     "x": -190.366,
-     "z": 97.995
-    },
-    {
-     "x": -187.533,
-     "z": 93.349
-    },
-    {
-     "x": -185.229,
-     "z": 88.682
-    },
-    {
-     "x": -186.062,
-     "z": 83.347
-    },
-    {
-     "x": -184.794,
-     "z": 78.113
-    },
-    {
-     "x": -179.494,
-     "z": 77.802
-    },
-    {
-     "x": -174.832,
-     "z": 80.113
-    },
-    {
-     "x": -170.218,
-     "z": 83.47
-    },
-    {
-     "x": -164.498,
-     "z": 85.826
-    },
-    {
-     "x": -159.284,
-     "z": 87.626
-    },
-    {
-     "x": -26.754,
-     "z": 141.803
-    },
-    {
-     "x": 26.608,
-     "z": 167.819
-    },
-    {
-     "x": 39.316,
-     "z": 179.999
-    },
-    {
-     "x": 43.674,
-     "z": 189.701
-    },
-    {
-     "x": 44.733,
-     "z": 202.448
-    },
-    {
-     "x": 44.079,
-     "z": 218.306
-    },
-    {
-     "x": 42.593,
-     "z": 228.83
-    },
-    {
-     "x": 22.904,
-     "z": 244.956
-    },
-    {
-     "x": -56.762,
-     "z": 293.009
-    },
-    {
-     "x": -80.599,
-     "z": 307.378
-    },
-    {
-     "x": -88.03,
-     "z": 308.123
-    },
-    {
-     "x": -89.984,
-     "z": 317.047
-    },
-    {
-     "x": -88.599,
-     "z": 321.87
-    }
-   ],
-   "kind": "grass"
+   "kind": "gravel"
   }
  ],
  "waters": [
   {
    "pts": [
     {
-     "x": -808.516,
-     "z": 277.084
-    },
-    {
-     "x": -816.976,
-     "z": 263.437
-    },
-    {
-     "x": -819.435,
-     "z": 258.558
-    },
-    {
-     "x": -822.439,
-     "z": 254.18
-    },
-    {
-     "x": -828.781,
-     "z": 240.633
-    },
-    {
-     "x": -835.871,
-     "z": 232.364
-    },
-    {
-     "x": -840.532,
-     "z": 229.508
-    },
-    {
-     "x": -845.209,
-     "z": 227.197
-    },
-    {
-     "x": -850.486,
-     "z": 226.441
-    },
-    {
-     "x": -855.318,
-     "z": 227.841
-    },
-    {
-     "x": -867.739,
-     "z": 231.52
-    },
-    {
-     "x": -871.645,
-     "z": 236.143
-    },
-    {
-     "x": -875.505,
-     "z": 239.71
-    },
-    {
-     "x": -878.353,
-     "z": 244.378
-    },
-    {
-     "x": -880.135,
-     "z": 249.09
-    },
-    {
-     "x": -877.264,
-     "z": 256.647
-    },
-    {
-     "x": -875.085,
-     "z": 262.281
-    },
-    {
-     "x": -882.501,
-     "z": 272.805
-    },
-    {
-     "x": -887.614,
-     "z": 276.45
-    },
-    {
-     "x": -890.532,
-     "z": 286.141
-    },
-    {
-     "x": -889.342,
-     "z": 292.298
-    },
-    {
-     "x": -890.618,
-     "z": 297.565
-    },
-    {
-     "x": -891.918,
-     "z": 303.355
-    },
-    {
-     "x": -897.264,
-     "z": 306.145
-    },
-    {
-     "x": -901.287,
-     "z": 311.613
-    },
-    {
-     "x": -900.937,
-     "z": 316.28
-    },
-    {
-     "x": -899.669,
-     "z": 319.636
-    },
-    {
-     "x": -899.093,
-     "z": 323.393
-    },
-    {
-     "x": -901.287,
-     "z": 326.882
-    },
-    {
-     "x": -911.513,
-     "z": 329.016
-    },
-    {
-     "x": -916.47,
-     "z": 331.416
-    },
-    {
-     "x": -920.595,
-     "z": 333.128
-    },
-    {
-     "x": -927.062,
-     "z": 335.684
-    },
-    {
-     "x": -931.863,
-     "z": 340.84
-    },
-    {
-     "x": -936.354,
-     "z": 344.019
-    },
-    {
-     "x": -941.708,
-     "z": 344.763
-    },
-    {
-     "x": -947.132,
-     "z": 347.03
-    },
-    {
-     "x": -950.891,
-     "z": 347.886
-    },
-    {
-     "x": -954.151,
-     "z": 346.841
-    },
-    {
-     "x": -955.825,
-     "z": 344.319
-    },
-    {
-     "x": -957.832,
-     "z": 341.074
-    },
-    {
-     "x": -958.867,
-     "z": 337.395
-    },
-    {
-     "x": -958.338,
-     "z": 332.939
-    },
-    {
-     "x": -956.05,
-     "z": 329.594
-    },
-    {
-     "x": -947.63,
-     "z": 321.826
-    },
-    {
-     "x": -939.56,
-     "z": 313.98
-    },
-    {
-     "x": -939.147,
-     "z": 313.58
-    },
-    {
-     "x": -929.575,
-     "z": 302.6
-    },
-    {
-     "x": -920.821,
-     "z": 290.52
-    },
-    {
-     "x": -920.089,
-     "z": 288.93
-    },
-    {
-     "x": -917.988,
-     "z": 284.385
-    },
-    {
-     "x": -915.357,
-     "z": 278.717
-    },
-    {
-     "x": -913.451,
-     "z": 268.027
-    },
-    {
-     "x": -912.097,
-     "z": 249.912
-    },
-    {
-     "x": -907.459,
-     "z": 231.798
-    },
-    {
-     "x": -906.89,
-     "z": 225.152
-    },
-    {
-     "x": -908.291,
-     "z": 218.628
-    },
-    {
-     "x": -910.782,
-     "z": 213.872
-    },
-    {
-     "x": -914.33,
-     "z": 209.86
-    },
-    {
-     "x": -926.579,
-     "z": 200.047
-    },
-    {
-     "x": -934.727,
-     "z": 193.413
-    },
-    {
-     "x": -942.011,
-     "z": 191.234
-    },
-    {
-     "x": -962.128,
-     "z": 172.775
-    },
-    {
-     "x": -974.533,
-     "z": 161.996
-    },
-    {
-     "x": -979.404,
-     "z": 160.64
-    },
-    {
-     "x": -990.673,
-     "z": 155.794
-    },
-    {
-     "x": -999.755,
-     "z": 151.838
-    },
-    {
-     "x": -1021.303,
-     "z": 145.059
-    },
-    {
-     "x": -1027.047,
-     "z": 144.592
-    },
-    {
-     "x": -1029.241,
-     "z": 145.27
-    },
-    {
-     "x": -1031.537,
-     "z": 147.193
-    },
-    {
-     "x": -1031.949,
-     "z": 149.126
-    },
-    {
-     "x": -1056.323,
-     "z": 144.692
-    },
-    {
-     "x": -1073.335,
-     "z": 141.936
-    },
-    {
-     "x": -1073.312,
-     "z": 134.735
-    },
-    {
-     "x": -1073.226,
-     "z": 132.501
-    },
-    {
-     "x": -1069.008,
-     "z": 132.757
-    },
-    {
-     "x": -1054.915,
-     "z": 133.624
-    },
-    {
-     "x": -1037.249,
-     "z": 134.357
-    },
-    {
-     "x": -1027.187,
-     "z": 135.891
-    },
-    {
-     "x": -1016.517,
-     "z": 136.335
-    },
-    {
-     "x": -1011.444,
-     "z": 135.98
-    },
-    {
-     "x": -1006.385,
-     "z": 136.18
-    },
-    {
-     "x": -998.237,
-     "z": 138.602
-    },
-    {
-     "x": -951.692,
-     "z": 157.461
-    },
-    {
-     "x": -919.249,
-     "z": 181.977
-    },
-    {
-     "x": -886.455,
-     "z": 210.438
-    },
-    {
-     "x": -865.614,
-     "z": 207.037
-    },
-    {
-     "x": -823.583,
-     "z": 204.515
-    },
-    {
-     "x": -802.12,
-     "z": 211.783
-    },
-    {
-     "x": -773.388,
-     "z": 235.821
-    },
-    {
-     "x": -755.652,
-     "z": 243.466
-    },
-    {
-     "x": -731.855,
-     "z": 245.5
-    },
-    {
-     "x": -726.322,
-     "z": 239.888
-    },
-    {
-     "x": -728.508,
-     "z": 228.63
-    },
-    {
-     "x": -738.874,
-     "z": 209.593
-    },
-    {
-     "x": -750.438,
-     "z": 180.944
-    },
-    {
-     "x": -757.699,
-     "z": 138.124
-    },
-    {
-     "x": -758.088,
-     "z": 121.621
-    },
-    {
-     "x": -776.703,
-     "z": 70.889
-    },
-    {
-     "x": -783.014,
-     "z": 30.76
-    },
-    {
-     "x": -783.248,
-     "z": 10.545
-    },
-    {
-     "x": -780.711,
-     "z": -7.203
-    },
-    {
-     "x": -782.952,
-     "z": -22.039
-    },
-    {
-     "x": -781.606,
-     "z": -29.507
-    },
-    {
-     "x": -784.664,
-     "z": -32.574
-    },
-    {
-     "x": -805.575,
-     "z": -40.343
-    },
-    {
-     "x": -804.851,
-     "z": -45.099
-    },
-    {
-     "x": -784.158,
-     "z": -44.777
-    },
-    {
-     "x": -778.415,
-     "z": -47.21
-    },
-    {
-     "x": -768.781,
-     "z": -51.522
-    },
-    {
-     "x": -759.372,
-     "z": -60.857
-    },
-    {
-     "x": -750.866,
-     "z": -81.172
-    },
-    {
-     "x": -750.438,
-     "z": -98.053
-    },
-    {
-     "x": -750.485,
-     "z": -102.399
-    },
-    {
-     "x": -746.329,
-     "z": -109.567
-    },
-    {
-     "x": -744.765,
-     "z": -112.267
-    },
-    {
-     "x": -721.248,
-     "z": -142.128
-    },
-    {
-     "x": -720.532,
-     "z": -159.643
-    },
-    {
-     "x": -730.501,
-     "z": -175.468
-    },
-    {
-     "x": -733.528,
-     "z": -192.071
-    },
-    {
-     "x": -751.824,
-     "z": -211.964
-    },
-    {
-     "x": -785.691,
-     "z": -253.227
-    },
-    {
-     "x": -807.404,
-     "z": -267.419
-    },
-    {
-     "x": -807.808,
-     "z": -283.377
-    },
-    {
-     "x": -822.4,
-     "z": -289.834
-    },
-    {
-     "x": -838.664,
-     "z": -307.515
-    },
-    {
-     "x": -857.264,
-     "z": -332.731
-    },
-    {
-     "x": -866.587,
-     "z": -338.432
-    },
-    {
-     "x": -870.478,
-     "z": -347.1
-    },
-    {
-     "x": -880.423,
-     "z": -363.448
-    },
-    {
-     "x": -902.47,
-     "z": -382.44
-    },
-    {
-     "x": -921.249,
-     "z": -403.411
-    },
-    {
-     "x": -937.038,
-     "z": -419.48
-    },
-    {
-     "x": -969.381,
-     "z": -446.319
-    },
-    {
-     "x": -970.976,
-     "z": -459.143
-    },
-    {
-     "x": -986.704,
-     "z": -476.802
-    },
-    {
-     "x": -998.696,
-     "z": -482.081
-    },
-    {
-     "x": -1007.303,
-     "z": -479.247
-    },
-    {
-     "x": -1019.226,
-     "z": -473.357
-    },
-    {
-     "x": -1027.809,
-     "z": -471.057
-    },
-    {
-     "x": -1035.475,
-     "z": -478.28
-    },
-    {
-     "x": -1041.49,
-     "z": -487.038
-    },
-    {
-     "x": -1048.276,
-     "z": -495.206
-    },
-    {
-     "x": -1020.058,
-     "z": -519.599
-    },
-    {
-     "x": -994.229,
-     "z": -495.928
-    },
-    {
-     "x": -981.856,
-     "z": -488.004
-    },
-    {
-     "x": -972.05,
-     "z": -498.395
-    },
-    {
-     "x": -962.525,
-     "z": -508.053
-    },
-    {
-     "x": -962.011,
-     "z": -508.586
-    },
-    {
-     "x": -872.042,
-     "z": -397.665
-    },
-    {
-     "x": -846.548,
-     "z": -368.893
-    },
-    {
-     "x": -807.606,
-     "z": -327.508
-    },
-    {
-     "x": -784.018,
-     "z": -297.891
-    },
-    {
-     "x": -773.061,
-     "z": -294.346
-    },
-    {
-     "x": -739.17,
-     "z": -245.681
-    },
-    {
-     "x": -731.248,
-     "z": -245.681
-    },
-    {
-     "x": -685.613,
-     "z": -194.205
-    },
-    {
-     "x": -680.111,
-     "z": -187.992
-    },
-    {
-     "x": -666.944,
-     "z": -169.9
-    },
-    {
-     "x": -665.854,
-     "z": -169.633
-    },
-    {
-     "x": -602.033,
-     "z": -164.477
+     "x": -600,
+     "z": -164.153
     },
     {
      "x": -560.943,
@@ -5502,124 +2900,12 @@
      "z": 597.944
     },
     {
-     "x": -183.72,
-     "z": 609.391
+     "x": -189.427,
+     "z": 600
     },
     {
-     "x": -168.202,
-     "z": 606.312
-    },
-    {
-     "x": -132.568,
-     "z": 617.359
-    },
-    {
-     "x": -120.622,
-     "z": 623.693
-    },
-    {
-     "x": -108.031,
-     "z": 640.163
-    },
-    {
-     "x": -85.493,
-     "z": 646.942
-    },
-    {
-     "x": -76.264,
-     "z": 654.766
-    },
-    {
-     "x": -55.423,
-     "z": 664.134
-    },
-    {
-     "x": -42.84,
-     "z": 667.835
-    },
-    {
-     "x": -17.408,
-     "z": 668.891
-    },
-    {
-     "x": -4.917,
-     "z": 661.967
-    },
-    {
-     "x": 3.449,
-     "z": 652.21
-    },
-    {
-     "x": 11.106,
-     "z": 646.676
-    },
-    {
-     "x": 23.005,
-     "z": 654.077
-    },
-    {
-     "x": 40.492,
-     "z": 654.799
-    },
-    {
-     "x": 55.675,
-     "z": 659.678
-    },
-    {
-     "x": 63.628,
-     "z": 660.011
-    },
-    {
-     "x": 100.469,
-     "z": 667.379
-    },
-    {
-     "x": 153.029,
-     "z": 666.89
-    },
-    {
-     "x": 206.983,
-     "z": 671.247
-    },
-    {
-     "x": 229.356,
-     "z": 670.813
-    },
-    {
-     "x": 264.446,
-     "z": 665.879
-    },
-    {
-     "x": 279.574,
-     "z": 660.956
-    },
-    {
-     "x": 280.913,
-     "z": 661.012
-    },
-    {
-     "x": 311.964,
-     "z": 651.021
-    },
-    {
-     "x": 324.61,
-     "z": 643.164
-    },
-    {
-     "x": 346.867,
-     "z": 624.938
-    },
-    {
-     "x": 347.816,
-     "z": 614.881
-    },
-    {
-     "x": 355.077,
-     "z": 606.135
-    },
-    {
-     "x": 365.886,
-     "z": 601.267
+     "x": 366.399,
+     "z": 600
     },
     {
      "x": 368.843,
@@ -5698,464 +2984,12 @@
      "z": 599.367
     },
     {
-     "x": 546.471,
-     "z": 610.635
+     "x": 538.898,
+     "z": 600
     },
     {
-     "x": 548.977,
-     "z": 614.158
-    },
-    {
-     "x": 558.105,
-     "z": 637.396
-    },
-    {
-     "x": 568.097,
-     "z": 678.215
-    },
-    {
-     "x": 583.288,
-     "z": 714.544
-    },
-    {
-     "x": 583.724,
-     "z": 716.655
-    },
-    {
-     "x": 582.922,
-     "z": 719.756
-    },
-    {
-     "x": 579.412,
-     "z": 729.536
-    },
-    {
-     "x": 581.226,
-     "z": 741.171
-    },
-    {
-     "x": 593.747,
-     "z": 768.476
-    },
-    {
-     "x": 593.568,
-     "z": 785.202
-    },
-    {
-     "x": 593.14,
-     "z": 785.957
-    },
-    {
-     "x": 587.101,
-     "z": 791.892
-    },
-    {
-     "x": 584.409,
-     "z": 798.093
-    },
-    {
-     "x": 571.802,
-     "z": 807.017
-    },
-    {
-     "x": 564.082,
-     "z": 814.14
-    },
-    {
-     "x": 547.529,
-     "z": 816.641
-    },
-    {
-     "x": 536.408,
-     "z": 828.943
-    },
-    {
-     "x": 535.288,
-     "z": 856.004
-    },
-    {
-     "x": 533.879,
-     "z": 864.45
-    },
-    {
-     "x": 516.159,
-     "z": 882.331
-    },
-    {
-     "x": 485.334,
-     "z": 909.225
-    },
-    {
-     "x": 473.552,
-     "z": 924.683
-    },
-    {
-     "x": 451.925,
-     "z": 947.188
-    },
-    {
-     "x": 442.221,
-     "z": 963.791
-    },
-    {
-     "x": 438.493,
-     "z": 976.926
-    },
-    {
-     "x": 436.206,
-     "z": 993.852
-    },
-    {
-     "x": 435.046,
-     "z": 1021.968
-    },
-    {
-     "x": 441.855,
-     "z": 1049.896
-    },
-    {
-     "x": 444.75,
-     "z": 1056.93
-    },
-    {
-     "x": 464.976,
-     "z": 1081.157
-    },
-    {
-     "x": 470.081,
-     "z": 1086.158
-    },
-    {
-     "x": 472.953,
-     "z": 1093.715
-    },
-    {
-     "x": 480.284,
-     "z": 1096.149
-    },
-    {
-     "x": 496.284,
-     "z": 1094.149
-    },
-    {
-     "x": 503.101,
-     "z": 1096.027
-    },
-    {
-     "x": 507.786,
-     "z": 1098.349
-    },
-    {
-     "x": 512.198,
-     "z": 1107.029
-    },
-    {
-     "x": 515.56,
-     "z": 1115.675
-    },
-    {
-     "x": 523.264,
-     "z": 1121.843
-    },
-    {
-     "x": 538.183,
-     "z": 1120.331
-    },
-    {
-     "x": 568.401,
-     "z": 1121.054
-    },
-    {
-     "x": 588.448,
-     "z": 1124.01
-    },
-    {
-     "x": 598.533,
-     "z": 1123.899
-    },
-    {
-     "x": 638.744,
-     "z": 1113.863
-    },
-    {
-     "x": 665.981,
-     "z": 1109.674
-    },
-    {
-     "x": 686.689,
-     "z": 1109.474
-    },
-    {
-     "x": 702.954,
-     "z": 1113.863
-    },
-    {
-     "x": 770.168,
-     "z": 1118.242
-    },
-    {
-     "x": 799.593,
-     "z": 1125.31
-    },
-    {
-     "x": 838.239,
-     "z": 1127.444
-    },
-    {
-     "x": 851.904,
-     "z": 1130.666
-    },
-    {
-     "x": 872.97,
-     "z": 1137.701
-    },
-    {
-     "x": 890.114,
-     "z": 1143.413
-    },
-    {
-     "x": 943.08,
-     "z": 1176.031
-    },
-    {
-     "x": 955.92,
-     "z": 1183.943
-    },
-    {
-     "x": 938.41,
-     "z": 1228.618
-    },
-    {
-     "x": 921.648,
-     "z": 1220.061
-    },
-    {
-     "x": 880.838,
-     "z": 1198.079
-    },
-    {
-     "x": 819.74,
-     "z": 1178.887
-    },
-    {
-     "x": 797.017,
-     "z": 1171.752
-    },
-    {
-     "x": 723.514,
-     "z": 1165.517
-    },
-    {
-     "x": 681.117,
-     "z": 1177.053
-    },
-    {
-     "x": 601,
-     "z": 1215.205
-    },
-    {
-     "x": 542.976,
-     "z": 1219.717
-    },
-    {
-     "x": 504.541,
-     "z": 1212.271
-    },
-    {
-     "x": 476.813,
-     "z": 1202.624
-    },
-    {
-     "x": 446.587,
-     "z": 1189.144
-    },
-    {
-     "x": 411.886,
-     "z": 1168.574
-    },
-    {
-     "x": 405.653,
-     "z": 1161.35
-    },
-    {
-     "x": 403.653,
-     "z": 1162.306
-    },
-    {
-     "x": 387.388,
-     "z": 1142.213
-    },
-    {
-     "x": 357.411,
-     "z": 1075.923
-    },
-    {
-     "x": 351.699,
-     "z": 1040.972
-    },
-    {
-     "x": 362.734,
-     "z": 987.751
-    },
-    {
-     "x": 378.33,
-     "z": 922.694
-    },
-    {
-     "x": 396.47,
-     "z": 863.627
-    },
-    {
-     "x": 437.715,
-     "z": 787.513
-    },
-    {
-     "x": 448.68,
-     "z": 777.922
-    },
-    {
-     "x": 467.023,
-     "z": 741.516
-    },
-    {
-     "x": 489.155,
-     "z": 727.669
-    },
-    {
-     "x": 493.085,
-     "z": 713.499
-    },
-    {
-     "x": 492.774,
-     "z": 694.307
-    },
-    {
-     "x": 484.968,
-     "z": 681.138
-    },
-    {
-     "x": 468.206,
-     "z": 679.415
-    },
-    {
-     "x": 463.708,
-     "z": 668.98
-    },
-    {
-     "x": 467.046,
-     "z": 654.921
-    },
-    {
-     "x": 460.206,
-     "z": 647.687
-    },
-    {
-     "x": 432.104,
-     "z": 660.978
-    },
-    {
-     "x": 413.124,
-     "z": 660.156
-    },
-    {
-     "x": 382.33,
-     "z": 695.407
-    },
-    {
-     "x": 367.481,
-     "z": 705.62
-    },
-    {
-     "x": 359.31,
-     "z": 704.22
-    },
-    {
-     "x": 356.252,
-     "z": 710.843
-    },
-    {
-     "x": 358.034,
-     "z": 723.457
-    },
-    {
-     "x": 341.956,
-     "z": 735.559
-    },
-    {
-     "x": 329.326,
-     "z": 733.903
-    },
-    {
-     "x": 320.649,
-     "z": 742.182
-    },
-    {
-     "x": 275.995,
-     "z": 753.273
-    },
-    {
-     "x": 233.123,
-     "z": 744.483
-    },
-    {
-     "x": 208.119,
-     "z": 750.851
-    },
-    {
-     "x": 180.554,
-     "z": 735.692
-    },
-    {
-     "x": 115.862,
-     "z": 731.258
-    },
-    {
-     "x": 32.811,
-     "z": 720.3
-    },
-    {
-     "x": -8.061,
-     "z": 720.778
-    },
-    {
-     "x": -37.524,
-     "z": 717.3
-    },
-    {
-     "x": -57.595,
-     "z": 720.989
-    },
-    {
-     "x": -91.299,
-     "z": 732.069
-    },
-    {
-     "x": -96.513,
-     "z": 735.759
-    },
-    {
-     "x": -99.12,
-     "z": 730.136
-    },
-    {
-     "x": -124.677,
-     "z": 738.159
-    },
-    {
-     "x": -127.245,
-     "z": 733.847
-    },
-    {
-     "x": -153.112,
-     "z": 742.371
-    },
-    {
-     "x": -220.389,
-     "z": 674.57
-    },
-    {
-     "x": -226.817,
-     "z": 649.865
+     "x": -230.234,
+     "z": 600
     },
     {
      "x": -231.502,
@@ -6290,8 +3124,12 @@
      "z": 26.37
     },
     {
-     "x": -608.609,
-     "z": 7.033
+     "x": -600,
+     "z": 23.654
+    },
+    {
+     "x": -600,
+     "z": 3.164
     },
     {
      "x": -595.255,
@@ -6334,188 +3172,8 @@
      "z": -104.277
     },
     {
-     "x": -645.2,
-     "z": -118.524
-    },
-    {
-     "x": -645.878,
-     "z": -117.924
-    },
-    {
-     "x": -651.667,
-     "z": -112.845
-    },
-    {
-     "x": -669.769,
-     "z": -119.257
-    },
-    {
-     "x": -676.967,
-     "z": -101.432
-    },
-    {
-     "x": -672.329,
-     "z": -95.342
-    },
-    {
-     "x": -677.092,
-     "z": -79.505
-    },
-    {
-     "x": -709.878,
-     "z": -72.726
-    },
-    {
-     "x": -713.746,
-     "z": -62.236
-    },
-    {
-     "x": -710.057,
-     "z": -44.132
-    },
-    {
-     "x": -695.162,
-     "z": -32.252
-    },
-    {
-     "x": -692.251,
-     "z": -13.426
-    },
-    {
-     "x": -697.543,
-     "z": -8.314
-    },
-    {
-     "x": -692.065,
-     "z": 20.558
-    },
-    {
-     "x": -677.107,
-     "z": 26.903
-    },
-    {
-     "x": -672.5,
-     "z": 37.561
-    },
-    {
-     "x": -674.251,
-     "z": 68.056
-    },
-    {
-     "x": -686.026,
-     "z": 76.691
-    },
-    {
-     "x": -690.22,
-     "z": 115.376
-    },
-    {
-     "x": -682.866,
-     "z": 186.3
-    },
-    {
-     "x": -688.695,
-     "z": 194.991
-    },
-    {
-     "x": -688.454,
-     "z": 222.485
-    },
-    {
-     "x": -685.473,
-     "z": 227.397
-    },
-    {
-     "x": -680.633,
-     "z": 233.931
-    },
-    {
-     "x": -677.504,
-     "z": 254.824
-    },
-    {
-     "x": -673.17,
-     "z": 275.806
-    },
-    {
-     "x": -673.605,
-     "z": 287.419
-    },
-    {
-     "x": -672.788,
-     "z": 293.298
-    },
-    {
-     "x": -673.675,
-     "z": 315.058
-    },
-    {
-     "x": -675.994,
-     "z": 319.747
-    },
-    {
-     "x": -682.173,
-     "z": 328.004
-    },
-    {
-     "x": -690.516,
-     "z": 336.139
-    },
-    {
-     "x": -710.244,
-     "z": 343.83
-    },
-    {
-     "x": -725.785,
-     "z": 341.14
-    },
-    {
-     "x": -726.197,
-     "z": 339.484
-    },
-    {
-     "x": -733.427,
-     "z": 338.573
-    },
-    {
-     "x": -735.964,
-     "z": 341.151
-    },
-    {
-     "x": -743.481,
-     "z": 340.94
-    },
-    {
-     "x": -753.294,
-     "z": 339.073
-    },
-    {
-     "x": -754.695,
-     "z": 333.672
-    },
-    {
-     "x": -760.812,
-     "z": 332.55
-    },
-    {
-     "x": -761.847,
-     "z": 336.773
-    },
-    {
-     "x": -773.014,
-     "z": 332.716
-    },
-    {
-     "x": -779.489,
-     "z": 326.049
-    },
-    {
-     "x": -788.726,
-     "z": 310.79
-    },
-    {
-     "x": -804.61,
-     "z": 284.096
+     "x": -600,
+     "z": -110.713
     }
    ],
    "depth": 1.5
@@ -6896,6 +3554,72 @@
     }
    ],
    "depth": 1.5
+  },
+  {
+   "pts": [
+    {
+     "x": -107.95,
+     "z": 6.522
+    },
+    {
+     "x": -116.634,
+     "z": 32.595
+    },
+    {
+     "x": -118.822,
+     "z": 40.366
+    },
+    {
+     "x": -110.158,
+     "z": 42.802
+    },
+    {
+     "x": -108.065,
+     "z": 35.348
+    },
+    {
+     "x": -99.411,
+     "z": 9.366
+    }
+   ],
+   "depth": 1.6
+  },
+  {
+   "pts": [
+    {
+     "x": -26.169,
+     "z": -95.86
+    },
+    {
+     "x": -22.797,
+     "z": -87.46
+    },
+    {
+     "x": -59.112,
+     "z": -100.587
+    },
+    {
+     "x": -102.42,
+     "z": -31.818
+    },
+    {
+     "x": -88.816,
+     "z": -23.396
+    },
+    {
+     "x": -49.82,
+     "z": -87.562
+    },
+    {
+     "x": -23.069,
+     "z": -71.462
+    },
+    {
+     "x": -10.903,
+     "z": -91.067
+    }
+   ],
+   "depth": 1.6
   }
  ],
  "calibCorners": {

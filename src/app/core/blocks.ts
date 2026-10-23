@@ -239,7 +239,8 @@ export function applyPattern(b: BuildingSpec, li: number, block: BlockSpec, give
   const done: string[] = [];
   const n = (v: unknown, d: number, lo: number, hi: number): number => (isNum(v) ? clamp(v, lo, hi) : d);
   if (pat.store) {
-    applyStore(b, li, { bay: n(pat.store.bay, 5, 2, 20), step: n(pat.store.step, 10, 2, 40), rows: Math.round(n(pat.store.rows, 4, 1, 8)), inset: n(pat.store.inset, 4, 1, 30) });
+    const step = n(pat.store.step, 0, 0, 40); // 0 = a column on every third pier
+    applyStore(b, li, { bay: n(pat.store.bay, 5, 2, 20), ...(step >= 2 ? { step } : {}), rows: Math.round(n(pat.store.rows, 4, 1, 8)), inset: n(pat.store.inset, 4, 1, 30) });
     done.push('store shell');
   }
   if (pat.facade && ['doors', 'panels', 'store'].includes(pat.facade.pattern)) {

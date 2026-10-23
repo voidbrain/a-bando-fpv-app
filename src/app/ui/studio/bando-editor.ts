@@ -832,7 +832,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                       <button class="btn" (click)="addLevel()" data-tour="add-floor" title="Add a floor on top (a copy of the last one; the roof moves up)">＋</button>
                       <button class="btn" [disabled]="bd.levels.length < 2" (click)="removeFloor()" title="Remove the selected floor">－</button>
                     </div>
-                    <label class="fld" title="0 = intact. A ruin has broken walls, more on the upper floors; from 35 % it has no roof, from 60 % no upper floors">ruined % <input type="range" min="0" max="100" step="5" [value]="(bd.ruin ?? 0) * 100" (change)="mutate(setRuin, num($event))" /></label>
+                    <label class="fld" title="0 = intact. A little ruin already has breaches in the facades and holes in the roof; from 20 % the wall tops break (upper floors first), from 60 % the roof is gone, from 75 % the upper floors">ruined % <input type="range" min="0" max="100" step="5" [value]="(bd.ruin ?? 0) * 100" (change)="mutate(setRuin, num($event))" /></label>
                     <label class="fld" title="A basement under the ground floor: the ground is cut under the building; reach it through a void in the ground floor">basement m <input type="number" min="0" max="12" step="0.5" [value]="bd.basement?.height ?? 0" (change)="mutate(setBasement, num($event))" /></label>
                   </div>
                   @if (topLevel(); as tl) {

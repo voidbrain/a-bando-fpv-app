@@ -3,7 +3,7 @@ import { buildStructure } from './structures';
 import { fenceDef, postsAlong } from '../core/fences';
 import { WATER_COLOR, insidePolygon, roadDef, surfaceDef } from '../core/layers';
 import { BASEMENT_WALL, tunnelAxis, volumeSolids } from '../core/underground';
-import { NO_SLABS, ROOFLESS, ruinPieces, ruinRandom } from '../core/ruin';
+import { NO_SLABS, ROOFLESS, roofCells, roofRuns, ruinPieces, ruinRandom, type RuinPiece } from '../core/ruin';
 import * as THREE from 'three';
 import { type BuildingSpec, type LevelSpec, type RoadSpec, type SiteSpec, type SurfaceSpec, type TreeSpec, type UndergroundSpec, createRandom } from '../core/site-spec';
 import { SiteCollider, type SolidBox, type TreeCylinder } from '../core/sim/collider';
@@ -145,9 +145,21 @@ function openingLeaf(ctx: Ctx, target: THREE.Object3D, l: LevelSpec, o: { kind: 
 }
 
 /** One wall run as built: whole, or broken into pieces with their tops cut when the building is ruined. */
-function ruinedRun(ctx: Ctx, len: number, h: number): { from: number; len: number; cut: number }[] {
+function ruinedRun(ctx: Ctx, len: number, h: number): RuinPiece[] {
   const r = ctx.ruin;
   return (r ? ruinPieces(len, h, r.level, r.li, r.floors, r.rnd) : [{ from: 0, len, cut: 0 }]).filter((p) => h - p.cut > 0.05);
+}
+
+/** The solid parts of a (ruined) wall piece `hh` high: below and above its breach, up to its broken top. [bottom, top] */
+function pieceParts(p: RuinPiece, hh: number): [number, number][] {
+  const top = hh - p.cut;
+  const parts: [number, number][] = p.hole ? [[0, p.hole.y0], [p.hole.y1, top]] : [[0, top]];
+  return parts.filter(([a, z]) => z - a > 0.05);
+}
+
+/** A collider over part of a roof (building-local centre and size), like the boxes `addBox` registers. */
+function roofSolid(ctx: Ctx, x: number, z: number, w: number, d: number, y0: number, y1: number): void {
+  ctx.solids.push(rotBoxLocal(x + ctx.at[0], z + ctx.at[1], w, d, ctx.rot, y0, y1, true));
 }
 
 function buildSide(ctx: Ctx, b: BuildingSpec, l: LevelSpec, side: 'n' | 's' | 'e' | 'w', target: THREE.Object3D): void {
@@ -156,11 +168,14 @@ function buildSide(ctx: Ctx, b: BuildingSpec, l: LevelSpec, side: 'n' | 's' | 'e
   const th = 0.5;
   const wall = (from: number, len: number, y: number, hh: number): void => {
     if (len < 0.01 || hh < 0.01) return;
+    const bottom = l.baseY + y - hh / 2; // y is measured from this floor's slab
     for (const r of ruinedRun(ctx, len, hh)) {
       const m = from + r.from + r.len / 2 - runLen / 2;
-      const yy = l.baseY + y - r.cut / 2; // y is measured from this floor's slab; a ruined piece loses its top
-      if (side === 'w' || side === 'e') ctx.addBox(target, acrossPos, yy, m, th, hh - r.cut, r.len, ctx.mat.wall, true, true);
-      else ctx.addBox(target, m, yy, acrossPos, r.len, hh - r.cut, th, ctx.mat.wall, true, true);
+      for (const [a, z] of pieceParts(r, hh)) {
+        const yy = bottom + (a + z) / 2;
+        if (side === 'w' || side === 'e') ctx.addBox(target, acrossPos, yy, m, th, z - a, r.len, ctx.mat.wall, true, true);
+        else ctx.addBox(target, m, yy, acrossPos, r.len, z - a, th, ctx.mat.wall, true, true);
+      }
     }
   };
   let p = 0;
@@ -187,11 +202,14 @@ function buildPolyWalls(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.O
     const wall = (from: number, to: number, y: number, hh: number): void => {
       const len = to - from;
       if (len < 0.01 || hh < 0.01) return;
+      const bottom = l.baseY + y - hh / 2;
       for (const r of ruinedRun(ctx, len, hh)) {
         const m = from + r.from + r.len / 2;
-        const yy = l.baseY + y - r.cut / 2;
-        if (e.axis === 'x') ctx.addBox(target, m, yy, e.at, r.len, hh - r.cut, th, ctx.mat.wall, true, true);
-        else ctx.addBox(target, e.at, yy, m, th, hh - r.cut, r.len, ctx.mat.wall, true, true);
+        for (const [a, z] of pieceParts(r, hh)) {
+          const yy = bottom + (a + z) / 2;
+          if (e.axis === 'x') ctx.addBox(target, m, yy, e.at, r.len, z - a, th, ctx.mat.wall, true, true);
+          else ctx.addBox(target, e.at, yy, m, th, z - a, r.len, ctx.mat.wall, true, true);
+        }
       }
     };
     let p = e.from - th / 2;
@@ -233,12 +251,20 @@ function buildRoof(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.Object
   const top = l.baseY + l.height;
   const rise = Math.max(0.5, l.roofRise);
   const rc = ctx.matFor(l.roofColor);
+  // a ruin keeps only parts of its roof (each part its own collider, so the holes can be flown through)
+  const ruin = ctx.ruin?.level ?? 0;
+  const rnd = ruin > 0.01 ? ruinRandom(`${b.id}:roof:${ctx.ruin?.li ?? 0}`) : Math.random;
+  const runs = (len: number): { from: number; len: number }[] => roofRuns(len, ruin, rnd);
   if (b.footprint) {
     // shaped buildings: a flat roof, one slab per rectangle of the outline (each is also a collider)
-    for (const r of slabs(b.footprint)) ctx.addBox(target, (r.x0 + r.x1) / 2, top + 0.15, (r.z0 + r.z1) / 2, r.x1 - r.x0, 0.3, r.z1 - r.z0, rc, true, true);
+    for (const s of slabs(b.footprint)) for (const r of roofCells(s.x0, s.x1, s.z0, s.z1, ruin, rnd)) ctx.addBox(target, (r.x0 + r.x1) / 2, top + 0.15, (r.z0 + r.z1) / 2, r.x1 - r.x0, 0.3, r.z1 - r.z0, rc, true, true);
     return;
   }
   if (l.roof === 'flat') {
+    if (ruin > 0.01) {
+      for (const r of roofCells(-b.length / 2 - 0.3, b.length / 2 + 0.3, -b.width / 2 - 0.3, b.width / 2 + 0.3, ruin, rnd)) ctx.addBox(target, (r.x0 + r.x1) / 2, top + 0.15, (r.z0 + r.z1) / 2, r.x1 - r.x0, 0.3, r.z1 - r.z0, rc, true, true);
+      return;
+    }
     ctx.addBox(target, 0, top + 0.15, 0, b.length + 0.6, 0.3, b.width + 0.6, rc, false, true);
     ctx.solids.push(rotBoxLocal(ctx.at[0], ctx.at[1], b.length, b.width, ctx.rot, top, top + 0.3, true));
     return;
@@ -252,28 +278,56 @@ function buildRoof(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.Object
     const across = turn ? b.length : b.width; // split into n modules
     const span = across / n;
     for (let i = 0; i < n; i++) {
-      const m = gable(run, span, rise, rc);
       const c = -across / 2 + span / 2 + i * span;
+      if (ruin > 0.01) {
+        for (const r of runs(run)) {
+          const m = gable(r.len, span, rise, rc), off = -run / 2 + r.from + r.len / 2;
+          if (turn) {
+            m.rotation.y = Math.PI / 2;
+            ctx.addMesh(target, m, c, top, off);
+            roofSolid(ctx, c, off, span, r.len, top, top + rise);
+          } else {
+            ctx.addMesh(target, m, off, top, c);
+            roofSolid(ctx, off, c, r.len, span, top, top + rise);
+          }
+        }
+        continue;
+      }
+      const m = gable(run, span, rise, rc);
       if (turn) {
         m.rotation.y = Math.PI / 2;
         ctx.addMesh(target, m, c, top, 0);
       } else ctx.addMesh(target, m, 0, top, c);
     }
-    ctx.solids.push(rotBoxLocal(ctx.at[0], ctx.at[1], b.length, b.width, ctx.rot, top, top + rise, true));
+    if (ruin <= 0.01) ctx.solids.push(rotBoxLocal(ctx.at[0], ctx.at[1], b.length, b.width, ctx.rot, top, top + rise, true));
     return;
   }
   const run = turn ? b.length : b.width; // barrel length
   const across = turn ? b.width : b.length;
   const VW = across / n, VR = VW / 2, VK = l.vaultK ?? 0.58;
   for (let i = 0; i < n; i++) {
-    const m = vault(run, VR, VK, rc);
     const c = -across / 2 + VW / 2 + i * VW;
+    if (ruin > 0.01) {
+      for (const r of runs(run)) {
+        const m = vault(r.len, VR, VK, rc), off = -run / 2 + r.from + r.len / 2;
+        if (turn) {
+          m.rotation.y = Math.PI / 2;
+          ctx.addMesh(target, m, off, top, c);
+          roofSolid(ctx, off, c, r.len, VW, top + 0.4, top + VR * VK + 0.2);
+        } else {
+          ctx.addMesh(target, m, c, top, off);
+          roofSolid(ctx, c, off, VW, r.len, top + 0.4, top + VR * VK + 0.2);
+        }
+      }
+      continue;
+    }
+    const m = vault(run, VR, VK, rc);
     if (turn) {
       m.rotation.y = Math.PI / 2;
       ctx.addMesh(target, m, 0, top, c);
     } else ctx.addMesh(target, m, c, top, 0);
   }
-  ctx.solids.push(rotBoxLocal(ctx.at[0], ctx.at[1], b.length, b.width, ctx.rot, top + 0.4, top + VR * VK + 0.2, true));
+  if (ruin <= 0.01) ctx.solids.push(rotBoxLocal(ctx.at[0], ctx.at[1], b.length, b.width, ctx.rot, top + 0.4, top + VR * VK + 0.2, true));
 }
 
 /** Floor slab of a level (minus its voids), plus the water basin of a ground-floor void, plus its columns. */
@@ -779,6 +833,8 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     ctx.at = [b.pos.x, b.pos.z];
     ctx.rot = b.rotDeg;
     const floorMat = material(b.floorColor ?? '#a9aaa0');
+    const baseWall = ctx.mat.wall;
+    if (b.color) ctx.mat.wall = ctx.matFor(b.color); // the building's own wall colour
     const ruin = Math.min(1, Math.max(0, b.ruin ?? 0));
     for (const [li, l] of b.levels.entries()) {
       ctx.ruin = ruin > 0.01 && !b.frame ? { level: ruin, li, floors: b.levels.length, rnd: ruinRandom(`${b.id}:${li}`) } : null;
@@ -791,6 +847,7 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
       if (ruin < ROOFLESS) buildRoof(ctx, b, l, localRoof); // a ruin past this has lost its roof
     }
     ctx.ruin = null;
+    ctx.mat.wall = baseWall;
     if (b.basement && !b.frame) buildBasement(ctx, b, inner, floorMat);
     // roofs live under the building but belong to the global roof group for hide/show
     roof.attach(localRoof);

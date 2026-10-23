@@ -15,6 +15,16 @@ const site = (rot = 0): SiteSpec => {
 };
 
 describe('ai commands', () => {
+  it('set_ruin ruins a building in percent (clamped), 0 restores it', () => {
+    const s = site();
+    const r = runCommands(s, normalizeCommands([{ op: 'set_ruin', ruin: 140 }]).cmds, '');
+    expect(r.errors).toEqual([]);
+    expect(s.buildings[0]!.ruin).toBe(1);
+    runCommands(s, normalizeCommands([{ op: 'set_ruin', ruin: 0 }]).cmds, '');
+    expect(s.buildings[0]!.ruin).toBeUndefined();
+    expect(runCommands(s, normalizeCommands([{ op: 'set_ruin' }]).cmds, '').changed).toBe(false);
+  });
+
   it('puts a door on the south wall in the middle', () => {
     const s = site();
     const r = runCommands(s, normalizeCommands([{ op: 'add_door', side: 'south' }]).cmds, '');

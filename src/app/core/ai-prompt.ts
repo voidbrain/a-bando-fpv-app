@@ -32,6 +32,7 @@ export const AI_SCHEMA = {
           depth: { type: 'number' },
           length: { type: 'number' },
           value: { type: 'number' },
+          ruin: { type: 'number' },
           name: { type: 'string' },
           roof: { type: 'string', enum: ['gable', 'flat', 'vault'] },
           turn: { type: 'boolean' },
@@ -74,6 +75,7 @@ Commands (all fields optional except op; distances in metres; "position" and x0.
 - add_columns: pattern (row|grid), count, spacing, axis (length|width), size, level. convert: to (greenhouse|building): the building is rebuilt, its interior is lost.
 - set_facade: facade (doors = every bay a full-height door, panels = every bay a lower panel with an opening above, store = repeated 2 panels + 1 door), side (omit = all walls), bay (metres between piers, default 5), level.
 - set_columns: rows (default 3), step (metres between columns along the hall), inset (edge rows from the long walls), size, level. Replaces the columns of that floor.
+- set_ruin: ruin (percent: 0 = intact, 15 = holes in the roof and breaches in the facades, 40 = broken wall tops and a roof full of holes, 60+ = no roof, 75+ = no upper floors).
 - industrial_store: the standard warehouse shell on a rectangular building (long walls = repeated 2 panels + 1 door, one end all doors, the other all lower panels, 4 rows of columns). Optional bay, rows, step, inset, size, level.
 "building" is the building's name; leave it out for the selected one.
 
@@ -84,7 +86,8 @@ User: "split the warehouse into 3 rooms with doors" -> {"reply":"Splitting it in
 User: "a door in the middle of the south wall and two windows on the north wall" -> {"reply":"Added a door and two windows.","commands":[{"op":"add_door","side":"south","position":0.5},{"op":"add_window","side":"north","position":0.3},{"op":"add_window","side":"north","position":0.7}]}
 User: "close all the windows on the north wall" -> {"reply":"Closing them.","commands":[{"op":"set_openings","state":"closed","what":"window","side":"north"}]}
 User: "put a container and a crane next to it" -> {"reply":"Adding them.","commands":[{"op":"add_structure","structure":"container","east":6,"north":4},{"op":"add_structure","structure":"tower_crane","east":18,"north":0}]}
-User: "make it an L: cut the north-east corner, 10 by 8 metres" -> {"reply":"Cutting the corner.","commands":[{"op":"cut_notch","side":"northeast","size":10,"depth":8}]}`;
+User: "make it an L: cut the north-east corner, 10 by 8 metres" -> {"reply":"Cutting the corner.","commands":[{"op":"cut_notch","side":"northeast","size":10,"depth":8}]}
+User: "make the old mill a ruin with no roof" -> {"reply":"The mill is now a roofless ruin.","commands":[{"op":"set_ruin","building":"old mill","ruin":65}]}`;
 
 /** A compact description of the site for the model: what exists, what is selected. */
 export function buildContext(spec: SiteSpec, selectedId: string): string {
@@ -102,6 +105,7 @@ export function buildContext(spec: SiteSpec, selectedId: string): string {
       closed_openings: all.filter((o) => o.closed).length,
       columns: b.levels.reduce((n, l) => n + (l.columns?.length ?? 0), 0),
       type: b.frame ? 'greenhouse' : undefined,
+      ruined_percent: b.ruin ? Math.round(b.ruin * 100) : undefined,
     };
   });
   const structs = (spec.structures ?? []).slice(0, 30).map((s) => ({ name: s.name, kind: s.kind, height: s.height }));

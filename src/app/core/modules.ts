@@ -6,7 +6,8 @@ import type { BuildingSpec } from './site-spec';
  * They are plain functions over the same data the mouse tools edit (openings and columns), so everything stays
  * editable afterwards. The "industrial store" preset is the standard warehouse shell: long walls with a repeated
  * module of two lower-panel bays + one full-height door, one end wall all lower panels, the other all doors, and
- * four rows of columns (1 - 2 - 1) down the hall.
+ * four rows of columns down the hall: one at a quarter of the width from each long wall and a close pair in the middle
+ * (1 ——— 1 - 1 ——— 1, under the valleys of a four-barrel roof), every three bays so they line up with the piers.
  */
 export type FacadePattern = 'doors' | 'panels' | 'store';
 export const FACADE_PATTERNS: readonly FacadePattern[] = ['doors', 'panels', 'store'];
@@ -80,6 +81,14 @@ export interface ColumnOpts {
   /** Distance of the edge rows from the long walls. Default 4. */
   inset?: number;
   size?: number;
+  /** Where the rows are, metres across the hall from its first long wall (overrides `rows` and `inset`). */
+  cross?: number[];
+}
+
+/** The store's rows across a hall `w` wide: a quarter in from each long wall, and a pair either side of the middle. */
+export function storeRows(w: number): number[] {
+  const pair = Math.min(1.2, w / 20);
+  return [w / 4, w / 2 - pair, w / 2 + pair, (3 * w) / 4].map((q) => Math.round(q * 100) / 100);
 }
 
 /**
@@ -97,7 +106,8 @@ export function setColumnRows(b: BuildingSpec, li: number, o: ColumnOpts = {}): 
   const step = Math.max(2, o.step ?? 10);
   const size = o.size ?? 0.8;
   const inset = Math.min(Math.max(1, o.inset ?? 4), W / 2 - size);
-  const cross = rows === 1 ? [W / 2] : Array.from({ length: rows }, (_, k) => inset + (k * (W - 2 * inset)) / (rows - 1));
+  const given = (o.cross ?? []).filter((q) => q > size / 2 && q < W - size / 2);
+  const cross = given.length ? given : rows === 1 ? [W / 2] : Array.from({ length: rows }, (_, k) => inset + (k * (W - 2 * inset)) / (rows - 1));
   lev.columns = [];
   for (const q of cross) {
     for (let a = step; a < L - 1; a += step) {
@@ -130,7 +140,9 @@ export function applyStore(b: BuildingSpec, li: number, o: StoreOpts = {}): stri
     out.push(`${setFacade(b, li, doorsOnMax ? last : first, 'doors', o)} door bays on one end wall`);
     out.push(`${setFacade(b, li, doorsOnMax ? first : last, 'panels', o)} panel bays on the other end wall`);
   }
-  // 1 - 2 - 1: an edge row on each side and a pair in the middle, so four rows unless told otherwise
-  out.push(`${setColumnRows(b, li, { ...o, rows: o.rows ?? 4 })} columns`);
+  // unless told otherwise: the store's four rows (1 ——— 1 - 1 ——— 1), one column every three bays (on the piers)
+  const across = longX ? b.width : b.length, along = longX ? b.length : b.width;
+  const pitch = along / Math.max(1, Math.round(along / Math.max(2, o.bay ?? 5)));
+  out.push(`${setColumnRows(b, li, { ...o, rows: o.rows ?? 4, step: o.step ?? pitch * 3, ...((o.rows ?? 4) === 4 && !o.cross ? { cross: storeRows(across) } : {}) })} columns`);
   return out;
 }
