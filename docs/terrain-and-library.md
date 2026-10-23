@@ -19,16 +19,18 @@ at the end are decided (2026-10-22); each section names the ones it depends on a
 
 ## Parts 2 and 3 — what was built
 
-| Plan item                                | Where                                                                       | Notes                                                                                       |
-| ---------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| 2.1 blocks, params, placing, `fromBlock` | `core/blocks.ts` (`BlockSpec`, `placeBlock`, `BlockRef` on placed elements) | update in place, detach, remove a placement; save a selection as a block                    |
-| 2.1 patterns                             | `applyPattern`                                                              | façade / column rows / store preset as blocks in the catalogue                              |
-| 2.2 primitive shapes                     | `core/shapes.ts`, structure kind `shapes`                                   | box, cylinder, extrude, array; capped at 400 primitives; colliders from boxes and cylinders |
-| 2.3 AI                                   | `core/ai-blocks.ts`, `AiService.generateBlock`                              | the answer is checked like a file; kept as `local/ai-…`                                     |
-| 2.3 export / import                      | `BlockLibraryService`                                                       | one block, a list or a catalogue as `.json` (Q11: no `.abando` zip yet)                     |
-| 3.1 IndexedDB library                    | `LibraryStore`, `SiteLibraryService`                                        | sites, blocks, catalog, meta; old localStorage bandos migrate once                          |
-| 3.2 Stage 1 catalogue                    | `library/blocks/*.json` → `public/library/catalog.json`                     | in this repository and published with the app (not a separate repo); CI checks every block  |
-| 3.3 sync                                 | `BlockLibraryService.sync`                                                  | ETag, offline cache, catalogue wins, own blocks (`local/`) never overwritten                |
+| Plan item                                | Where                                                                       | Notes                                                                                           |
+| ---------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 2.1 blocks, params, placing, `fromBlock` | `core/blocks.ts` (`BlockSpec`, `placeBlock`, `BlockRef` on placed elements) | update in place, detach, remove a placement; save a selection as a block                        |
+| 2.1 patterns                             | `applyPattern`                                                              | façade / column rows / store preset as blocks in the catalogue                                  |
+| 2.2 primitive shapes                     | `core/shapes.ts`, structure kind `shapes`                                   | box, cylinder, extrude, array; capped at 400 primitives; colliders from boxes and cylinders     |
+| 2.3 AI                                   | `core/ai-blocks.ts`, `AiService.generateBlock`                              | the answer is checked like a file; kept as `local/ai-…`                                         |
+| 2.3 export / import                      | `BlockLibraryService`, `SiteService.exportShared`                           | blocks and bandos as `.json`; no `.abando` zip (thumbnails and terrain fit in the JSON)         |
+| 3.1 IndexedDB library                    | `LibraryStore`, `SiteLibraryService`                                        | sites, blocks, catalog, meta; old localStorage bandos migrate once                              |
+| 3.2 Stage 1 catalogue                    | `library/blocks/*.json` → `public/library/catalog.json`                     | in this repository and published with the app (not a separate repo); CI checks every block      |
+| 3.3 sync                                 | `BlockLibraryService.sync`                                                  | ETag, offline cache, catalogue wins, own blocks (`local/`) never overwritten                    |
+| Q12 privacy (export)                     | `core/share.ts`, Bandos list → Export                                       | exact / ~1 km / hidden; hidden copies carry their real ground; flights snap to the take-off pad |
+| Modules from the library                 | inspector → Modules                                                         | the pattern blocks of the library replace the hard-coded presets                                |
 
 Not done from Part 1: building basements through a negative `baseY` (1.6, last paragraph), 3D measures (1.4), a
 section view along a tunnel (1.6), national DEMs (Q6). The terrain tools work in the 2D editor only.
