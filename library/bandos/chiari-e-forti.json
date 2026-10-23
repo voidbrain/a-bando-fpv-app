@@ -19,7 +19,7 @@
  "groundColor": "#789b52",
  "buildings": [
   {
-   "id": "b-mvkphvga-8981",
+   "id": "example-chiari-e-forti-b-1",
    "name": "North wing",
    "pos": {
     "x": 99.317,
@@ -109,7 +109,7 @@
    "ruin": 0.45
   },
   {
-   "id": "b-mvkphvga-cdu1",
+   "id": "example-chiari-e-forti-b-2",
    "name": "West wing",
    "pos": {
     "x": -84.941,
@@ -202,7 +202,7 @@
    "ruin": 0.15
   },
   {
-   "id": "b-mvkphvga-4exx",
+   "id": "example-chiari-e-forti-b-3",
    "name": "Cuore block",
    "pos": {
     "x": 46.021,
@@ -301,7 +301,7 @@
    "ruin": 0.4
   },
   {
-   "id": "b-mvkphvga-cm1i",
+   "id": "example-chiari-e-forti-b-4",
    "name": "Building 5",
    "pos": {
     "x": -49.319,
@@ -422,7 +422,7 @@
    "ruin": 0.2
   },
   {
-   "id": "b-mvkphvga-9umi",
+   "id": "example-chiari-e-forti-b-5",
    "name": "River shed",
    "pos": {
     "x": 89.577,
@@ -470,7 +470,7 @@
    "ruin": 0.1
   },
   {
-   "id": "b-mvkphvga-eh0e",
+   "id": "example-chiari-e-forti-b-6",
    "name": "Ruined mill",
    "pos": {
     "x": -28.388,
@@ -579,7 +579,7 @@
    }
   },
   {
-   "id": "b-mvkphvga-f5gh",
+   "id": "example-chiari-e-forti-b-7",
    "name": "Square block",
    "pos": {
     "x": 99.062,
@@ -669,7 +669,7 @@
    "ruin": 0.12
   },
   {
-   "id": "b-mvkphvga-gm6k",
+   "id": "example-chiari-e-forti-b-8",
    "name": "Building 9",
    "pos": {
     "x": 73.634,
@@ -759,7 +759,7 @@
    "ruin": 0.15
   },
   {
-   "id": "b-mvkphvga-2nhz",
+   "id": "example-chiari-e-forti-b-9",
    "name": "Yard block",
    "pos": {
     "x": 13.084,
@@ -872,7 +872,7 @@
    "ruin": 0.1
   },
   {
-   "id": "b-mvkphvga-amwh",
+   "id": "example-chiari-e-forti-b-10",
    "name": "Building 11",
    "pos": {
     "x": 51.51,
@@ -987,7 +987,7 @@
    "ruin": 0.2
   },
   {
-   "id": "b-mvkphvga-4i60",
+   "id": "example-chiari-e-forti-b-11",
    "name": "River shed",
    "pos": {
     "x": 176.547,
@@ -1035,7 +1035,7 @@
    "ruin": 0.1
   },
   {
-   "id": "b-mvkphvga-4oj4",
+   "id": "example-chiari-e-forti-b-12",
    "name": "Ochre block",
    "pos": {
     "x": -32.066,
@@ -1139,7 +1139,7 @@
    "ruin": 0.15
   },
   {
-   "id": "b-mvkphvga-32mf",
+   "id": "example-chiari-e-forti-b-13",
    "name": "Building 14",
    "pos": {
     "x": 31.383,
@@ -1232,7 +1232,7 @@
    "ruin": 0.2
   },
   {
-   "id": "b-mvkphvga-al7m",
+   "id": "example-chiari-e-forti-b-14",
    "name": "Building 15",
    "pos": {
     "x": 20.78,
@@ -1308,7 +1308,7 @@
    "ruin": 0.08
   },
   {
-   "id": "b-mvkphvga-9dlk",
+   "id": "example-chiari-e-forti-b-15",
    "name": "Loading dock",
    "pos": {
     "x": -17.444,
@@ -1385,7 +1385,7 @@
    ]
   },
   {
-   "id": "b-mvkphvga-djuf",
+   "id": "example-chiari-e-forti-b-16",
    "name": "Building 19",
    "pos": {
     "x": 39.393,
@@ -1461,7 +1461,7 @@
    "ruin": 0.15
   },
   {
-   "id": "b-mvkphvga-4vne",
+   "id": "example-chiari-e-forti-b-17",
    "name": "South wing",
    "pos": {
     "x": 41.531,
@@ -1560,7 +1560,7 @@
    "ruin": 0.35
   },
   {
-   "id": "b-mvkphvga-3war",
+   "id": "example-chiari-e-forti-b-18",
    "name": "Silo wing",
    "pos": {
     "x": 7.999,
@@ -1664,7 +1664,7 @@
    "ruin": 0.1
   },
   {
-   "id": "b-mvkphvga-iagl",
+   "id": "example-chiari-e-forti-b-19",
    "name": "Boat house",
    "pos": {
     "x": 35.503,
@@ -1734,7 +1734,7 @@
    ]
   },
   {
-   "id": "b-mvkphvga-ehgg",
+   "id": "example-chiari-e-forti-b-20",
    "name": "White tower",
    "pos": {
     "x": -69.838,
@@ -1866,7 +1866,7 @@
    "ruin": 0.1
   },
   {
-   "id": "b-mvkphvgb-lef9",
+   "id": "example-chiari-e-forti-b-21",
    "name": "Building 27",
    "pos": {
     "x": 26.079,
@@ -1942,7 +1942,7 @@
    "ruin": 0.12
   },
   {
-   "id": "b-mvkphvgb-kp19",
+   "id": "example-chiari-e-forti-b-22",
    "name": "Building 28",
    "pos": {
     "x": -70.802,
@@ -2004,7 +2004,7 @@
    "ruin": 0.2
   },
   {
-   "id": "b-mvkphvgb-cj2",
+   "id": "example-chiari-e-forti-b-23",
    "name": "Building 31",
    "pos": {
     "x": 22.284,
@@ -2066,7 +2066,7 @@
    "ruin": 0.2
   },
   {
-   "id": "b-mvkphvgb-igqs",
+   "id": "example-chiari-e-forti-b-24",
    "name": "Building 36",
    "pos": {
     "x": 68.632,
@@ -2114,7 +2114,7 @@
    "ruin": 0.4
   },
   {
-   "id": "b-mvkphvgb-h4mi",
+   "id": "example-chiari-e-forti-b-25",
    "name": "Building 42",
    "pos": {
     "x": -53.853,
@@ -2162,7 +2162,7 @@
    "ruin": 0.4
   },
   {
-   "id": "b-mill-tower",
+   "id": "example-chiari-e-forti-b-26",
    "name": "Mill tower",
    "pos": {
     "x": -28.069,
@@ -2281,7 +2281,7 @@
  "walls": [],
  "structures": [
   {
-   "id": "st-mvl19fq5-1bs",
+   "id": "example-chiari-e-forti-st-27",
    "kind": "water_tower",
    "name": "Water tower",
    "x": 12.143,
@@ -2292,7 +2292,7 @@
    "block": {
     "id": "abando/water-tower",
     "v": 1,
-    "inst": "blk-mvl19fq5-dbng",
+    "inst": "example-chiari-e-forti-blk-28",
     "params": {
      "h": 26,
      "r": 4.5
@@ -2305,7 +2305,7 @@
    }
   },
   {
-   "id": "st-mvl19fq5-7o7z",
+   "id": "example-chiari-e-forti-st-29",
    "kind": "shapes",
    "name": "Cuore tower",
    "x": 41.303,
@@ -2374,7 +2374,7 @@
    "block": {
     "id": "abando/sign-tower",
     "v": 1,
-    "inst": "blk-mvl19fq5-a1iz",
+    "inst": "example-chiari-e-forti-blk-30",
     "params": {
      "h": 45,
      "w": 5
