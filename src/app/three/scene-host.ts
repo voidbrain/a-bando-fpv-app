@@ -10,24 +10,29 @@ import type { CameraView } from '../core/models';
 const SKY = '#b8d0c5';
 
 /** A text sprite (dark plate, light text) that always faces the camera. */
-function makeLabel(text: string): THREE.Sprite {
+/** The badge at the tip of the north arrow: a round "N" (a sprite, so it always faces the camera). */
+function makeNorthBadge(): THREE.Sprite {
   const c = document.createElement('canvas');
-  c.width = 512;
-  c.height = 96;
+  c.width = c.height = 128;
   const g = c.getContext('2d');
   if (g) {
-    g.fillStyle = 'rgba(20,34,28,.78)';
-    g.fillRect(2, 2, 508, 92);
+    g.beginPath();
+    g.arc(64, 64, 58, 0, Math.PI * 2);
+    g.fillStyle = 'rgba(20,34,28,.85)';
+    g.fill();
+    g.lineWidth = 8;
+    g.strokeStyle = '#ff3b30';
+    g.stroke();
     g.fillStyle = '#eff7e8';
-    g.font = 'bold 34px sans-serif';
+    g.font = 'bold 72px sans-serif';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.fillText(text, 256, 48);
+    g.fillText('N', 64, 68);
   }
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-  s.scale.set(18, 3.4, 1);
+  s.scale.set(5, 5, 1);
   return s;
 }
 
@@ -62,7 +67,7 @@ export class SceneHost {
   readonly paths: PathRenderer;
   readonly mainCamera = new THREE.PerspectiveCamera(60, 1, 0.05, 1200);
   private readonly northArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, -1), new THREE.Vector3(-130, 0.4, 40), 20, 0xff3b30, 5, 3);
-  private readonly northLabel = makeLabel('N');
+  private readonly northLabel = makeNorthBadge();
   private readonly ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private readonly raycaster = new THREE.Raycaster();
 
@@ -91,7 +96,6 @@ export class SceneHost {
     this.scene.add(this.site.group);
     this.drones = new DroneRig(this.scene);
     this.paths = new PathRenderer(this.scene);
-    this.northLabel.scale.set(7, 1.3, 1);
     this.scene.add(this.northArrow, this.northLabel);
   }
 
@@ -115,7 +119,7 @@ export class SceneHost {
     const a = (rotDeg * Math.PI) / 180;
     const d = new THREE.Vector3(Math.sin(a), 0, -Math.cos(a));
     this.northArrow.setDirection(d);
-    this.northLabel.position.set(-130 + d.x * 24, 2, 40 + d.z * 24);
+    this.northLabel.position.set(-130 + d.x * 24, 3, 40 + d.z * 24);
   }
 
   /** Where a click at (nx, ny) in normalised device coordinates (-1..1) lands on the ground plane, or null. */

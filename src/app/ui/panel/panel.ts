@@ -1,5 +1,6 @@
 import { Component, ElementRef, computed, inject, input } from '@angular/core';
 import { LayoutStore } from '../../state/layout.store';
+import { TourService } from '../../services/tour.service';
 import { CASCADE_STEP, PANEL_BY_ID, cascadeIndex, type PanelId } from '../panel-defs';
 
 /**
@@ -33,8 +34,12 @@ import { CASCADE_STEP, PANEL_BY_ID, cascadeIndex, type PanelId } from '../panel-
     <header class="grip" title="Drag to move" (pointerdown)="dragStart($event)" (pointermove)="dragMove($event)" (pointerup)="dragEnd()" (pointercancel)="dragEnd()">
       <span class="dots">⠿</span>
       <span class="title">{{ def().title }}</span>
-      <button class="gb" title="Transparent: hide the panel background, keep only the content" (pointerdown)="$event.stopPropagation()" (click)="layout.toggleGhost(id())">◐</button>
-      <button class="gb" title="Collapse / expand" (pointerdown)="$event.stopPropagation()" (click)="layout.toggleMinimized(id())">▾</button>
+      <button class="gb" title="Transparent: hide the panel background, keep only the content" aria-label="Transparent" (pointerdown)="$event.stopPropagation()" (click)="layout.toggleGhost(id())">◐</button>
+      <button class="gb" [class.on]="tour.tips()" [attr.aria-pressed]="tour.tips()" [title]="tour.tips() ? 'Tips on hover are on: hover a control for a moment to see how it works (click to turn off)' : 'Tips on hover: hover a control for a moment to see how it works'" aria-label="Tips on hover" (pointerdown)="$event.stopPropagation()" (click)="tour.setTips(!tour.tips())">?</button>
+      <button class="gb" title="Collapse / expand" aria-label="Collapse / expand" (pointerdown)="$event.stopPropagation()" (click)="layout.toggleMinimized(id())">▾</button>
+      @if (id() !== 'views') {
+        <button class="gb" title="Close (Views shows it again)" [attr.aria-label]="'Close ' + def().title" (pointerdown)="$event.stopPropagation()" (click)="layout.setVisible(id(), false)">×</button>
+      }
     </header>
     <div class="body"><ng-content /></div>
     @if (def().resizable && !state().minimized) {
@@ -114,6 +119,9 @@ import { CASCADE_STEP, PANEL_BY_ID, cascadeIndex, type PanelId } from '../panel-
       &:hover {
         color: var(--text);
       }
+      &.on {
+        color: var(--accent);
+      }
     }
     .body {
       display: flex;
@@ -142,6 +150,7 @@ import { CASCADE_STEP, PANEL_BY_ID, cascadeIndex, type PanelId } from '../panel-
 export class Panel {
   readonly id = input.required<PanelId>();
   protected readonly layout = inject(LayoutStore);
+  protected readonly tour = inject(TourService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly def = computed(() => PANEL_BY_ID[this.id()]);
   readonly state = computed(() => this.layout.panels()[this.id()]);
