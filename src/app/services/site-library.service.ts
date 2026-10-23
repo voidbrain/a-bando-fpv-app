@@ -55,8 +55,25 @@ export class SiteLibraryService {
     return r ? sanitizeSpec(r.spec) : null;
   }
 
-  save(spec: SiteSpec): void {
-    this.store.put('sites', spec.id, { savedAt: Date.now(), spec: cloneSpec(spec) } satisfies SiteRecord);
+  save(spec: SiteSpec, savedAt = Date.now()): void {
+    this.store.put('sites', spec.id, { savedAt, spec: cloneSpec(spec) } satisfies SiteRecord);
+  }
+
+  /** Every stored bando with when it was saved (for a backup). */
+  records(): { savedAt: number; spec: SiteSpec }[] {
+    return this.store
+      .all<SiteRecord>('sites')
+      .filter((r) => r && r.spec && typeof r.spec.id === 'string')
+      .flatMap((r) => {
+        const spec = sanitizeSpec(r.spec);
+        return spec ? [{ savedAt: r.savedAt ?? 0, spec }] : [];
+      });
+  }
+
+  /** When a bando was last saved (null: not in the library). */
+  savedAt(id: string): number | null {
+    const r = this.store.get<SiteRecord>('sites', id);
+    return r ? (r.savedAt ?? 0) : null;
   }
 
   remove(id: string): void {
