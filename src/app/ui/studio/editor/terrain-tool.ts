@@ -24,7 +24,7 @@ export class TerrainTool {
   readonly groundStyle = signal<GroundStyle>('natural');
   readonly asGroundStyle = (e: Event): GroundStyle => {
     const v = (e.target as HTMLSelectElement).value;
-    return v === 'height' || v === 'wire' ? v : 'natural';
+    return v === 'height' || v === 'wire' || v === 'satellite' ? v : 'natural';
   };
   readonly op = signal<TerrainOp>('raise');
   readonly radius = signal(8);

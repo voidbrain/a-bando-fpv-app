@@ -224,6 +224,14 @@ npm run check:i18n                        # every UI text has its Italian
 - The Water tool draws an outline by hand or, in "Line" mode, a canal along a centre line (`stripOutline`, `waterWidth`). "Merge overlapping" in the inspector joins the selected water with every water it overlaps or touches (`mergeWaters` → `unionOutline`, a grid trace, in `core/layers.ts`).
 - Water, roads and surfaces are listed in ☰ Elements ("Water, roads, ground"); a row selects the element (`goTo`, kinds `water` / `road` / `surface`). On the plan they are still picked by their edge, so a click inside them pans the map.
 
+## Coordinates, outlines, preview, satellite ground
+- Right-click a building / structure / tree → "Move … to coordinates…", the ground → "New building at coordinates…" and "Copy the coordinates of this point" (`parseLatLon` reads decimal and DMS, `siteFromLatLon` / `latLonText` in core/geo; only for bandos with a place, drawn north-up).
+- Roads, surfaces and water selected with Select show their points: drag one, Alt-click removes it, double-click the line adds one (`nearestEdge` / `insertPoint` / `removePoint` in core/layers; drag `layerPt`).
+- Inspector preview: ⤢ makes it as big as the inspector allows; a building with fixtures gets a "zoom to" list (`PreviewRenderer.zoomTo`; fixture objects carry `userData.fixture`).
+- Satellite ground: `GroundStyle 'satellite'` lays the Esri World Imagery tiles on the terrain (`core/satellite.ts` picks the tiles, `three/satellite-ground.ts` draws them on a canvas, cached per place and grid; the terrain has uv for it). Editor: ground → "satellite (3D)"; flight view: the satellite icon in Views. Not for hidden places or bandos without real ground.
+- `npm run clips` (local, needs ffmpeg): records each guide step with the GPU, cuts the set-up (`TourState.preparing`), compresses to VP9 / 960 px into `docs/guide/clips/`.
+- `docs/article/medium-draft.md`: the Medium article draft.
+
 ## Not done yet (future)
 - National elevation data: the terrain uses the free worldwide AWS terrarium tiles; per-country high-resolution DEMs could replace them where available (an `ElevationService` source).
 - Multi-user authoring: the catalogue is published only by the maintainer (`library/` in this repo, read-only in the app). Letting any pilot publish blocks or bandos needs accounts, per-user rights and moderation (a server such as Supabase), plus queued offline edits that never overwrite another pilot's work.

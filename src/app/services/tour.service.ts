@@ -32,6 +32,8 @@ export interface TourState {
   paused: boolean;
   /** Back has somewhere to go. */
   canBack: boolean;
+  /** Setting up what the step needs (opening a bando, loading the demo flight): the step itself has not started. */
+  preparing: boolean;
 }
 
 /** The copy of the Chiari e Forti example the tour builds and edits (replaced on every run: the pilot's own copies stay untouched). */
@@ -130,9 +132,12 @@ export class TourService {
     try {
       for (let i = 0; i < beats.length; i++) {
         const { beat: b, snippet, first } = beats[i]!;
-        this.state.set({ title, index: i + 1, total: beats.length, say: b.say ?? this.state()?.say ?? '', paused: this.paused, canBack: i > 0 });
+        this.state.set({ title, index: i + 1, total: beats.length, say: b.say ?? this.state()?.say ?? '', paused: this.paused, canBack: i > 0, preparing: first });
         this.skip = false;
-        if (first) await this.prepare(snippet.needs ?? []);
+        if (first) {
+          await this.prepare(snippet.needs ?? []);
+          this.state.update((s) => (s ? { ...s, preparing: false } : s));
+        }
         for (const a of b.actions) {
           if (this.skip) break;
           await this.act(a);

@@ -1,5 +1,6 @@
 import { Component, DestroyRef, ElementRef, afterNextRender, afterRenderEffect, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { tr } from '../../services/i18n.service';
+import { latLonText, parseLatLon, siteFromLatLon } from '../../core/geo';
 import { uiResets } from '../../state/layout.store';
 import { FormsModule } from '@angular/forms';
 import * as L from 'leaflet';
@@ -1813,6 +1814,9 @@ export class BandoEditor {
       case 'fenceDraw':
         this.drag.set({ ...d, b: { x: snap(p.x, 0.5), z: snap(p.z, 0.5) } });
         break;
+      case 'layerPt':
+        this.gesture((s) => this.layers.movePoint(s, d, p));
+        break;
       case 'fenceEnd':
         this.gesture((s) => {
           const w = s.walls?.[d.i];
@@ -2078,6 +2082,7 @@ export class BandoEditor {
           this.indoor() ? { label: 'Exit indoors', act: () => this.exitIndoor() } : { label: 'Edit indoors', act: () => bd.frame || this.enterIndoor() },
           { label: 'Duplicate', act: () => this.duplicate() },
           { label: 'Rotate 90°', act: () => this.mutate(this.setRot, (bd.rotDeg + 90) % 360) },
+          ...this.byCoords('Move its centre to coordinates…', (q) => this.ed.commitSite((s) => void (s.buildings.find((x) => x.id === bd.id)!.pos = q))),
           sep,
           del,
         ];
@@ -2085,10 +2090,10 @@ export class BandoEditor {
       case 'tree':
         if (!this.treeIdxs().includes(n)) this.treeSet.set([]);
         this.pick.set({ t: 'tree', i: n });
-        return [head(this.treeIdxs().length > 1 ? `${this.treeIdxs().length} trees` : 'Tree'), del];
+        return [head(this.treeIdxs().length > 1 ? `${this.treeIdxs().length} trees` : 'Tree'), ...(this.treeIdxs().length > 1 ? [] : this.byCoords('Move to coordinates…', (q) => this.ed.commitSite((s) => void Object.assign(s.trees[n]!, q)))), del];
       case 'structure':
         this.pick.set({ t: 'structure', i: n });
-        return [head('Structure'), { label: 'Duplicate', act: () => this.duplicateStruct() }, sep, del];
+        return [head('Structure'), { label: 'Duplicate', act: () => this.duplicateStruct() }, ...this.byCoords('Move to coordinates…', (q) => this.ed.commitSite((s) => void Object.assign(s.structures![n]!, q))), sep, del];
       case 'fence':
         this.pick.set({ t: 'fence', i: n });
         return [head('Fence'), del];
@@ -2141,11 +2146,42 @@ export class BandoEditor {
           tool('Scatter trees…', 'scatter'),
           tool('Draw a fence', 'fence'),
           { label: 'Measure from here', act: () => { this.setTool('measure'); this.measure.startAt(p); } },
+          ...this.byCoords('New building at coordinates…', (q) => this.newBuildingAt(q)),
+          ...(this.hasPlace() ? [{ label: 'Copy the coordinates of this point', act: () => this.copyCoords(p) }] : []),
           sep,
           tool('Select tool', 'select'),
         ];
       }
     }
+  }
+
+  /** The bando has a real place, drawn north-up (old rotated bandos are not): coordinates mean something here. */
+  private readonly hasPlace = computed(() => !this.placeHidden() && this.ed.draft().bearingDeg === 0);
+
+  /** A menu entry that asks for coordinates and hands the point (bando metres) to `use`, then rebuilds; none without a place. */
+  private byCoords(label: string, use: (q: Pt) => void): CtxItem[] {
+    if (!this.hasPlace()) return [];
+    return [
+      {
+        label,
+        act: () => {
+          const text = prompt(tr('Coordinates: latitude, longitude (45.6469, 12.3002 or 45°38\'49"N 12°18\'01"E)'));
+          if (text === null) return;
+          const g = parseLatLon(text);
+          if (!g) return void this.toast.show('Those are not coordinates: latitude, longitude, e.g. 45.6469, 12.3002.');
+          const q = siteFromLatLon(this.ed.draft().origin, g);
+          if (Math.max(Math.abs(q.x), Math.abs(q.z)) > this.ed.draft().extent + 500) return void this.toast.show('That point is far outside this bando.');
+          use(q);
+          this.applyNow();
+        },
+      },
+    ];
+  }
+
+  private copyCoords(p: Pt): void {
+    const t = latLonText(this.ed.draft().origin, p);
+    void navigator.clipboard?.writeText(t).catch(() => undefined);
+    this.toast.show(`${t} (copied)`);
   }
 
   /** A default 20 × 12 m building centred on `q`, if the ground is free. */

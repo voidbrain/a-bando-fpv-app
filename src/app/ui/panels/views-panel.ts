@@ -172,6 +172,7 @@ const CAMERA_ICON: Record<CameraView, string> = { orbit: 'camOrbit', chase: 'cam
           <div class="cams" role="group" aria-label="Camera options">
             <button class="btn ib" [class.on]="follow()" (click)="toggleFollow()" [title]="followHint()" [attr.aria-label]="followHint()" [attr.aria-pressed]="follow()"><app-tool-icon name="follow" /></button>
             <button class="btn ib" [class.on]="view.roofHidden()" (click)="view.toggleRoof()" [title]="view.roofHidden() ? 'Roofs hidden: show them again' : 'Hide the roofs (see inside the buildings)'" aria-label="Hide roofs" [attr.aria-pressed]="view.roofHidden()"><app-tool-icon name="roof" /></button>
+            <button class="btn ib" [class.on]="view.satGround()" (click)="view.toggleSatGround()" title="Satellite picture on the 3D ground (bandos with a place and real ground; imagery © Esri, Maxar)" aria-label="Satellite ground" [attr.aria-pressed]="view.satGround()"><app-tool-icon name="satellite" /></button>
             <button class="btn ib" [class.on]="view.xray()" (click)="toggleXray()" title="X-ray: whatever stands between the camera and the drone fades" aria-label="X-ray" [attr.aria-pressed]="view.xray()"><app-tool-icon name="xray" /></button>
             <button class="btn ib" (click)="scene.resetCamera()" title="Reset the camera" aria-label="Reset the camera"><app-tool-icon name="recentre" /></button>
           </div>

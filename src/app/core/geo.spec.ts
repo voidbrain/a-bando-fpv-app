@@ -1,5 +1,5 @@
 import { DEFAULT_CALIBRATION, setSiteOrigin } from './constants';
-import { courseDegrees, rotateCalibrationAbout, solveCalibration, toGeo, toLocal, toLocalAt, turnTowards } from './geo';
+import { courseDegrees, rotateCalibrationAbout, solveCalibration, toGeo, toLocal, toLocalAt, turnTowards, latLonText, parseLatLon, siteFromLatLon } from './geo';
 
 describe('geo', () => {
   beforeAll(() => setSiteOrigin({ lat: 45.648698, lon: 12.303305 })); // these cases are written against this site (Chiari e Forti)
@@ -74,5 +74,28 @@ describe('turning a path about its start', () => {
     expect(az2).toBeCloseTo(az, 6);
     expect(Math.hypot(bx2 - ax2, bz2 - az2)).toBeCloseTo(Math.hypot(bx - ax, bz - az), 6); // a GPS path keeps its length
     expect(Math.atan2(bz2 - az2, bx2 - ax2)).toBeCloseTo(Math.atan2(pin.z - az, pin.x - ax), 6); // and points at the pin
+  });
+});
+
+describe('coordinates typed by the pilot', () => {
+  it('reads decimal and degrees-minutes-seconds, refuses the rest', () => {
+    expect(parseLatLon('45.6469, 12.3002')).toEqual({ lat: 45.6469, lon: 12.3002 });
+    expect(parseLatLon(' -33.8568 151.2153 ')).toEqual({ lat: -33.8568, lon: 151.2153 });
+    const d = parseLatLon(`45°38'48.8"N 12°18'00.8"E`)!;
+    expect(d.lat).toBeCloseTo(45.64689, 4);
+    expect(d.lon).toBeCloseTo(12.30022, 4);
+    expect(parseLatLon(`33°51'24"S 151°12'55"E`)!.lat).toBeLessThan(0);
+    expect(parseLatLon('95, 12')).toBeNull();
+    expect(parseLatLon('Via Roma 3')).toBeNull();
+  });
+});
+
+describe('bando points and coordinates', () => {
+  it('a point goes to degrees and back', () => {
+    const o = { lat: 45.6469, lon: 12.3002 };
+    const p = siteFromLatLon(o, parseLatLon(latLonText(o, { x: 120.5, z: -40.25 }))!);
+    expect(p.x).toBeCloseTo(120.5, 1);
+    expect(p.z).toBeCloseTo(-40.25, 1);
+    expect(siteFromLatLon(o, o)).toEqual({ x: 0, z: 0 });
   });
 });

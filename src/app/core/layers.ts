@@ -310,3 +310,32 @@ export function layerShape(raw: readonly Vec2[], kind: 'line' | 'outline' | 'str
   if (kind === 'strip') return along ? stripOutline(pts, o.width ?? 8) : 'Drag along the course of the canal.';
   return pts.length >= 3 ? pts : 'Draw a loop: the outline of the area.';
 }
+
+/** The edge of a line (`closed`: an outline, the last point joins the first) nearest to `p`: its start index, the nearest point on it, and how far. */
+export function nearestEdge(pts: readonly Vec2[], p: Vec2, closed: boolean): { i: number; at: Vec2; d: number } | null {
+  const n = closed ? pts.length : pts.length - 1;
+  let best: { i: number; at: Vec2; d: number } | null = null;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i]!, b = pts[(i + 1) % pts.length]!;
+    const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz;
+    const t = l2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / l2)) : 0;
+    const at = { x: a.x + dx * t, z: a.z + dz * t }, d = Math.hypot(p.x - at.x, p.z - at.z);
+    if (!best || d < best.d) best = { i, at, d };
+  }
+  return best;
+}
+
+/** A new point on the edge nearest to `p` (where `p` falls on it); returns the line and the new point's index. */
+export function insertPoint(pts: readonly Vec2[], p: Vec2, closed: boolean): { pts: Vec2[]; k: number } | null {
+  const e = nearestEdge(pts, p, closed);
+  if (!e) return null;
+  const out = [...pts];
+  out.splice(e.i + 1, 0, { x: Math.round(e.at.x * 100) / 100, z: Math.round(e.at.z * 100) / 100 });
+  return { pts: out, k: e.i + 1 };
+}
+
+/** The line without point `k`, unless that would leave fewer than `min` points (3 for an outline, 2 for a road). */
+export function removePoint(pts: readonly Vec2[], k: number, min: number): Vec2[] | null {
+  if (pts.length <= min || k < 0 || k >= pts.length) return null;
+  return pts.filter((_, i) => i !== k);
+}

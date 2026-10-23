@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { digWater, layerShape, levelRoad, padsToRoads, pathLength, sanitizeLayers, simplifyPath, waterLevel } from './layers';
+import { digWater, insertPoint, layerShape, nearestEdge, removePoint, levelRoad, padsToRoads, pathLength, sanitizeLayers, simplifyPath, waterLevel } from './layers';
 import { siteGround } from './site-ground';
 import { emptySpec, sanitizeSpec } from './site-spec';
 import { applyStroke, emptyGrid, heightAt } from './terrain';
@@ -85,5 +85,20 @@ describe('layer shapes from a drag', () => {
   it('measures a line', () => {
     expect(pathLength([{ x: 0, z: 0 }, { x: 3, z: 4 }, { x: 3, z: 10 }])).toBe(11);
     expect(pathLength([])).toBe(0);
+  });
+});
+
+describe('editing outlines point by point', () => {
+  const sq = [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 10 }, { x: 0, z: 10 }];
+  it('finds the nearest edge, closing the outline', () => {
+    expect(nearestEdge(sq, { x: -1, z: 5 }, true)).toEqual({ i: 3, at: { x: 0, z: 5 }, d: 1 });
+    expect(nearestEdge(sq, { x: -1, z: 5 }, false)!.i).not.toBe(3); // an open line has no closing edge
+  });
+  it('adds a point on that edge and removes one, keeping a minimum', () => {
+    const r = insertPoint(sq, { x: 5, z: -2 }, true)!;
+    expect(r.k).toBe(1);
+    expect(r.pts[1]).toEqual({ x: 5, z: 0 });
+    expect(removePoint(r.pts, 1, 3)).toEqual(sq);
+    expect(removePoint(sq.slice(0, 3), 0, 3)).toBeNull();
   });
 });
