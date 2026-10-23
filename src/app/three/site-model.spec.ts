@@ -267,3 +267,24 @@ describe('site model basements', () => {
     expect(m.collider.hit(new Vec3(0, -1.5, 0))).toBe(false); // its inside
   });
 });
+
+describe('ruined buildings', () => {
+  it('a ruin loses its roof and part of its walls; the same building crumbles the same way', () => {
+    const count = (ruin?: number): { roofs: number; solids: number } => {
+      const s = spec();
+      s.structures = [];
+      s.buildings = [{ ...s.buildings[0]!, levels: [s.buildings[0]!.levels[0]!, { ...s.buildings[0]!.levels[0]!, baseY: 4 }], ...(ruin ? { ruin } : {}) }];
+      const m = buildSiteFromSpec(s);
+      let roofs = 0;
+      m.roof.traverse((o) => {
+        if (o instanceof THREE.Mesh) roofs++;
+      });
+      return { roofs, solids: m.collider.solids.length };
+    };
+    const intact = count(), ruined = count(0.7);
+    expect(intact.roofs).toBeGreaterThan(0);
+    expect(ruined.roofs).toBe(0);
+    expect(ruined.solids).toBeGreaterThan(intact.solids); // the walls are in pieces now
+    expect(count(0.7)).toEqual(ruined);
+  });
+});

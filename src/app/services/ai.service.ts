@@ -6,6 +6,8 @@ import { serverChat, type ChatMessage, type ServerConfig } from '../core/ai-serv
 import { cloneSpec } from '../core/site-spec';
 import { BLOCK_PROMPT, BLOCK_SCHEMA, parseBlockReply } from '../core/ai-blocks';
 import type { BlockSpec } from '../core/blocks';
+import { replyLanguage } from '../core/i18n';
+import { I18nService } from './i18n.service';
 import { SiteService } from './site.service';
 
 export interface AiModel {
@@ -62,6 +64,7 @@ const SERVER_KEY = 'abando-ai-server';
 @Service()
 export class AiService {
   private readonly site = inject(SiteService);
+  private readonly i18n = inject(I18nService);
 
   readonly open = signal(false);
   readonly supported = typeof navigator !== 'undefined' && 'gpu' in navigator;
@@ -70,6 +73,8 @@ export class AiService {
   readonly provider = signal<'browser' | 'server'>(AiService.storedProvider());
   readonly server = signal<ServerConfig>(AiService.storedServer());
   readonly status = signal<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  /** The guided tour is showing the chat with scripted answers (no model needed). */
+  readonly demo = signal(false);
   readonly progress = signal(0);
   readonly progressText = signal('');
   readonly error = signal('');
@@ -213,10 +218,13 @@ export class AiService {
     }
   }
 
-  /** Send one chat message: ask the model, run what it answers, record the outcome. */
-  async send(text: string): Promise<void> {
+  /**
+   * Send one chat message: ask the model, run what it answers, record the outcome. `scripted` is the guided tour's
+   * stand-in for the model (its JSON answer): everything after the model's answer runs as usual.
+   */
+  async send(text: string, scripted?: string): Promise<void> {
     const t = text.trim();
-    if (!t || this.busy() || this.status() !== 'ready') return;
+    if (!t || this.busy() || (this.status() !== 'ready' && scripted === undefined)) return;
     this.busy.set(true);
     const ed = this.site.editor;
     const spec = ed.draft();
@@ -226,8 +234,8 @@ export class AiService {
       const history = this.messages()
         .slice(-7, -1)
         .map((m) => (m.role === 'user' ? { role: 'user' as const, content: m.text } : { role: 'assistant' as const, content: JSON.stringify({ reply: m.text, commands: m.raw ?? [] }) }));
-      const msgs: ChatMessage[] = [{ role: 'system', content: `${SYSTEM_PROMPT}\n\n${buildContext(spec, sel)}` }, ...history, { role: 'user', content: t }];
-      const parsed = parseReply(await this.complete(msgs));
+      const msgs: ChatMessage[] = [{ role: 'system', content: `${SYSTEM_PROMPT}${replyLanguage(this.i18n.lang())}\n\n${buildContext(spec, sel)}` }, ...history, { role: 'user', content: t }];
+      const parsed = parseReply(scripted ?? (await this.complete(msgs)));
       const probe = cloneSpec(spec);
       const dry = runCommands(probe, parsed.commands, sel);
       // the same commands one by one on another copy, to know which change belongs to which building
@@ -270,7 +278,7 @@ export class AiService {
     if (this.busy()) return { block: null, error: 'The assistant is busy.' };
     this.busy.set(true);
     try {
-      return parseBlockReply(await this.complete([{ role: 'system', content: BLOCK_PROMPT }, { role: 'user', content: t }], BLOCK_SCHEMA, 2000));
+      return parseBlockReply(await this.complete([{ role: 'system', content: BLOCK_PROMPT + replyLanguage(this.i18n.lang()) }, { role: 'user', content: t }], BLOCK_SCHEMA, 2000));
     } catch (e) {
       return { block: null, error: e instanceof Error ? e.message : String(e) };
     } finally {

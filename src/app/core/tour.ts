@@ -1,0 +1,283 @@
+/**
+ * The guided tour: short animated snippets that use the real interface (a cursor moves, clicks, types and drags; a
+ * caption says what happens), and full tours made of snippets. The same snippets are the clips of the help pages
+ * (docs/guide, built by tools/build-guide.mjs) and of the hover tips. Pure data and checks; services/tour.service.ts
+ * plays them.
+ *
+ * Targets: a plain name is a `data-tour` mark in the templates (`[data-tour~="name"]`); anything starting with `#`,
+ * `.`, `[` or `app-` is a CSS selector. Points inside a target are fractions of its box (0..1), the centre by default.
+ * Slow or online steps (generating from map data, the AI model) are stand-ins (`hook`) that show the real result.
+ */
+
+export type Section = 'start' | 'bandos' | 'model' | 'ai' | 'flight';
+
+export const SECTIONS: readonly { id: Section; title: string }[] = [
+  { id: 'start', title: 'Getting started' },
+  { id: 'bandos', title: 'Bandos and the map' },
+  { id: 'model', title: 'Editing the model' },
+  { id: 'ai', title: 'The AI assistant' },
+  { id: 'flight', title: 'Flights, video and sync' },
+];
+
+/** What the player can do besides moving the cursor; each one is implemented in the tour service. */
+export const HOOKS = ['panel', 'list', 'fakeGenerate', 'tool', 'select', 'view', 'ai', 'demoLog', 'demoVideo', 'autoSync', 'play', 'pause', 'closeBoxes'] as const;
+export type Hook = (typeof HOOKS)[number];
+
+export type At = readonly [number, number];
+
+export type TourAction =
+  /** Move the cursor over a target. */
+  | { do: 'point'; at: string; to?: At }
+  /** Move there and click it (`press` shows the click without sending it, before a hook does the work). */
+  | { do: 'click' | 'press'; at: string; to?: At }
+  /** Type into an input, one character at a time (then `change`). */
+  | { do: 'type'; at: string; text: string }
+  /** Press, move and release inside a target (drawing on the plan, orbiting the 3D view). */
+  | { do: 'drag'; at: string; from: At; to: At; ms?: number }
+  | { do: 'wait'; ms: number }
+  | { do: 'hook'; hook: Hook; arg?: string };
+
+export interface Beat {
+  /** The caption shown while this beat plays (English; the language layer translates it). */
+  say?: string;
+  actions: TourAction[];
+}
+
+export interface Snippet {
+  id: string;
+  section: Section;
+  /** Short title: the Guide panel, the help page heading, the hover tip. */
+  title: string;
+  beats: Beat[];
+  /** `data-tour` marks that show this snippet as a hover tip. */
+  hover?: string[];
+}
+
+export interface Tour {
+  id: string;
+  title: string;
+  about: string;
+  snippets: string[];
+}
+
+const p = (at: string, to?: At): TourAction => ({ do: 'point', at, ...(to ? { to } : {}) });
+const click = (at: string, to?: At): TourAction => ({ do: 'click', at, ...(to ? { to } : {}) });
+const press = (at: string, to?: At): TourAction => ({ do: 'press', at, ...(to ? { to } : {}) });
+const wait = (ms: number): TourAction => ({ do: 'wait', ms });
+const hook = (h: Hook, arg?: string): TourAction => ({ do: 'hook', hook: h, ...(arg !== undefined ? { arg } : {}) });
+const drag = (at: string, from: At, to: At, ms = 900): TourAction => ({ do: 'drag', at, from, to, ms });
+const type = (at: string, text: string): TourAction => ({ do: 'type', at, text });
+
+/** The building the model snippets work on, in the Villetta example. */
+const SHED = 'Barrel-vault shed';
+
+export const SNIPPETS: readonly Snippet[] = [
+  {
+    id: 'welcome',
+    section: 'start',
+    title: 'Welcome',
+    beats: [
+      { say: 'A Bando builds a 3D model of an abandoned place from open map data, then lets you fly it, replay your flights and sync the video.', actions: [p('app-stage', [0.5, 0.45]), wait(3800)] },
+      { say: 'Everything is in floating panels: drag one by its title, resize it by the corner, show or hide it in Views.', actions: [hook('closeBoxes'), p('#views', [0.5, 0.1]), wait(3200)] },
+    ],
+  },
+  {
+    id: 'open-bandos',
+    section: 'bandos',
+    title: 'Open the Bandos panel',
+    hover: ['examples'],
+    beats: [{ say: 'Bandos holds your places, and ready-made examples to open as a copy.', actions: [hook('panel', 'studio'), hook('list'), p('#studio', [0.3, 0.3]), wait(2600), p('examples'), wait(1800)] }],
+  },
+  {
+    id: 'create',
+    section: 'bandos',
+    title: 'Create a bando',
+    hover: ['new-bando'],
+    beats: [{ say: 'New bando opens the map.', actions: [hook('panel', 'studio'), hook('list'), click('new-bando'), wait(1500)] }],
+  },
+  {
+    id: 'place',
+    section: 'bandos',
+    title: 'Place the area on the map',
+    hover: ['search'],
+    beats: [
+      { say: 'Search a place, or paste its coordinates.', actions: [type('search', '45.52848, 12.13364'), click('search-go'), wait(1800)] },
+      { say: 'Frame the area: move the map, pull the frame by its edges and corners, turn it with the yellow knob.', actions: [p('map', [0.25, 0.3]), wait(700), p('map', [0.75, 0.7]), wait(1600)] },
+    ],
+  },
+  {
+    id: 'generate',
+    section: 'bandos',
+    title: 'Generate the 3D model',
+    hover: ['generate'],
+    beats: [
+      { say: 'Generate 3D downloads buildings, roads, trees, water and the real ground, and builds the model.', actions: [press('generate'), hook('fakeGenerate'), wait(1200)] },
+      { say: 'The model is drawn over the map: each building can be moved, resized, reshaped and turned.', actions: [p('map', [0.55, 0.5]), wait(2600)] },
+    ],
+  },
+  {
+    id: 'look-3d',
+    section: 'model',
+    title: 'Look around in 3D',
+    hover: ['view-3d'],
+    beats: [
+      { say: 'Switch to 3D to look around: drag to orbit, the wheel zooms.', actions: [click('view-3d'), wait(1200), drag('map', [0.35, 0.6], [0.65, 0.55], 1400), wait(600), drag('map', [0.5, 0.5], [0.45, 0.62], 900), wait(1400)] },
+      { say: 'Back to 2D to edit the plan.', actions: [click('view-2d'), wait(900)] },
+    ],
+  },
+  {
+    id: 'select',
+    section: 'model',
+    title: 'Select a building',
+    hover: ['tool-select'],
+    beats: [{ say: 'Click a building to select it: the inspector shows its size, floors, roof and openings.', actions: [hook('tool', 'select'), p('map', [0.6, 0.5]), hook('select', SHED), wait(2400), p('inspector', [0.5, 0.25]), wait(1600)] }],
+  },
+  {
+    id: 'adjust',
+    section: 'model',
+    title: 'Change a building',
+    hover: ['wall-height'],
+    beats: [
+      { say: 'Every value can be changed: here the wall height.', actions: [hook('select', SHED), type('wall-height', '8'), wait(1600)] },
+      { say: 'Add a floor, take the roof off, make it a ruin: each change is one Undo step.', actions: [p('add-floor'), wait(1800)] },
+    ],
+  },
+  {
+    id: 'add-building',
+    section: 'model',
+    title: 'Draw a building',
+    hover: ['tool-building'],
+    beats: [
+      { say: 'Building tool: drag a rectangle on free ground. It snaps flush to close neighbours.', actions: [hook('tool', 'building'), wait(500), drag('map', [0.12, 0.72], [0.24, 0.86], 1100), wait(1400)] },
+      { actions: [hook('tool', 'select'), wait(400)] },
+    ],
+  },
+  {
+    id: 'trees',
+    section: 'model',
+    title: 'Plant trees with the brush',
+    hover: ['tool-scatter'],
+    beats: [
+      { say: 'The tree brush plants trees along a stroke, or fills a square, a circle or a hand-drawn area.', actions: [hook('tool', 'scatter'), wait(500), drag('map', [0.08, 0.3], [0.2, 0.62], 1500), wait(1400)] },
+      { actions: [hook('tool', 'select'), wait(400)] },
+    ],
+  },
+  {
+    id: 'library',
+    section: 'model',
+    title: 'Place a block from the Library',
+    hover: ['library'],
+    beats: [
+      { say: 'The Library has ready-made objects, buildings and patterns, from the online catalogue and your own.', actions: [click('library'), wait(1500)] },
+      { say: 'Pick one, then click the map to place it.', actions: [click('block-abando/race-gate'), wait(700), click('block-place'), wait(500), click('map', [0.3, 0.45]), wait(1400)] },
+      { actions: [click('library'), hook('closeBoxes'), wait(400)] },
+    ],
+  },
+  {
+    id: 'ai',
+    section: 'ai',
+    title: 'Edit with the AI assistant',
+    hover: ['ai'],
+    beats: [
+      { say: 'The AI assistant edits from plain words. It runs in your browser, or on your own server.', actions: [hook('select', SHED), hook('ai', 'on'), click('ai'), wait(1400)] },
+      { say: 'Ask for a change to the selected building.', actions: [type('ai-input', 'a door in the middle of the north wall, and 8 windows on the east side'), press('ai-send'), hook('ai', 'door'), wait(1800)] },
+      { say: 'What changed is listed for review, and Undo is one click. The app reports what it really did, not what the model claims.', actions: [p('ai-changes'), wait(3200), click('ai'), hook('ai', 'off')] },
+    ],
+  },
+  {
+    id: 'log',
+    section: 'flight',
+    title: 'Load a flight log',
+    hover: ['upload-log'],
+    beats: [{ say: 'Drop a Betaflight Blackbox log (CSV), a GPX or a JSON file on the page, or press Upload log.', actions: [hook('panel', 'flights'), press('upload-log'), hook('demoLog'), wait(2600)] }],
+  },
+  {
+    id: 'video',
+    section: 'flight',
+    title: 'Load the flight video',
+    hover: ['load-video'],
+    beats: [{ say: 'Load the video of the same flight. It stays on this computer; nothing is uploaded.', actions: [hook('panel', 'video'), press('load-video'), hook('demoVideo'), wait(2400)] }],
+  },
+  {
+    id: 'sync',
+    section: 'flight',
+    title: 'Sync the video with the log',
+    hover: ['auto-sync'],
+    beats: [{ say: 'Auto-sync lines up the video with the log from how the picture moves; flips and rolls are the best markers.', actions: [hook('panel', 'video'), press('auto-sync'), hook('autoSync'), wait(2200)] }],
+  },
+  {
+    id: 'replay',
+    section: 'flight',
+    title: 'Replay the flight',
+    hover: ['play'],
+    beats: [{ say: 'Play: the drone flies its real path through the model, with the video in step.', actions: [hook('panel', 'timeline'), click('play'), wait(6000), hook('pause')] }],
+  },
+  {
+    id: 'finish',
+    section: 'start',
+    title: 'Where to go next',
+    beats: [{ say: 'That is the tour. Every step is also a short clip in this Guide panel; turn on hover tips to see them over the tools.', actions: [hook('panel', 'guide'), p('#guide', [0.5, 0.2]), wait(3600)] }],
+  },
+];
+
+export const TOURS: readonly Tour[] = [
+  { id: 'full', title: 'Full tour', about: 'From a new bando to a synced replay, in about three minutes.', snippets: ['welcome', 'open-bandos', 'create', 'place', 'generate', 'look-3d', 'select', 'adjust', 'add-building', 'trees', 'library', 'ai', 'log', 'video', 'sync', 'replay', 'finish'] },
+  { id: 'build', title: 'Build a bando', about: 'Find the place, generate the model, edit it.', snippets: ['open-bandos', 'create', 'place', 'generate', 'look-3d', 'select', 'adjust', 'add-building', 'trees', 'library'] },
+  { id: 'fly', title: 'Fly and sync', about: 'Load a flight and its video, sync them, replay.', snippets: ['log', 'video', 'sync', 'replay'] },
+];
+
+export const SNIPPET_BY_ID: ReadonlyMap<string, Snippet> = new Map(SNIPPETS.map((s) => [s.id, s]));
+
+/** Problems in the guide data (unknown snippets or hooks, empty beats, duplicates): the tests keep it empty. */
+export function checkGuide(snippets: readonly Snippet[] = SNIPPETS, tours: readonly Tour[] = TOURS): string[] {
+  const out: string[] = [];
+  const ids = new Set<string>();
+  for (const s of snippets) {
+    if (ids.has(s.id)) out.push(`duplicate snippet ${s.id}`);
+    ids.add(s.id);
+    if (!s.beats.length || !s.beats.some((b) => b.say)) out.push(`${s.id}: needs at least one beat with a caption`);
+    for (const b of s.beats) {
+      if (!b.actions.length) out.push(`${s.id}: a beat with no action`);
+      for (const a of b.actions) if (a.do === 'hook' && !HOOKS.includes(a.hook)) out.push(`${s.id}: unknown hook ${a.hook}`);
+    }
+  }
+  for (const t of tours) for (const id of t.snippets) if (!ids.has(id)) out.push(`${t.id}: unknown snippet ${id}`);
+  return out;
+}
+
+/** A tour as one list of beats, each with the snippet it belongs to (for the progress line). */
+export function tourBeats(t: Tour, by: ReadonlyMap<string, Snippet> = SNIPPET_BY_ID): { snippet: Snippet; beat: Beat }[] {
+  return t.snippets.flatMap((id) => {
+    const s = by.get(id);
+    return s ? s.beats.map((beat) => ({ snippet: s, beat })) : [];
+  });
+}
+
+/** Roughly how long beats take to play, milliseconds (waits, drags, typing, cursor moves). */
+export function playTime(beats: readonly Beat[]): number {
+  let ms = 0;
+  for (const b of beats)
+    for (const a of b.actions) {
+      if (a.do === 'wait') ms += a.ms;
+      else if (a.do === 'drag') ms += (a.ms ?? 900) + 500;
+      else if (a.do === 'type') ms += a.text.length * 55 + 500;
+      else if (a.do !== 'hook') ms += 650;
+    }
+  return ms;
+}
+
+/** The snippet a hover tip shows for a `data-tour` mark. */
+export function snippetForMark(mark: string, snippets: readonly Snippet[] = SNIPPETS): Snippet | null {
+  return snippets.find((s) => s.hover?.includes(mark)) ?? null;
+}
+
+/** The scripted answers the tour gives in place of the AI model (the app then runs them like any answer). */
+export const AI_SCRIPTS: Readonly<Record<string, string>> = {
+  door: JSON.stringify({
+    reply: 'A door in the middle of the north wall, and eight windows along the east side.',
+    commands: [
+      { op: 'add_door', side: 'north', position: 0.5, width: 5, height: 4 },
+      ...[0.1, 0.22, 0.34, 0.46, 0.58, 0.7, 0.82, 0.94].map((position) => ({ op: 'add_window', side: 'east', position, width: 2, height: 1.4, sill: 3 })),
+    ],
+  }),
+};

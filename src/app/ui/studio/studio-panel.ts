@@ -1,6 +1,9 @@
 import { Component, inject, signal } from '@angular/core';
 import type { Privacy } from '../../core/share';
 import { DownloadService } from '../../services/download.service';
+import { tr } from '../../services/i18n.service';
+import { ExampleBandosService } from '../../services/example-bandos.service';
+import type { ExampleBando } from '../../core/examples';
 import { FormsModule } from '@angular/forms';
 import { SiteService } from '../../services/site.service';
 import { StudioService } from '../../services/studio.service';
@@ -20,7 +23,7 @@ import { BandoEditor } from './bando-editor';
     <app-panel id="studio">
       @if (studio.view() === 'list') {
         <div class="row">
-          <button class="btn primary" (click)="studio.create()">＋ New bando</button>
+          <button class="btn primary" (click)="studio.create()" data-tour="new-bando">＋ New bando</button>
           <label class="btn">Import<input type="file" accept=".json,application/json" hidden (change)="importFile($event)" /></label>
           <span class="grow"></span>
         </div>
@@ -50,6 +53,24 @@ import { BandoEditor } from './bando-editor';
                   <button class="btn" (click)="exportOne(b.id)" title="Save it as a file to share (the place as chosen)">Export</button>
                 </span>
                 <button class="btn danger" (click)="remove(b.id, b.name)">Delete</button>
+              </div>
+            </div>
+          }
+        </div>
+        <h4 class="caption" data-tour="examples">Examples</h4>
+        @if (examples.status() === 'error') {
+          <div class="dim small">The examples could not be downloaded. <button class="btn" (click)="examples.load()">Try again</button></div>
+        }
+        <div class="list">
+          @for (e of examples.list(); track e.file) {
+            <div class="card ex">
+              <div class="title static">
+                <b>{{ e.name }}</b>
+                <span class="dim small mono">{{ e.buildings }} buildings · {{ e.origin.lat.toFixed(4) }}, {{ e.origin.lon.toFixed(4) }}</span>
+              </div>
+              @if (e.about) { <div class="dim small about">{{ e.about }}</div> }
+              <div class="acts">
+                <button class="btn" (click)="openExample(e)" [disabled]="opening() === e.file" [title]="'Add a copy of ' + e.name + ' to your bandos and open it'">{{ opening() === e.file ? 'Opening…' : 'Open a copy' }}</button>
               </div>
             </div>
           }
@@ -114,6 +135,15 @@ import { BandoEditor } from './bando-editor';
       flex-wrap: wrap;
       gap: 5px;
     }
+    .caption {
+      margin: 12px 0 2px;
+    }
+    .title.static {
+      cursor: default;
+    }
+    .about {
+      padding: 0 0 6px;
+    }
     .empty {
       padding: 18px 8px;
       text-align: center;
@@ -125,6 +155,19 @@ export class StudioPanel {
   protected readonly site = inject(SiteService);
   private readonly toast = inject(ToastService);
   private readonly downloads = inject(DownloadService);
+  protected readonly examples = inject(ExampleBandosService);
+  /** The example being downloaded. */
+  protected readonly opening = signal<string | null>(null);
+
+  constructor() {
+    void this.examples.load();
+  }
+
+  protected async openExample(e: ExampleBando): Promise<void> {
+    this.opening.set(e.file);
+    await this.examples.open(e);
+    this.opening.set(null);
+  }
   /** How much of its place an exported file keeps (hidden by default: share a bando, not its address). */
   protected readonly privacy = signal<Privacy>('hidden');
   protected privacyOf = (e: Event): Privacy => {
@@ -141,7 +184,7 @@ export class StudioPanel {
   }
 
   protected rename(id: string, current: string): void {
-    const name = prompt('Bando name', current);
+    const name = prompt(tr('Bando name'), current);
     if (name) this.site.rename(id, name);
   }
 
@@ -150,7 +193,7 @@ export class StudioPanel {
   }
 
   protected remove(id: string, name: string): void {
-    if (confirm(`Delete “${name}”? This cannot be undone.`)) this.site.remove(id);
+    if (confirm(tr(`Delete “${name}”? This cannot be undone.`))) this.site.remove(id);
   }
 
   protected async importFile(e: Event): Promise<void> {

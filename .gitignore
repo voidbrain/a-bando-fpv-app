@@ -1,3 +1,8 @@
 node_modules/
 .angular/
 dist/
+flight_data/
+flight-data/*
+
+# demo media for the guided tour (local only, never pushed)
+public/demo/

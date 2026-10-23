@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "id": "abando/vault-shed",
+  "version": 1,
+  "name": "Barrel-vault shed",
+  "kind": "building",
+  "tags": ["industrial", "shed", "vault"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A long industrial shed of parallel barrel-vault halls, with a big door at both ends of every hall.",
+  "thumbnail": "icon:building",
+  "params": [
+    { "key": "len", "label": "Length", "type": "number", "default": 80, "min": 20, "max": 200, "step": 1 },
+    { "key": "hall", "label": "Hall width", "type": "number", "default": 14, "min": 8, "max": 30, "step": 0.5 },
+    { "key": "h", "label": "Wall height", "type": "number", "default": 5.5, "min": 3, "max": 12, "step": 0.5 }
+  ],
+  "content": {
+    "buildings": [
+      {
+        "id": "b",
+        "name": "Barrel-vault shed",
+        "pos": { "x": 0, "z": 0 },
+        "rotDeg": 0,
+        "length": { "$": "len" },
+        "width": { "$": "hall", "mul": 4 },
+        "color": "#c9c3b2",
+        "levels": [
+          {
+            "baseY": 0,
+            "height": { "$": "h" },
+            "sides": { "n": true, "s": true, "e": true, "w": true },
+            "doors": {
+              "e": [
+                { "kind": "door", "c": { "$": "hall", "mul": 0.5 }, "w": { "$": "hall", "mul": 0.5 }, "h": { "$": "h", "mul": 0.8 } },
+                { "kind": "door", "c": { "$": "hall", "mul": 1.5 }, "w": { "$": "hall", "mul": 0.5 }, "h": { "$": "h", "mul": 0.8 } },
+                { "kind": "door", "c": { "$": "hall", "mul": 2.5 }, "w": { "$": "hall", "mul": 0.5 }, "h": { "$": "h", "mul": 0.8 } },
+                { "kind": "door", "c": { "$": "hall", "mul": 3.5 }, "w": { "$": "hall", "mul": 0.5 }, "h": { "$": "h", "mul": 0.8 } }
+              ],
+              "w": [
+                { "kind": "door", "c": { "$": "hall", "mul": 0.5 }, "w": { "$": "hall", "mul": 0.5 }, "h": { "$": "h", "mul": 0.8 } },
+                { "kind": "door", "c": { "$": "hall", "mul": 1.5 }, "w": { "$": "hall", "mul": 0.5 }, "h": { "$": "h", "mul": 0.8 } },
+                { "kind": "door", "c": { "$": "hall", "mul": 2.5 }, "w": { "$": "hall", "mul": 0.5 }, "h": { "$": "h", "mul": 0.8 } },
+                { "kind": "door", "c": { "$": "hall", "mul": 3.5 }, "w": { "$": "hall", "mul": 0.5 }, "h": { "$": "h", "mul": 0.8 } }
+              ]
+            },
+            "partitions": [],
+            "roof": "vault",
+            "roofTurn": true,
+            "roofCount": 4,
+            "vaultK": 0.58,
+            "roofRise": 3,
+            "roofColor": "#8f8d86"
+          }
+        ]
+      }
+    ]
+  }
+}

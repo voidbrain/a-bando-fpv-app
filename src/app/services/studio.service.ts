@@ -3,6 +3,7 @@ import type { SiteSpec } from '../core/site-spec';
 import { boundingZone, sameArea } from '../core/areas';
 import { MAX_HALF_EXTENT, SiteService } from './site.service';
 import { ToastService } from './toast.service';
+import { tr } from './i18n.service';
 
 /** The map zone as drawn on screen: centre and half extents in metres (east-west, north-south). */
 export interface Zone {
@@ -122,7 +123,7 @@ export class StudioService {
     }
     const id = this.editingId();
     const existing = id ? this.site.peek(id) : null;
-    if (existing && existing.buildings.length > 0 && !confirm('Regenerating replaces this bando\'s model, including your manual edits. Continue?')) return;
+    if (existing && existing.buildings.length > 0 && !confirm(tr('Regenerating replaces this bando\'s model, including your manual edits. Continue?'))) return;
     const label = this.name().trim() || 'New bando';
     // several areas: one request for the rectangle around them all, then (without fill) only what is inside each
     const all = this.areas().some((a) => sameArea(a, z)) ? this.areas() : [...this.areas(), z];

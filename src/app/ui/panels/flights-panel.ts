@@ -10,7 +10,7 @@ import { Panel } from '../panel/panel';
   template: `
     <app-panel id="flights">
       <div class="row">
-        <label class="btn">Upload log<input type="file" accept=".csv,.txt,.gpx,.json" multiple hidden (change)="upload($event)" /></label>
+        <label class="btn" data-tour="upload-log">Upload log<input type="file" accept=".csv,.txt,.gpx,.json" multiple hidden (change)="upload($event)" /></label>
         <button class="btn" [disabled]="!store.count()" (click)="flights.clear()">Clear paths</button>
       </div>
       <div class="keep list">

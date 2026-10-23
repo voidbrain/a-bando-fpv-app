@@ -16,13 +16,16 @@ const EXAMPLES: readonly string[] = [
   imports: [FloatBox],
   template: `
     <app-float-box fid="assistant-v2" title="AI assistant" [x]="320" [y]="44" [w]="400" [h]="460" [minW]="320" [minH]="300">
-      @if (ai.status() !== 'ready' && ai.status() !== 'loading') {
+      @if (!ai.demo() && ai.status() !== 'ready' && ai.status() !== 'loading') {
         <div class="seg">
           <button [class.on]="ai.provider() === 'browser'" (click)="ai.setProvider('browser')">In this browser</button>
           <button [class.on]="ai.provider() === 'server'" (click)="ai.setProvider('server')">Server / home PC</button>
         </div>
       }
-      @if (ai.provider() === 'server' && (ai.status() === 'idle' || ai.status() === 'error')) {
+      @if (ai.demo()) {
+        <div class="dim small">Guided tour: the answers are scripted, the changes are real.</div>
+      }
+      @if (!ai.demo() && ai.provider() === 'server' && (ai.status() === 'idle' || ai.status() === 'error')) {
         <div class="dim small">Any OpenAI-compatible server: Ollama or LM Studio on your PC (over HTTPS, e.g. Tailscale), a proxy on your hosting, or a cloud API. Your messages and the building list are sent to it.</div>
         <label class="f">address <input type="text" [value]="ai.server().url" placeholder="https://my-pc.tailnet.ts.net  or  https://site.it/ai-proxy.php" (change)="srv({ url: val($event) })" /></label>
         <label class="f">model <input type="text" [value]="ai.server().model" placeholder="qwen2.5:7b" (change)="srv({ model: val($event) })" /></label>
@@ -31,9 +34,9 @@ const EXAMPLES: readonly string[] = [
           <div class="err">{{ ai.error() }}</div>
         }
         <button class="btn primary" (click)="ai.connect()">Connect</button>
-      } @else if (ai.provider() === 'browser' && !ai.supported) {
+      } @else if (!ai.demo() && ai.provider() === 'browser' && !ai.supported) {
         <div class="dim">This browser has no WebGPU, which the in-browser model needs. Use a recent desktop Chrome or Edge, or Safari 26 or later, or switch to “Server / home PC”.</div>
-      } @else if (ai.status() === 'idle' || ai.status() === 'error') {
+      } @else if (!ai.demo() && (ai.status() === 'idle' || ai.status() === 'error')) {
         <div class="dim small">A small language model runs inside your browser (nothing is sent anywhere). The first load downloads the model once, then it is cached.</div>
         <label class="f">model
           <select [value]="ai.modelId()" (change)="pickModel($event)">
@@ -46,7 +49,7 @@ const EXAMPLES: readonly string[] = [
           <div class="err">{{ ai.error() }}</div>
         }
         <button class="btn primary" (click)="ai.load()">Load model</button>
-      } @else if (ai.status() === 'loading') {
+      } @else if (!ai.demo() && ai.status() === 'loading') {
         <div class="dim small">{{ ai.progressText() }}</div>
         @if (ai.provider() === 'browser') {
           <div class="bar"><i [style.width.%]="ai.progress() * 100"></i></div>
@@ -69,7 +72,7 @@ const EXAMPLES: readonly string[] = [
                 <div class="ok"><b>Applied.</b> Undo is one click below.</div>
               }
               @if (m.text) {
-                <div [class.bad]="m.role === 'ai' && m.changed === false">{{ m.text }}</div>
+                <div [class.bad]="m.role === 'ai' && m.changed === false" translate="no">{{ m.text }}</div>
               }
               @for (d of m.done ?? []; track $index) {
                 <div class="ok">✓ {{ d }}</div>
@@ -91,7 +94,7 @@ const EXAMPLES: readonly string[] = [
           }
         </div>
         @if (ai.changes().length) {
-          <details class="chg" open>
+          <details class="chg" open data-tour="ai-changes">
             <summary>
               <b>Changes</b> <span class="dim small">{{ ai.unreviewed() }} to review of {{ ai.changes().length }}</span>
               <button class="btn mini" [disabled]="!ai.unreviewed()" (click)="ai.acceptAll(); $event.preventDefault()" title="Mark everything as reviewed">Accept all</button>
@@ -111,8 +114,8 @@ const EXAMPLES: readonly string[] = [
           </details>
         }
         <div class="in">
-          <textarea #box rows="2" placeholder="e.g. split into 2 rooms, add a door on the east wall" (keydown)="key($event, box)" [disabled]="ai.busy()"></textarea>
-          <button class="btn primary" (click)="send(box.value); box.value = ''" [disabled]="ai.busy()">Send</button>
+          <textarea #box rows="2" data-tour="ai-input" placeholder="e.g. split into 2 rooms, add a door on the east wall" (keydown)="key($event, box)" [disabled]="ai.busy()"></textarea>
+          <button class="btn primary" (click)="send(box.value); box.value = ''" [disabled]="ai.busy()" data-tour="ai-send">Send</button>
         </div>
         <div class="row2">
           <button class="btn" (click)="ai.undoLast()" [disabled]="!ai.canUndo()">Undo last AI change</button>
