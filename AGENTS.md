@@ -117,6 +117,7 @@ npx tsc -p tools/examples/tsconfig.json   # the example-bando script
 - `SiteService.applySpec` re-applies the calibration every time (Save, every edit). The pilot's own alignment (pins, compass)
   therefore lives in `SiteSpec.calibration`; an effect in `SiteService` copies live changes into the spec. Do not set the
   calibration anywhere without going through the store, or it will be undone on the next edit.
+- The flight view builds the site with `{ merge: true }` (`three/merge.ts`): each building, its roof and each structure become one mesh per material (Chiari: 1,217 meshes → 91). Transparent and instanced meshes stay apart, the x-ray fades the merged mesh, the collider is unchanged. The 3D editor and previews keep separate meshes (they pick columns and walls one by one); a new builder needs nothing special.
 - Meshes that can be clicked in the 3D editor carry `userData.pick` (`{ kind, id | i }`); keep it when adding a new builder.
 
 ## Editor layout

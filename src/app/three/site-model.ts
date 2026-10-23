@@ -5,6 +5,7 @@ import { WATER_COLOR, insidePolygon, roadDef, surfaceDef } from '../core/layers'
 import { BASEMENT_WALL, tunnelAxis, volumeSolids } from '../core/underground';
 import { NO_SLABS, ROOFLESS, roofCells, roofRuns, ruinRandom, wallPieces, wallTop } from '../core/ruin';
 import * as THREE from 'three';
+import { mergeUnit } from './merge';
 import { type BuildingSpec, type LevelSpec, type RoadSpec, type SiteSpec, type SurfaceSpec, type TreeSpec, type UndergroundSpec, createRandom, fixturesInSite } from '../core/site-spec';
 import { SiteCollider, type SolidBox, type TreeCylinder } from '../core/sim/collider';
 import { siteGround, type SiteGround } from '../core/site-ground';
@@ -751,13 +752,19 @@ function buildBasement(ctx: Ctx, b: BuildingSpec, target: THREE.Object3D, floorM
 }
 
 /** Build the whole site from a {@link SiteSpec}. Deterministic: the same spec always produces the same scene. */
-export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {}): SiteModel {
+/**
+ * `bare`: only the buildings (previews). `merge`: one mesh per material per building / structure / roof (the flight
+ * view: far fewer draw calls; the 3D editor keeps separate meshes, it picks columns and walls one by one).
+ */
+export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean; merge?: boolean } = {}): SiteModel {
   const group = new THREE.Group();
   const roof = new THREE.Group();
   group.add(roof);
   const solids: SolidBox[] = [];
   const treeSolids: TreeCylinder[] = [];
   const occluders: THREE.Mesh[] = [];
+  /** Buildings, their roofs and structures: what `merge` turns into one mesh per material. */
+  const units: THREE.Object3D[] = [];
   const rnd = createRandom(spec.seed);
   const ground = opts.bare ? siteGround({ ...spec, terrain: undefined }) : siteGround(spec);
   let terrain: THREE.Mesh | null = null;
@@ -914,6 +921,7 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     if (b.basement && !b.frame) buildBasement(ctx, b, inner, floorMat);
     // roofs live under the building but belong to the global roof group for hide/show
     roof.attach(localRoof);
+    units.push(inner, localRoof);
     liftSolids(solids, firstSolid, by);
   }
 
@@ -965,6 +973,7 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     built.object.userData['pick'] = pick;
     built.object.position.y += sy;
     group.add(built.object);
+    units.push(built.object);
     const firstSolid = solids.length;
     solids.push(...built.solids);
     liftSolids(solids, firstSolid, sy);
@@ -1006,6 +1015,8 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     group.add(m);
   }
 
+  if (opts.merge) mergeUnits(units, occluders);
+
   const collider = new SiteCollider(solids, treeSolids, ground.grid, opts.bare ? [] : (spec.waters ?? []).map((w, i) => ({ pts: w.pts, level: ground.grid ? (ground.water[i] ?? 0) : 0.03 })), opts.bare ? [] : ground.vols);
   return {
     group,
@@ -1035,4 +1046,12 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
       (terrain.material as THREE.MeshStandardMaterial).wireframe = style === 'wire';
     },
   };
+}
+
+/** Merge each unit's meshes and point the x-ray at the merged meshes. */
+function mergeUnits(units: readonly THREE.Object3D[], occluders: THREE.Mesh[]): void {
+  const replaced = new Map<THREE.Mesh, THREE.Mesh>();
+  for (const u of units) for (const [a, b] of mergeUnit(u)) replaced.set(a, b);
+  const next = [...new Set(occluders.map((m) => replaced.get(m) ?? m))];
+  occluders.splice(0, occluders.length, ...next);
 }
