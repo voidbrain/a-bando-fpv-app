@@ -140,8 +140,10 @@ npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
 - 3D picks: columns and partitions carry `userData.pick` (`SitePick` kinds `column`/`wall`); the inspector preview forwards clicks through `onPick`.
 - Inspector: sections (`.sec`, caption `.st`, fields `.fld` two to a row). `FloatBox` has `right` (default x measured from the right edge). Remember: Angular's emulated encapsulation does not apply a component's CSS to projected content, so layout CSS for projected children lives in the component that owns them.
 - Lesson: `buildSide` in `site-model.ts` once built wall segments too long when a side had 2+ openings (walls reached neighbouring buildings). Covered by "walls with several openings stay inside the building outline".
+- Barrel vaults are closed at both ends by a half-ellipse wall in the building's colour (`vaultEnd`), where that end wall exists (an open side, like a colonnade, stays open).
 - Lesson: panel height must be bound as `[style.height.px]`; a unit-less `[style.height]` is ignored.
 - Lesson: in an `effect`, read the signal BEFORE any `if (renderer)` guard (`const on = this.spin(); if (r) r.spin = on`); a signal read behind a false guard is never tracked and the effect never re-runs.
+- Views panel: below the main page and 3D camera controls, the panels are grouped by work (`PanelDef.group`: views = the camera windows, telemetry = flight data and instruments, simulator = simulator, radio and keys, tools = editor, render, guide). Each section has a show / hide-all box (indeterminate when mixed); Show all / Hide all never hide Views itself. "Collisions" lives in the Simulator panel (it only switches the simulated drone's physics).
 - Layout: the studio panel defaults to 760 × 540; "Reset UI" clears all remembered sizes. Showing a panel (`LayoutStore.setVisible/toggle`) also raises it.
 - Patches: when diffing a working copy, exclude `node_modules` (a symlink there gets into the diff and breaks `git apply` on a real folder).
 
