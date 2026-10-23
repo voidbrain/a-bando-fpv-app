@@ -2,13 +2,13 @@
   "name": "a-bando-fpv-app",
   "version": "0.0.0",
   "scripts": {
+    "e2e": "playwright test",
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "examples": "esbuild tools/examples/build-examples.ts --bundle --platform=node --format=esm --outfile=.angular/build-examples.mjs --log-level=warning && node .angular/build-examples.mjs && node tools/build-catalog.mjs",
-    "e2e": "playwright test"
+    "examples": "esbuild tools/examples/build-examples.ts --bundle --platform=node --format=esm --outfile=.angular/build-examples.mjs --log-level=warning && node .angular/build-examples.mjs && node tools/build-catalog.mjs"
   },
   "private": true,
   "packageManager": "npm@11.17.0",
