@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "id": "abando/cage-ladder",
+  "version": 1,
+  "name": "Caged roof ladder",
+  "kind": "structure",
+  "tags": ["industrial", "ladder", "roof"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A vertical ladder inside a blue cylindrical safety cage, up through the roof to a small hood on top.",
+  "thumbnail": "icon:stairs",
+  "params": [
+    { "key": "h", "label": "Height to the hood", "type": "number", "default": 8, "min": 3, "max": 40, "step": 0.5 }
+  ],
+  "content": {
+    "shapes": [
+      { "prim": "cylinder", "at": { "x": 0, "y": 0, "z": 0 }, "radius": 0.45, "height": { "$": "h" }, "segments": 10, "color": "#3f6fb5" },
+      { "prim": "box", "at": { "x": 0, "y": { "$": "h", "add": 0.6 }, "z": 0 }, "size": { "x": 1.1, "y": 1.2, "z": 1.1 }, "color": "#3f6fb5" }
+    ]
+  }
+}
