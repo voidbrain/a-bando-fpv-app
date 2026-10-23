@@ -190,3 +190,106 @@ export function simplifyPath(p: readonly Vec2[], tol = 0.6): Vec2[] {
   if (dmax <= tol) return [p[0]!, p[p.length - 1]!];
   return [...simplifyPath(p.slice(0, idx + 1), tol).slice(0, -1), ...simplifyPath(p.slice(idx), tol)];
 }
+
+/** Area of a polygon (square metres, always positive). */
+export function polygonArea(p: readonly Vec2[]): number {
+  let a = 0;
+  for (let i = 0; i < p.length; i++) {
+    const q = p[i]!, r = p[(i + 1) % p.length]!;
+    a += q.x * r.z - r.x * q.z;
+  }
+  return Math.abs(a) / 2;
+}
+
+/** The outline of a strip `width` wide along a centre line (a canal, a ditch): one side out, the other back. */
+export function stripOutline(line: readonly Vec2[], width: number): Vec2[] {
+  if (line.length < 2) return [];
+  const half = width / 2;
+  const side = (k: number): Vec2[] =>
+    line.map((p, i) => {
+      const a = line[Math.max(0, i - 1)]!, b = line[Math.min(line.length - 1, i + 1)]!;
+      const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1;
+      return { x: p.x - (dz / l) * k * half, z: p.z + (dx / l) * k * half };
+    });
+  return [...side(1), ...side(-1).reverse()];
+}
+
+/**
+ * One outline around overlapping polygons (two ponds drawn into each other, a canal and its basin): they are laid on
+ * a grid of `cell` metres and the edge of the biggest connected area is traced, then simplified. Holes are filled.
+ */
+export function unionOutline(polys: readonly (readonly Vec2[])[], cell = 1): Vec2[] {
+  const all = polys.flat();
+  if (!all.length) return [];
+  const x0 = Math.min(...all.map((p) => p.x)) - cell, z0 = Math.min(...all.map((p) => p.z)) - cell;
+  const nx = Math.ceil((Math.max(...all.map((p) => p.x)) + cell - x0) / cell), nz = Math.ceil((Math.max(...all.map((p) => p.z)) + cell - z0) / cell);
+  if (nx * nz > 4e6) return [...(polys[0] ?? [])]; // too big for the grid: keep the first as it is
+  const inside = new Uint8Array(nx * nz);
+  for (let j = 0; j < nz; j++)
+    for (let i = 0; i < nx; i++) {
+      const x = x0 + (i + 0.5) * cell, z = z0 + (j + 0.5) * cell;
+      if (polys.some((p) => p.length >= 3 && insidePolygon(p, x, z))) inside[j * nx + i] = 1;
+    }
+  const at = (i: number, j: number): boolean => i >= 0 && j >= 0 && i < nx && j < nz && inside[j * nx + i] === 1;
+  // boundary edges with the inside on their left, keyed by their start corner
+  const next = new Map<number, number[]>();
+  const key = (i: number, j: number): number => j * (nx + 1) + i;
+  const add = (a: number, b: number): void => void (next.get(a) ?? next.set(a, []).get(a)!).push(b);
+  for (let j = 0; j < nz; j++)
+    for (let i = 0; i < nx; i++) {
+      if (!at(i, j)) continue;
+      if (!at(i, j - 1)) add(key(i, j), key(i + 1, j));
+      if (!at(i + 1, j)) add(key(i + 1, j), key(i + 1, j + 1));
+      if (!at(i, j + 1)) add(key(i + 1, j + 1), key(i, j + 1));
+      if (!at(i - 1, j)) add(key(i, j + 1), key(i, j));
+    }
+  let best: number[] = [];
+  while (next.size) {
+    const start = next.keys().next().value!;
+    const loop: number[] = [];
+    let v = start;
+    for (let guard = 0; guard < nx * nz * 4; guard++) {
+      const outs = next.get(v);
+      if (!outs?.length) break;
+      const w = outs.pop()!;
+      if (!outs.length) next.delete(v);
+      loop.push(v);
+      v = w;
+      if (v === start) break;
+    }
+    if (loop.length > best.length) best = loop;
+  }
+  const pts = best.map((k) => ({ x: x0 + (k % (nx + 1)) * cell, z: z0 + Math.floor(k / (nx + 1)) * cell }));
+  return simplifyPath([...pts, pts[0]!], cell * 0.75).slice(0, -1);
+}
+
+/** Whether two polygons overlap or touch (a corner inside the other, or two edges crossing). */
+export function polygonsTouch(a: readonly Vec2[], b: readonly Vec2[]): boolean {
+  if (a.some((p) => insidePolygon(b, p.x, p.z)) || b.some((p) => insidePolygon(a, p.x, p.z))) return true;
+  const cross = (p: Vec2, q: Vec2, r: Vec2): number => (q.x - p.x) * (r.z - p.z) - (q.z - p.z) * (r.x - p.x);
+  for (let i = 0; i < a.length; i++) {
+    const p1 = a[i]!, p2 = a[(i + 1) % a.length]!;
+    for (let j = 0; j < b.length; j++) {
+      const q1 = b[j]!, q2 = b[(j + 1) % b.length]!;
+      if (cross(p1, p2, q1) * cross(p1, p2, q2) <= 0 && cross(q1, q2, p1) * cross(q1, q2, p2) <= 0) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Merge water `i` with every water that overlaps it (one outline, the deepest depth, the first one's level). Returns
+ * the merged list and the new index of the merged water, or null when nothing overlaps.
+ */
+export function mergeWaters(waters: readonly WaterSpec[], i: number): { waters: WaterSpec[]; index: number } | null {
+  const w = waters[i];
+  if (!w) return null;
+  const others = waters.map((o, k) => ({ o, k })).filter(({ o, k }) => k !== i && polygonsTouch(w.pts, o.pts));
+  if (!others.length) return null;
+  const pts = unionOutline([w.pts, ...others.map((x) => x.o.pts)], 1);
+  if (pts.length < 3) return null;
+  const gone = new Set(others.map((x) => x.k));
+  const merged: WaterSpec = { ...w, pts, depth: Math.max(w.depth, ...others.map((x) => x.o.depth)) };
+  const out = waters.filter((_, k) => !gone.has(k)).map((o) => (o === w ? merged : o));
+  return { waters: out, index: out.indexOf(merged) };
+}

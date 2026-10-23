@@ -3,7 +3,7 @@ import { buildStructure } from './structures';
 import { fenceDef, postsAlong } from '../core/fences';
 import { WATER_COLOR, insidePolygon, roadDef, surfaceDef } from '../core/layers';
 import { BASEMENT_WALL, tunnelAxis, volumeSolids } from '../core/underground';
-import { NO_SLABS, ROOFLESS, roofCells, roofRuns, ruinPieces, ruinRandom, type RuinPiece } from '../core/ruin';
+import { NO_SLABS, ROOFLESS, roofCells, roofRuns, ruinRandom, wallPieces, wallTop } from '../core/ruin';
 import * as THREE from 'three';
 import { type BuildingSpec, type LevelSpec, type RoadSpec, type SiteSpec, type SurfaceSpec, type TreeSpec, type UndergroundSpec, createRandom } from '../core/site-spec';
 import { SiteCollider, type SolidBox, type TreeCylinder } from '../core/sim/collider';
@@ -87,8 +87,9 @@ const material = (color: string, o: THREE.MeshStandardMaterialParameters = {}): 
  * carries position + rotation); collider boxes are registered directly in site space through `at` / `rot`.
  */
 interface Ctx {
-  /** While a ruined building is built: its level, the floor being built, and its random source. */
-  ruin: { level: number; li: number; floors: number; rnd: () => number } | null;
+  /** While a ruined building is built: its level, the floor being built, whether it is open to the sky (its walls then
+   * break at the top), its full height and its id (the seed of every broken line). */
+  ruin: { level: number; li: number; open: boolean; height: number; id: string } | null;
   /** The building being built has lost its upper floor slabs (a deep ruin, or an open shell). */
   noSlabs: boolean;
   /** Centre of the building currently being built, in site coordinates. */
@@ -146,17 +147,11 @@ function openingLeaf(ctx: Ctx, target: THREE.Object3D, l: LevelSpec, o: { kind: 
   else ctx.addBox(target, across, y, along, 0.12, h, o.w, mat, true, o.kind === 'door');
 }
 
-/** One wall run as built: whole, or broken into pieces with their tops cut when the building is ruined. */
-function ruinedRun(ctx: Ctx, len: number, h: number): RuinPiece[] {
+/** The broken top line of one wall of the building being built (`key` names the wall), or none when it stands whole. */
+function standingOf(ctx: Ctx, len: number, level: number, key: string): ((x: number) => number) | undefined {
   const r = ctx.ruin;
-  return (r ? ruinPieces(len, h, r.level, r.li, r.floors, r.rnd) : [{ from: 0, len, cut: 0 }]).filter((p) => h - p.cut > 0.05);
-}
-
-/** The solid parts of a (ruined) wall piece `hh` high: below and above its breach, up to its broken top. [bottom, top] */
-function pieceParts(p: RuinPiece, hh: number): [number, number][] {
-  const top = hh - p.cut;
-  const parts: [number, number][] = p.hole ? [[0, p.hole.y0], [p.hole.y1, top]] : [[0, top]];
-  return parts.filter(([a, z]) => z - a > 0.05);
+  if (!r?.open || level <= 0.01) return undefined;
+  return wallTop(len, r.height, level, ruinRandom(`${r.id}:wall:${key}`));
 }
 
 /** A collider over part of a roof (building-local centre and size), like the boxes `addBox` registers. */
@@ -168,16 +163,15 @@ function buildSide(ctx: Ctx, b: BuildingSpec, l: LevelSpec, side: 'n' | 's' | 'e
   const runLen = side === 'n' || side === 's' ? b.length : b.width; // n and s run along the length, e and w along the width
   const acrossPos = side === 'w' ? -b.length / 2 : side === 'e' ? b.length / 2 : side === 'n' ? -b.width / 2 : b.width / 2;
   const th = 0.5;
+  // a ruin open to the sky: this wall stands up to its broken line (its own ruin level if it has one)
+  const standing = standingOf(ctx, runLen, b.ruinWalls?.[side] ?? ctx.ruin?.level ?? 0, side);
   const wall = (from: number, len: number, y: number, hh: number): void => {
     if (len < 0.01 || hh < 0.01) return;
     const bottom = l.baseY + y - hh / 2; // y is measured from this floor's slab
-    for (const r of ruinedRun(ctx, len, hh)) {
-      const m = from + r.from + r.len / 2 - runLen / 2;
-      for (const [a, z] of pieceParts(r, hh)) {
-        const yy = bottom + (a + z) / 2;
-        if (side === 'w' || side === 'e') ctx.addBox(target, acrossPos, yy, m, th, z - a, r.len, ctx.mat.wall, true, true);
-        else ctx.addBox(target, m, yy, acrossPos, r.len, z - a, th, ctx.mat.wall, true, true);
-      }
+    for (const p of wallPieces(from, len, bottom, bottom + hh, standing)) {
+      const m = p.from + p.len / 2 - runLen / 2, h = p.top - bottom;
+      if (side === 'w' || side === 'e') ctx.addBox(target, acrossPos, bottom + h / 2, m, th, h, p.len, ctx.mat.wall, true, true);
+      else ctx.addBox(target, m, bottom + h / 2, acrossPos, p.len, h, th, ctx.mat.wall, true, true);
     }
   };
   let p = 0;
@@ -196,7 +190,8 @@ function buildSide(ctx: Ctx, b: BuildingSpec, l: LevelSpec, side: 'n' | 's' | 'e
 /** Walls of a shaped building: one wall per footprint edge, openings (door / window centres) punched out of them. */
 function buildPolyWalls(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.Object3D): void {
   const th = 0.5;
-  for (const e of edgesOf(b.footprint ?? [])) {
+  edgesOf(b.footprint ?? []).forEach((e, k) => {
+    const standing = standingOf(ctx, e.to - e.from, ctx.ruin?.level ?? 0, `edge${k}`);
     const ops = (l.wallOpenings ?? [])
       .filter((o) => (e.axis === 'x' ? Math.abs(o.z - e.at) < 0.08 && o.x >= e.from - 0.08 && o.x <= e.to + 0.08 : Math.abs(o.x - e.at) < 0.08 && o.z >= e.from - 0.08 && o.z <= e.to + 0.08))
       .map((o) => ({ o, c: e.axis === 'x' ? o.x : o.z }))
@@ -205,13 +200,10 @@ function buildPolyWalls(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.O
       const len = to - from;
       if (len < 0.01 || hh < 0.01) return;
       const bottom = l.baseY + y - hh / 2;
-      for (const r of ruinedRun(ctx, len, hh)) {
-        const m = from + r.from + r.len / 2;
-        for (const [a, z] of pieceParts(r, hh)) {
-          const yy = bottom + (a + z) / 2;
-          if (e.axis === 'x') ctx.addBox(target, m, yy, e.at, r.len, z - a, th, ctx.mat.wall, true, true);
-          else ctx.addBox(target, e.at, yy, m, th, z - a, r.len, ctx.mat.wall, true, true);
-        }
+      for (const p of wallPieces(from - e.from, len, bottom, bottom + hh, standing)) {
+        const m = e.from + p.from + p.len / 2, h = p.top - bottom;
+        if (e.axis === 'x') ctx.addBox(target, m, bottom + h / 2, e.at, p.len, h, th, ctx.mat.wall, true, true);
+        else ctx.addBox(target, e.at, bottom + h / 2, m, th, h, p.len, ctx.mat.wall, true, true);
       }
     };
     let p = e.from - th / 2;
@@ -226,25 +218,30 @@ function buildPolyWalls(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.O
       p = z;
     }
     wall(p, e.to + th / 2, l.height / 2, l.height);
-  }
+  });
 }
 
-/** Battlements on top of the outer walls: merlons 0.7 m wide every 1.4 m, 0.9 m high, corners always filled. */
+/**
+ * Battlements on top of the outer walls: merlons 0.7 m wide every 1.4 m, 0.9 m high, corners always filled. Where a
+ * ruined wall's top has fallen there are none.
+ */
 function buildCrenels(ctx: Ctx, b: BuildingSpec, top: number, target: THREE.Object3D): void {
   const L = b.length / 2, W = b.width / 2;
   const edges = b.footprint
-    ? edgesOf(b.footprint)
+    ? edgesOf(b.footprint).map((e, k) => ({ ...e, side: null, key: `edge${k}` }))
     : [
-        { axis: 'x' as const, at: -W, from: -L, to: L },
-        { axis: 'x' as const, at: W, from: -L, to: L },
-        { axis: 'z' as const, at: -L, from: -W, to: W },
-        { axis: 'z' as const, at: L, from: -W, to: W },
+        { axis: 'x' as const, at: -W, from: -L, to: L, side: 'n' as const, key: 'n' },
+        { axis: 'x' as const, at: W, from: -L, to: L, side: 's' as const, key: 's' },
+        { axis: 'z' as const, at: -L, from: -W, to: W, side: 'w' as const, key: 'w' },
+        { axis: 'z' as const, at: L, from: -W, to: W, side: 'e' as const, key: 'e' },
       ];
   const h = 0.9, y = top + h / 2, th = 0.55;
   for (const e of edges) {
+    const standing = standingOf(ctx, e.to - e.from, (e.side && b.ruinWalls?.[e.side]) ?? b.ruin ?? 0, e.key);
     const len = e.to - e.from, n = Math.max(1, Math.round(len / 1.4));
     for (let i = 0; i <= n; i++) {
       const c = e.from + (len * i) / n;
+      if (standing && standing(c - e.from) < top - 0.2) continue; // the wall has fallen here
       if (e.axis === 'x') ctx.addBox(target, c, y, e.at, 0.7, h, th, ctx.mat.wall, true, true);
       else ctx.addBox(target, e.at, y, c, th, h, 0.7, ctx.mat.wall, true, true);
     }
@@ -864,7 +861,9 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     const open = !b.frame && (!!b.roofless || ruin >= ROOFLESS); // no roof left
     ctx.noSlabs = !b.frame && (!!b.roofless || ruin >= NO_SLABS);
     for (const [li, l] of b.levels.entries()) {
-      ctx.ruin = ruin > 0.01 && !b.frame ? { level: ruin, li, floors: b.levels.length, rnd: ruinRandom(`${b.id}:${li}`) } : null;
+      const anyRuin = ruin > 0.01 || Object.values(b.ruinWalls ?? {}).some((v) => (v ?? 0) > 0.01);
+    const height = (b.levels.at(-1)?.baseY ?? 0) + (b.levels.at(-1)?.height ?? 0);
+    ctx.ruin = anyRuin && !b.frame ? { level: ruin, li, open, height, id: b.id } : null;
       buildFloorAndColumns(ctx, b, l, inner, floorMat);
       if (b.frame === 'greenhouse') {
         buildGreenhouse(ctx, b, inner, localRoof);

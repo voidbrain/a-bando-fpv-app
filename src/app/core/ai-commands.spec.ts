@@ -25,6 +25,16 @@ describe('ai commands', () => {
     expect(runCommands(s, normalizeCommands([{ op: 'set_ruin' }]).cmds, '').changed).toBe(false);
   });
 
+  it('set_ruin with a side ruins that wall only', () => {
+    const s = site();
+    const r = runCommands(s, normalizeCommands([{ op: 'set_ruin', side: 'south', ruin: 70 }]).cmds, '');
+    expect(r.errors).toEqual([]);
+    expect(s.buildings[0]!.ruinWalls).toEqual({ s: 0.7 }); // south = +z = the 's' side of an unturned building
+    expect(s.buildings[0]!.ruin).toBeUndefined();
+    runCommands(s, normalizeCommands([{ op: 'set_ruin', side: 'south', ruin: 0 }]).cmds, '');
+    expect(s.buildings[0]!.ruinWalls).toBeUndefined();
+  });
+
   it('set_ruin makes an open shell with battlements, and takes them away', () => {
     const s = site();
     runCommands(s, normalizeCommands([{ op: 'set_ruin', ruin: 15, roofless: true, crenels: true }]).cmds, '');

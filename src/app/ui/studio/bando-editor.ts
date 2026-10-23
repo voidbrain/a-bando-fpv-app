@@ -12,7 +12,7 @@ import { autoAlign, magnetAngle } from '../../core/align';
 import { columnsInLine, pointsInside, treeZones } from '../../core/elements';
 import { FENCES, fenceDef, newFence, setFenceMaterial, type FenceMaterial } from '../../core/fences';
 import { areaCorners } from '../../core/areas';
-import { ROADS, SURFACES, WATER_COLOR, roadDef, simplifyPath, surfaceDef } from '../../core/layers';
+import { ROADS, SURFACES, WATER_COLOR, mergeWaters, roadDef, simplifyPath, stripOutline, surfaceDef } from '../../core/layers';
 import { newTunnel, sectionProfile, tunnelAxis, tunnelOutline } from '../../core/underground';
 import type { GroundStyle } from '../../three/site-model';
 import { contourPaths, defaultTerrain, heightColor, heightRange, type Falloff, type TerrainOp, type TerrainStroke } from '../../core/terrain';
@@ -565,6 +565,13 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                     <app-pick-menu label="Ground" [options]="surfaceOptions" [value]="surfaceKind()" (valueChange)="surfaceKind.set(asSurface($event))" />
                   }
                   @case ('water') {
+                    <span class="seg" title="Draw the outline by hand (a pond, a basin), or along a centre line (a canal, a ditch)">
+                      <button [class.on]="waterMode() === 'outline'" [attr.aria-pressed]="waterMode() === 'outline'" (click)="waterMode.set('outline')">◌ Outline</button>
+                      <button [class.on]="waterMode() === 'line'" [attr.aria-pressed]="waterMode() === 'line'" (click)="waterMode.set('line')">∿ Line</button>
+                    </span>
+                    @if (waterMode() === 'line') {
+                      <label class="lay" title="Width of the canal, metres">width <input class="mini" type="number" min="1" max="60" step="0.5" [value]="waterWidth()" (change)="waterWidth.set(Math.max(1, num($event)))" /> m</label>
+                    }
                     <label class="lay" title="Depth of the basin below the water, metres">depth <input class="mini" type="number" min="0.2" max="20" step="0.5" [value]="waterDepth()" (change)="waterDepth.set(Math.max(0.2, num($event)))" /> m</label>
                   }
                   @case ('terrain') {
@@ -758,7 +765,8 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                 <div class="f"><span class="dim">Water · its surface sits just below the lowest bank</span></div>
                 <div class="f"><label>depth <input type="number" min="0.2" max="20" step="0.5" [value]="w.depth" (change)="setLayer({ depth: Math.max(0.2, num($event)) })" /> m</label>
                 <label>level <input type="number" min="-10" max="5" step="0.1" [value]="w.level ?? -0.3" (change)="setLayer({ level: num($event) })" /> m</label></div>
-                <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
+                <div class="f"><button class="btn" (click)="mergeWater()" title="Join it with every water it overlaps or touches into one outline">Merge overlapping</button>
+                <button class="btn danger" (click)="deleteSel()">Delete</button></div>
               }
             }
             @case ('fence') {
@@ -832,9 +840,18 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                       <button class="btn" (click)="addLevel()" data-tour="add-floor" title="Add a floor on top (a copy of the last one; the roof moves up)">＋</button>
                       <button class="btn" [disabled]="bd.levels.length < 2" (click)="removeFloor()" title="Remove the selected floor">－</button>
                     </div>
-                    <label class="fld" title="0 = intact. A little ruin already has breaches in the facades and holes in the roof; from 20 % the wall tops break (upper floors first), from 60 % the roof is gone, from 75 % the upper floors">ruined % <input type="range" min="0" max="100" step="5" [value]="(bd.ruin ?? 0) * 100" (change)="mutate(setRuin, num($event))" /></label>
+                    <label class="fld" title="0 = intact. A ruin first has holes in the roof; from 60 % the roof is gone and the walls lose their upper part along a broken line; from 75 % the upper floors are gone too">ruined % <input type="range" min="0" max="100" step="5" [value]="(bd.ruin ?? 0) * 100" (change)="mutate(setRuin, num($event))" /></label>
                     <label class="fld" title="An open shell: the roof and the upper floors are gone, the walls stand as the ruin level says">open shell <input type="checkbox" [checked]="!!bd.roofless" (change)="mutate(setFlag('roofless'), checked($event))" /></label>
                     <label class="fld" title="Battlements along the top of the walls (on a flat roof or an open shell)">battlements <input type="checkbox" [checked]="!!bd.crenels" (change)="mutate(setFlag('crenels'), checked($event))" /></label>
+                    @if (!bd.footprint) {
+                      <label class="fld" title="One wall more ruined than the rest (or less): percent, empty = as the building">ruin by wall
+                        <span class="walls">
+                          @for (sd of wallSides; track sd.k) {
+                            <input class="mini" type="number" min="0" max="100" step="5" [attr.aria-label]="'Ruin of the ' + sd.label + ' wall, percent'" [title]="sd.label + ' wall'" [placeholder]="sd.short" [value]="bd.ruinWalls?.[sd.k] !== undefined ? bd.ruinWalls![sd.k]! * 100 : ''" (change)="mutate(setWallRuin(sd.k), rawNum($event))" />
+                          }
+                        </span>
+                      </label>
+                    }
                     <label class="fld" title="A basement under the ground floor: the ground is cut under the building; reach it through a void in the ground floor">basement m <input type="number" min="0" max="12" step="0.5" [value]="bd.basement?.height ?? 0" (change)="mutate(setBasement, num($event))" /></label>
                   </div>
                   @if (topLevel(); as tl) {
@@ -1399,6 +1416,13 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
       gap: 4px 6px;
       align-items: center;
     }
+    .walls {
+      display: flex;
+      gap: 3px;
+      input {
+        width: 36px;
+      }
+    }
     .fld {
       display: flex;
       flex-direction: column;
@@ -1731,6 +1755,10 @@ export class BandoEditor {
       this.ed.select(g.id);
       this.pick.set({ t: 'building' });
     } else if (g.kind === 'structure' && g.index !== undefined) this.pick.set({ t: 'structure', i: g.index });
+    else if ((g.kind === 'water' || g.kind === 'road' || g.kind === 'surface') && g.index !== undefined) {
+      if (this.indoor()) this.exitIndoor();
+      this.pick.set({ t: g.kind, i: g.index });
+    }
     else if (g.kind === 'fence' && g.index !== undefined) this.pick.set({ t: 'fence', i: g.index });
     else {
       this.pick.set(null);
@@ -1859,6 +1887,9 @@ export class BandoEditor {
   protected readonly roadWidth = signal(6);
   protected readonly surfaceKind = signal<SurfaceKind>('asphalt');
   protected readonly waterDepth = signal(1.5);
+  /** Water is drawn as an outline (a pond) or along a centre line `waterWidth` wide (a canal). */
+  protected readonly waterMode = signal<'outline' | 'line'>('outline');
+  protected readonly waterWidth = signal(8);
   protected readonly roadOptions: readonly PickOption[] = ROADS.map((r) => ({ id: r.id, label: r.label, icon: ROAD_ICON[r.id], hint: `${r.width} m wide by default` }));
   protected readonly surfaceOptions: readonly PickOption[] = SURFACES.map((x) => ({ id: x.id, label: x.label, icon: SURFACE_ICON[x.id] }));
   protected readonly roadSurfaceOptions: readonly PickOption[] = [{ id: '', label: 'As its kind', icon: 'road' }, ...this.surfaceOptions];
@@ -1886,7 +1917,10 @@ export class BandoEditor {
       this.ed.commitSite((s) => void (s.roads ??= []).push({ pts, width: this.roadWidth(), kind: this.roadKind() }));
       this.pick.set({ t: 'road', i: (this.ed.draft().roads?.length ?? 1) - 1 });
     } else {
-      if (pts.length < 3) return void this.toast.show('Draw a loop: the outline of the area.');
+      const line = t === 'water' && this.waterMode() === 'line';
+      if (line && (pts.length < 2 || Math.hypot(pts[pts.length - 1]!.x - pts[0]!.x, pts[pts.length - 1]!.z - pts[0]!.z) < 2)) return void this.toast.show('Drag along the course of the canal.');
+      if (!line && pts.length < 3) return void this.toast.show('Draw a loop: the outline of the area.');
+      if (line) pts.splice(0, pts.length, ...stripOutline(pts, this.waterWidth()));
       if (t === 'surface') {
         this.ed.commitSite((s) => void (s.surfaces ??= []).push({ pts, kind: this.surfaceKind() }));
         this.pick.set({ t: 'surface', i: (this.ed.draft().surfaces?.length ?? 1) - 1 });
@@ -1899,6 +1933,17 @@ export class BandoEditor {
       }
     }
     this.applyNow();
+  }
+  /** Join the selected water with the water it overlaps (one undo step). */
+  protected mergeWater(): void {
+    const p = this.pick();
+    if (p?.t !== 'water') return;
+    const r = mergeWaters(this.ed.draft().waters ?? [], p.i);
+    if (!r) return void this.toast.show('It does not overlap or touch any other water.');
+    this.ed.commitSite((s) => void (s.waters = r.waters));
+    this.pick.set({ t: 'water', i: r.index });
+    this.applyNow();
+    this.toast.show('Water merged.');
   }
   protected readonly roadSel = computed(() => {
     const p = this.pick();
@@ -2513,7 +2558,8 @@ export class BandoEditor {
     if (t === 'tree') return 'Click to plant trees; switch to ↖ to move or delete them.';
     if (t === 'tunnel') return (this.underKind() === 'tunnel' ? 'Drag from one end of the tunnel to the other.' : 'Drag a rectangle: a room under the ground (a bunker, a basement).') + ' It opens where the ground is between its floor and ceiling: lower the ground at its ends with Terrain to make the mouths.';
     if (t === 'road') return 'Drag along the way. Select a road to change its kind, width or surface.';
-    if (t === 'surface' || t === 'water') return `Draw the outline by hand. Select it (click its edge) to change it or delete it.`;
+    if (t === 'water' && this.waterMode() === 'line') return 'Drag along the course of a canal or ditch: the water follows the line at the width above. Select it (click its edge) to change it.';
+    if (t === 'surface' || t === 'water') return `Draw the outline by hand. Select it (click its edge, or in ☰ Elements) to change it or delete it.`;
     if (t === 'terrain') return { raise: 'Drag to raise the ground along the stroke.', lower: 'Drag to dig along the stroke.', smooth: 'Drag to soften bumps and steps.', flatten: 'Drag from a point: the ground around the stroke goes to that point\'s height.', hill: 'Click to put a hill there.', crater: 'Click to dig a crater (with a little rim).', ramp: 'Drag from the foot of the ramp to its top.' }[this.terrainOp()] + ' One stroke = one undo step.';
     if (t === 'scatter') return { pen: 'Drag along a path: trees are planted randomly in a strip around it.', rect: 'Drag a square: it is filled with random trees.', circle: 'Drag from the centre: a circle is filled with random trees.', lasso: 'Draw a loop freehand: it is filled with random trees.' }[this.scatterMode()];
     if (t === 'door' || t === 'window') return this.b() ? `Click a wall of “${this.b()!.name}” to add a ${t}.` : 'Select a building first.';
@@ -4135,6 +4181,27 @@ export class BandoEditor {
   protected readonly setLength = (b: BuildingSpec, v: number): void => { b.length = Math.max(2, v); };
   protected readonly setWidth = (b: BuildingSpec, v: number): void => { b.width = Math.max(2, v); };
   protected readonly setRot = (b: BuildingSpec, v: number): void => { b.rotDeg = v; };
+  /** The four walls of a rectangular building, as `LevelSpec.sides` names them. */
+  protected readonly wallSides = [
+    { k: 'n' as const, label: 'north', short: 'N' },
+    { k: 's' as const, label: 'south', short: 'S' },
+    { k: 'e' as const, label: 'east', short: 'E' },
+    { k: 'w' as const, label: 'west', short: 'W' },
+  ];
+  protected rawNum = (e: Event): number | null => {
+    const v = (e.target as HTMLInputElement).value.trim();
+    return v === '' ? null : Number(v);
+  };
+  /** One wall's own ruin (percent); empty removes it and the wall follows the building again. */
+  protected readonly setWallRuin =
+    (k: 'n' | 's' | 'e' | 'w') =>
+    (b: BuildingSpec, pct: number | null): void => {
+      const walls = { ...b.ruinWalls };
+      if (pct === null || !isFinite(pct)) delete walls[k];
+      else walls[k] = Math.min(1, Math.max(0, pct / 100));
+      if (Object.keys(walls).length) b.ruinWalls = walls;
+      else delete b.ruinWalls;
+    };
   /** A yes / no property of a building: set, or removed when off (old bandos stay as they were). */
   protected readonly setFlag =
     (key: 'roofless' | 'crenels') =>

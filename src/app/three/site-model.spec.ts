@@ -326,3 +326,18 @@ describe('open shells and battlements', () => {
     expect(build({ crenels: true }).solids).toBeGreaterThan(build({}).solids + 8);
   });
 });
+
+describe('ruin by wall', () => {
+  it('one wall can fall while the others stand, and loses its battlements', () => {
+    const count = (extra: Partial<BuildingSpec>): number => {
+      const s = spec();
+      s.structures = [];
+      s.buildings = [{ ...s.buildings[0]!, levels: [{ ...s.buildings[0]!.levels[0]!, roof: 'flat' }], crenels: true, ...extra }];
+      return buildSiteFromSpec(s).collider.solids.length;
+    };
+    const intact = count({ roofless: true }), fallen = count({ roofless: true, ruinWalls: { s: 0.8 } });
+    expect(fallen).not.toBe(intact); // the south wall is broken at the top and has lost merlons
+    expect(count({ roofless: true, ruinWalls: { s: 0.8 } })).toBe(fallen); // the same every time
+    expect(count({ ruinWalls: { s: 0.8 } })).toBe(count({})); // under a roof the walls stand whole
+  });
+});
