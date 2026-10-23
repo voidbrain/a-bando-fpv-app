@@ -5,7 +5,7 @@
   "name": "Door fa\u00e7ade",
   "kind": "pattern",
   "tags": ["facade", "doors", "garage"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "Every bay a full-height door: garages, sheds, a fire station.",
   "thumbnail": "icon:door",

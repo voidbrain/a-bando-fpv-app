@@ -25,9 +25,10 @@ describe('stores', () => {
       s.toggle('video');
       expect(s.panels()['video'].z).toBeGreaterThan(s.panels()['views'].z);
     });
-    it('starts with the default panels visible', () => {
+    it('a first visit shows only Welcome', () => {
       const s = TestBed.inject(LayoutStore);
-      expect(s.panels().views.visible).toBe(true);
+      expect(s.panels().welcome.visible).toBe(true);
+      expect(s.panels().views.visible).toBe(false);
       expect(s.panels().radio.visible).toBe(false);
     });
 
@@ -71,7 +72,7 @@ describe('stores', () => {
       expect(s.panels().flights.x).toBe(10);
       expect(s.panels().flights.visible).toBe(false);
       expect(s.panels().flights.minimized).toBe(false); // missing field gets its default
-      expect(s.panels().timeline.visible).toBe(true); // panel absent from the save keeps its default
+      expect(s.panels().welcome.visible).toBe(true); // panel absent from the save keeps its default
       expect(s.zTop()).toBe(40);
     });
   });

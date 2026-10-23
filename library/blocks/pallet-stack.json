@@ -5,7 +5,7 @@
   "name": "Pallet stack",
   "kind": "structure",
   "tags": ["yard", "wood"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "Wooden pallets stacked up.",
   "thumbnail": "icon:container",

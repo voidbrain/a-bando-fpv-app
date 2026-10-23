@@ -18,7 +18,7 @@ import { CASCADE_STEP, PANEL_BY_ID, cascadeIndex, type PanelId } from '../panel-
     '[class.resizable]': 'def().resizable',
     '[hidden]': '!state().visible',
     '[style.z-index]': 'state().z',
-    '[style.left.px]': 'state().x ?? at(def().anchor.left)',
+    '[style.left]': 'leftCss()',
     '[style.top.px]': 'state().y ?? at(def().anchor.top)',
     '[style.right.px]': 'state().x === null ? at(def().anchor.right, -1) : null',
     '[style.bottom.px]': 'state().y === null ? at(def().anchor.bottom) : null',
@@ -38,7 +38,7 @@ import { CASCADE_STEP, PANEL_BY_ID, cascadeIndex, type PanelId } from '../panel-
       <button class="gb" [class.on]="tour.tips()" [attr.aria-pressed]="tour.tips()" [title]="tour.tips() ? 'Tips on hover are on: hover a control for a moment to see how it works (click to turn off)' : 'Tips on hover: hover a control for a moment to see how it works'" aria-label="Tips on hover" (pointerdown)="$event.stopPropagation()" (click)="tour.setTips(!tour.tips())">?</button>
       <button class="gb" title="Collapse / expand" aria-label="Collapse / expand" (pointerdown)="$event.stopPropagation()" (click)="layout.toggleMinimized(id())">▾</button>
       @if (id() !== 'views') {
-        <button class="gb" title="Close (Views shows it again)" [attr.aria-label]="'Close ' + def().title" (pointerdown)="$event.stopPropagation()" (click)="layout.setVisible(id(), false)">×</button>
+        <button class="gb" title="Close (Views shows it again)" [attr.aria-label]="'Close ' + def().title" [attr.data-tour]="'close-' + id()" (pointerdown)="$event.stopPropagation()" (click)="layout.setVisible(id(), false)">×</button>
       }
     </header>
     <div class="body"><ng-content /></div>
@@ -156,6 +156,16 @@ export class Panel {
   readonly state = computed(() => this.layout.panels()[this.id()]);
   /** Panels opened at the same first place step aside, so the new one never covers the last exactly. */
   private readonly cascade = computed(() => cascadeIndex(this.id(), this.layout.panels()) * CASCADE_STEP);
+  /** Left edge: where it was dragged, its anchor, or centred across the window (never off its left side). */
+  protected leftCss(): string | null {
+    const x = this.state().x;
+    if (x !== null) return `${x}px`;
+    const a = this.def().anchor;
+    if (a.center) return `max(8px, calc(50% - ${(this.panelWidth() ?? 300) / 2}px))`;
+    const l = this.at(a.left);
+    return l === null ? null : `${l}px`;
+  }
+
   /** An anchor distance stepped by the cascade (null when not anchored on that side); a right anchor steps towards the edge, so the panel stays on screen. */
   protected at(v: number | undefined, sign = 1): number | null {
     return v === undefined ? null : Math.max(0, v + sign * this.cascade());

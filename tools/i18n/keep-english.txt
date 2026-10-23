@@ -6,3 +6,4 @@ JSON
 https://my-pc.tailnet.ts.net or https://site.it/ai-proxy.php
 qwen2.5:7b
 Acro
+OpenBando

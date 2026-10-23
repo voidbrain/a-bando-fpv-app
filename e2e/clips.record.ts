@@ -11,13 +11,14 @@ import { SNIPPETS } from '../src/app/core/tour';
 const DIR = 'docs/guide/clips';
 mkdirSync(DIR, { recursive: true });
 
-for (const s of SNIPPETS) {
+for (const s of SNIPPETS.filter((x) => x.section !== 'showcase')) {
   test(`clip: ${s.id}`, async ({ page }) => {
     const t0 = Date.now(); // the video starts with the page
     await page.goto('/');
-    await page.getByRole('button', { name: 'Close Guide me' }).click();
+    await page.getByRole('button', { name: 'Close Welcome' }).click();
+    await page.locator('app-panel[data-id="views"]').evaluate((el) => ((el as HTMLElement).hidden = true)); // the step opens what it needs
     await page.evaluate((title) => {
-      // the Play buttons live in the closed panel: press the one of this step directly
+      // the Play buttons live in the Guide panel, closed here: press the one of this step directly
       const b = [...document.querySelectorAll<HTMLButtonElement>('app-guide-panel button')].find((x) => x.getAttribute('aria-label') === `Play: ${title}`);
       b?.click();
     }, s.title);

@@ -5,7 +5,7 @@
   "name": "Billboard",
   "kind": "structure",
   "tags": ["sign", "advertising"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A big sign panel on two poles.",
   "thumbnail": "icon:structure",

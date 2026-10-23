@@ -1,4 +1,4 @@
-# A Bando design system
+# OpenBando design system
 
 How the app looks and talks. Read this before changing UI (templates, component styles, `src/styles.scss`, user-facing
 text). The values live in code: CSS custom properties in `src/styles.scss` (`:root`) and the tool colours in `tools` in
@@ -7,7 +7,7 @@ still use) with where it is used; `components/*.md` are the guidelines per compo
 
 Published copy (for browsing, may lag behind this folder): https://claude.ai/artifact/MH32oVjF7EmKTFnSmP7YoC
 
-A Bando is a dark, dense instrument for FPV pilots: a 3D map and site editor, a flight log player and a simulator, built from floating panels over a live 3D stage. The interface stays quiet so the map, the video and the flight path carry the colour. One lime-green accent marks what is active; every editing tool owns a distinct hue.
+OpenBando is a dark, dense instrument for FPV pilots: a 3D map and site editor, a flight log player and a simulator, built from floating panels over a live 3D stage. The interface stays quiet so the map, the video and the flight path carry the colour. One lime-green accent marks what is active; every editing tool owns a distinct hue.
 
 ## Content fundamentals
 
@@ -68,11 +68,11 @@ A Bando is a dark, dense instrument for FPV pilots: a 3D map and site editor, a 
 
 ## Logo
 
-There is no logo in the codebase: set the name "A Bando" in the `sans` family at 600 weight. Do not draw a mark.
+There is no logo in the codebase: set the name "OpenBando" in the `sans` family at 600 weight. Do not draw a mark.
 
 ## Components
 
-Guidelines per component in `components/`: Button, SegmentedControl, FormControls, InspectorSection, Panel, FloatBox,
+Guidelines per component in `components/`: WelcomePanel, Button, SegmentedControl, FormControls, InspectorSection, Panel, FloatBox,
 ToolPalette, OptionsBar, PickMenu, BlocksPanel, ContextMenu, Readout, Notice, Toast, Spinner, ElementsList, VersionBadge. Reuse these (the global
 classes in `src/styles.scss`, `app-panel`, `app-float-box`) before inventing a new control. In the app the elements-list row
 is `.row` scoped to `ElementsBox`; the guideline calls it `.el-row` to keep it apart from the global `.row`.

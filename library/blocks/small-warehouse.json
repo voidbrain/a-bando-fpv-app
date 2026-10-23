@@ -5,7 +5,7 @@
   "name": "Small warehouse",
   "kind": "building",
   "tags": ["warehouse", "shed", "industrial"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A gabled shed with a store fa\u00e7ade on its long walls.",
   "thumbnail": "icon:building",

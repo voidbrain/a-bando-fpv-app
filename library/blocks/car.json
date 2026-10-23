@@ -5,7 +5,7 @@
   "name": "Car",
   "kind": "structure",
   "tags": ["vehicle", "car"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "An abandoned car.",
   "thumbnail": "icon:car",

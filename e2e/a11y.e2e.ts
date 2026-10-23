@@ -7,14 +7,23 @@ async function axe(page: Page): Promise<string[]> {
   return r.violations.map((v) => `${v.id} (${v.impact}): ${v.help} · ${v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(' | ')}`);
 }
 
-test('first visit: panels, Views, Guide me', async ({ page }) => {
+test('first visit: Welcome over the empty world', async ({ page }) => {
   await page.goto('/');
+  await expect(page.locator('app-panel[data-id="welcome"]')).toBeVisible();
+  expect(await axe(page)).toEqual([]);
+});
+
+test('after Welcome: Views and Guide me', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Guide me', exact: true }).click();
+  await expect(page.locator('app-panel[data-id="views"]')).toBeVisible();
   await expect(page.locator('app-panel[data-id="guide"]')).toBeVisible();
   expect(await axe(page)).toEqual([]);
 });
 
 test('the editor with a model, the inspector and the library', async ({ page }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Open the bandos →' }).click();
   await page.locator('app-studio-panel .card.ex').filter({ hasText: /^Chiari e Forti/ }).getByRole('button', { name: 'Open a copy' }).click();
   await page.locator('app-studio-panel .card:not(.ex)').filter({ hasText: 'Chiari e Forti' }).getByRole('button', { name: 'Edit area' }).click();
   await page.getByRole('button', { name: '2 · Model' }).click();
@@ -25,6 +34,7 @@ test('the editor with a model, the inspector and the library', async ({ page }) 
 
 test('a guide step running (caption bar)', async ({ page }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Guide me', exact: true }).click();
   await page.getByRole('button', { name: 'Play: Start a bando: find the place', exact: true }).click();
   await expect(page.locator('app-tour-overlay .bar')).toBeVisible();
   expect(await axe(page)).toEqual([]);

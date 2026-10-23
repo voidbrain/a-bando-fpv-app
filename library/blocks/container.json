@@ -5,7 +5,7 @@
   "name": "Shipping container",
   "kind": "structure",
   "tags": ["container", "yard"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A 20 ft or 40 ft steel container.",
   "thumbnail": "icon:container",

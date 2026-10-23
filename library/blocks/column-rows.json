@@ -5,7 +5,7 @@
   "name": "Column rows",
   "kind": "pattern",
   "tags": ["columns", "hall"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "Rows of columns along the hall; 4 rows are spaced 1 - 2 - 1.",
   "thumbnail": "icon:column",

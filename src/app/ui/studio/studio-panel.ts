@@ -73,7 +73,7 @@ import { BandoEditor } from './bando-editor';
               </div>
               @if (e.about) { <div class="dim small about">{{ e.about }}</div> }
               <div class="acts">
-                <button class="btn" (click)="openExample(e)" [disabled]="opening() === e.file" [title]="'Add a copy of ' + e.name + ' to your bandos and open it'">{{ opening() === e.file ? 'Opening…' : 'Open a copy' }}</button>
+                <button class="btn" (click)="openExample(e)" [attr.data-tour]="'example-' + e.file.replace('bandos/', '').replace('.json', '')" [disabled]="opening() === e.file" [title]="'Add a copy of ' + e.name + ' to your bandos and open it'">{{ opening() === e.file ? 'Opening…' : 'Open a copy' }}</button>
               </div>
             </div>
           }
@@ -206,7 +206,7 @@ export class StudioPanel {
     input.value = '';
     if (!file) return;
     const r = await this.backups.restore(await file.text());
-    if (!r) return void this.toast.show('That file is not an A Bando backup.');
+    if (!r) return void this.toast.show('That file is not an OpenBando backup.');
     const parts = [
       r.added && `${r.added} added`,
       r.replaced && `${r.replaced} replaced by the backup's newer copy`,

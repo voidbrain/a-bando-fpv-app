@@ -5,7 +5,7 @@
   "name": "Chimney",
   "kind": "structure",
   "tags": ["industrial", "tower", "brick"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A brick factory chimney, tapering, with a dark rim.",
   "thumbnail": "icon:chimney",

@@ -7,7 +7,9 @@ export const metresPerDegLon = (lat: number): number => 111320 * Math.cos((lat *
 
 /** Latitude/longitude -> local model metres [x, z], around the given geographic origin. */
 export function toLocalAt(origin: GeoPoint, lat: number, lon: number, cal: Calibration): [number, number] {
-  const e = (lon - origin.lon) * metresPerDegLon(origin.lat);
+  // east metres at the point's own latitude: the same as the origin's anywhere near it, and still true for a bando
+  // without its place (origin 0, 0), whose flights are far from the origin until they are moved onto the take-off pad
+  const e = (lon - origin.lon) * metresPerDegLon(lat);
   const n = (lat - origin.lat) * METRES_PER_DEG_LAT;
   const a = cal.rot * RAD;
   return [e * Math.cos(a) + n * Math.sin(a) + cal.dx, e * Math.sin(a) - n * Math.cos(a) + cal.dz];
@@ -18,10 +20,8 @@ export function toGeoAt(origin: GeoPoint, x: number, z: number, cal: Calibration
   const a = cal.rot * RAD;
   const X = x - cal.dx;
   const Z = z - cal.dz;
-  return [
-    origin.lat + (X * Math.sin(a) - Z * Math.cos(a)) / METRES_PER_DEG_LAT,
-    origin.lon + (X * Math.cos(a) + Z * Math.sin(a)) / metresPerDegLon(origin.lat),
-  ];
+  const lat = origin.lat + (X * Math.sin(a) - Z * Math.cos(a)) / METRES_PER_DEG_LAT;
+  return [lat, origin.lon + (X * Math.cos(a) + Z * Math.sin(a)) / metresPerDegLon(lat)];
 }
 
 export interface CalibrationSolution {

@@ -1,5 +1,5 @@
 import { DEFAULT_CALIBRATION, setSiteOrigin } from './constants';
-import { courseDegrees, rotateCalibrationAbout, solveCalibration, toGeo, toLocal, toLocalAt, turnTowards, latLonText, parseLatLon, siteFromLatLon } from './geo';
+import { courseDegrees, rotateCalibrationAbout, solveCalibration, toGeo, toLocal, toLocalAt, turnTowards, latLonText, parseLatLon, siteFromLatLon, toGeoAt } from './geo';
 
 describe('geo', () => {
   beforeAll(() => setSiteOrigin({ lat: 45.648698, lon: 12.303305 })); // these cases are written against this site (Chiari e Forti)
@@ -97,5 +97,16 @@ describe('bando points and coordinates', () => {
     expect(p.x).toBeCloseTo(120.5, 1);
     expect(p.z).toBeCloseTo(-40.25, 1);
     expect(siteFromLatLon(o, o)).toEqual({ x: 0, z: 0 });
+  });
+});
+
+describe('a flight far from the origin (a bando without its place)', () => {
+  it('keeps its true shape: east-west metres at its own latitude', () => {
+    const o = { lat: 0, lon: 0 };
+    const a = toLocalAt(o, 45.5, 12.1, { rot: 0, dx: 0, dz: 0 }), b = toLocalAt(o, 45.5, 12.101, { rot: 0, dx: 0, dz: 0 });
+    expect(b[0] - a[0]).toBeCloseTo(0.001 * 111319.49 * Math.cos((45.5 * Math.PI) / 180), 0); // ~78 m, not 111 m
+    const back = toGeoAt(o, b[0], b[1], { rot: 0, dx: 0, dz: 0 });
+    expect(back[0]).toBeCloseTo(45.5, 9);
+    expect(back[1]).toBeCloseTo(12.101, 9);
   });
 });

@@ -11,6 +11,9 @@ import { StorageService } from './storage.service';
 import { StudioService } from './studio.service';
 import { ToastService } from './toast.service';
 import { VideoService } from './video.service';
+import { SceneService } from './scene.service';
+import { ViewStore } from '../state/view.store';
+import type { CameraView } from '../core/models';
 
 /** What the open editor lets the tour do (it registers itself while it exists). */
 export interface TourEditor {
@@ -41,6 +44,8 @@ const TOUR_BANDO = { id: 'tour-chiari', name: 'Chiari e Forti (tour)', file: 'li
 /** Where the demo flight is replayed: a copy of the example without its place (the flight starts on its take-off pad). */
 const FLIGHT_BANDO = { id: 'tour-flight', name: 'Villetta (tour)', file: 'library/bandos/villetta-no-place.json' };
 /** A short cut of a real flight (log thinned to ~100 Hz, its GPS moved to 0, 0; video 480p): published with the app for the guide. */
+/** The video offset Auto-sync finds for the demo flight (the showcase uses it instead of scanning a minute of video). */
+const DEMO_OFFSET = -0.54;
 const DEMO = { log: 'guide-demo/flight.csv', video: 'guide-demo/flight.mp4' };
 const SETTINGS = 'abando-guide';
 
@@ -63,6 +68,8 @@ export class TourService {
   private readonly playback = inject(PlaybackService);
   private readonly toast = inject(ToastService);
   private readonly storage = inject(StorageService);
+  private readonly scene = inject(SceneService);
+  private readonly view = inject(ViewStore);
 
   readonly state = signal<TourState | null>(null);
   readonly cursor = signal<{ x: number; y: number; down: boolean } | null>(null);
@@ -86,7 +93,7 @@ export class TourService {
   }
 
   playTour(t: Tour): Promise<void> {
-    return this.run(t.title, t.snippets.map((id) => SNIPPET_BY_ID.get(id)).filter((s): s is Snippet => !!s));
+    return this.run(t.title, t.snippets.map((id) => SNIPPET_BY_ID.get(id)).filter((s): s is Snippet => !!s), !!t.keepLayout);
   }
 
   playSnippet(s: Snippet): Promise<void> {
@@ -118,7 +125,7 @@ export class TourService {
   }
   private firsts: boolean[] = [];
 
-  private async run(title: string, snippets: readonly Snippet[]): Promise<void> {
+  private async run(title: string, snippets: readonly Snippet[], keepLayout = false): Promise<void> {
     const beats: { beat: Beat; snippet: Snippet; first: boolean }[] = snippets.flatMap((s) => s.beats.map((beat, k) => ({ beat, snippet: s, first: k === 0 })));
     if (this.state()) this.end();
     while (this.state()) await new Promise((r) => setTimeout(r, 50));
@@ -151,7 +158,7 @@ export class TourService {
     } catch (e) {
       if (!(e instanceof Stopped)) console.warn('tour', e);
     } finally {
-      this.layout.restore(before);
+      if (!keepLayout || this.stop) this.layout.restore(before); // the showcase ends on its finished screen, unless stopped
       this.ai.demo.set(false);
       this.state.set(null);
       this.cursor.set(null);
@@ -378,6 +385,37 @@ export class TourService {
       case 'closeBoxes':
         this.editor?.closeBoxes();
         return;
+      case 'layoutReset':
+        // a clean screen: only Welcome over the empty world (a showcase may run on a visit that moved things)
+        this.layout.reset();
+        for (const id of Object.keys(this.layout.panels()) as PanelId[]) if (id !== 'welcome') this.layout.setVisible(id, false);
+        this.layout.setVisible('welcome', true);
+        this.scene.resetCamera();
+        return this.sleep(400);
+      case 'orbit':
+        this.scene.autoOrbit.set(arg === 'on');
+        return;
+      case 'flightSite':
+        return this.flightSite();
+      case 'hide':
+        for (const id of (arg ?? '').split(',')) this.layout.setVisible(id as PanelId, false);
+        return this.sleep(250);
+      case 'camera':
+        this.view.setCameraView((arg ?? 'orbit') as CameraView);
+        return this.sleep(300);
+      case 'fakeSync':
+        return this.fakeSync();
+      case 'arrange':
+        return this.arrange(arg === 'cameras' ? 'cameras' : 'replay');
+      case 'ghostAll':
+        // one panel after the other turns to glass
+        for (const [id, p] of Object.entries(this.layout.panels()) as [PanelId, { visible: boolean; ghost: boolean }][]) {
+          if (!p.visible || p.ghost) continue;
+          this.layout.toggleGhost(id);
+          await this.sleep(180);
+        }
+        return;
+
       case 'fakeGenerate':
         return this.fakeGenerate();
       case 'tool': {
@@ -458,6 +496,64 @@ export class TourService {
     if (this.site.peek(FLIGHT_BANDO.id)) this.studio.open(FLIGHT_BANDO.id);
     else await this.copyExample(FLIGHT_BANDO);
     await this.sleep(600);
+  }
+
+  /**
+   * Auto-sync for the showcase, without its minute of scanning: a short scan line, then the offset Auto-sync finds for
+   * the demo flight (`DEMO_OFFSET`, checked against the real scan in e2e/showcase.e2e.ts).
+   */
+  private async fakeSync(): Promise<void> {
+    for (let i = 0; i < 50 && !this.video.loaded(); i++) await this.sleep(100);
+    const f = this.flights.active;
+    if (!f || !this.video.loaded()) return;
+    this.video.busy.set(true);
+    try {
+      for (const t of [6, 18, 31, 44, 57, 60]) {
+        this.video.status.set(`scanning ${t} / 60 s`);
+        await this.sleep(320);
+      }
+    } finally {
+      this.video.busy.set(false);
+    }
+    this.video.applySync(DEMO_OFFSET, 'whole-flight match (g vs pan), high confidence', this.flights.liftoff(f) ?? 0);
+  }
+
+  /**
+   * Place the panels of a showcase screen, measured against the window. `replay`: the video on the left, the instruments
+   * in the top-right corner, the path under them, the timeline at the bottom, everything else hidden. `cameras`: the
+   * four camera views in the free middle, appearing one after the other.
+   */
+  private async arrange(what: 'replay' | 'cameras'): Promise<void> {
+    const W = innerWidth, H = innerHeight, m = 14, gap = 8;
+    const box = (id: PanelId): DOMRect | undefined => document.querySelector<HTMLElement>(`app-panel[data-id="${id}"]`)?.getBoundingClientRect();
+    if (what === 'replay') {
+      const keep: PanelId[] = ['video', 'timeline', 'speed', 'attitude', 'path'];
+      for (const [id, p] of Object.entries(this.layout.panels()) as [PanelId, { visible: boolean }][]) if (p.visible && !keep.includes(id)) this.layout.setVisible(id, false);
+      for (const id of keep) this.layout.setVisible(id, true);
+      this.layout.setWidth('video', Math.round(Math.min(560, W * 0.36)));
+      this.layout.setWidth('timeline', Math.min(620, W - 2 * m));
+      await this.sleep(150);
+      const att = box('attitude'), spd = box('speed'), tl = box('timeline');
+      const aw = att?.width ?? 270, ah = att?.height ?? 160, th = tl?.height ?? 110;
+      this.layout.moveTo('video', m, m);
+      this.layout.moveTo('attitude', W - m - aw, m);
+      this.layout.moveTo('speed', W - m - aw - gap - (spd?.width ?? 170), m);
+      this.layout.resizeTo('path', 330, Math.max(180, Math.min(300, H - ah - th - 4 * m)));
+      this.layout.moveTo('path', W - m - 330, m + ah + gap);
+      this.layout.moveTo('timeline', Math.round((W - (tl?.width ?? 620)) / 2), H - m - th);
+      return this.sleep(300);
+    }
+    // the free middle: between the video and the instruments, above the timeline
+    const vid = box('video'), spd = box('speed'), tl = box('timeline');
+    const x0 = (vid?.right ?? W * 0.38) + gap, x1 = (spd?.left ?? W * 0.62) - gap;
+    const y1 = (tl?.top ?? H - 120) - gap;
+    const w = Math.max(220, Math.floor((x1 - x0 - gap) / 2)), h = Math.max(140, Math.min(Math.floor((y1 - m - gap) / 2), Math.round(w * 0.62)));
+    for (const [k, id] of (['vpChase', 'vpFpv', 'vpTop', 'vpOrbit'] as PanelId[]).entries()) {
+      this.layout.resizeTo(id, w, h);
+      this.layout.moveTo(id, Math.round(x0 + (k % 2) * (w + gap)), Math.round(m + Math.floor(k / 2) * (h + gap)));
+      this.layout.setVisible(id, true);
+      await this.sleep(650);
+    }
   }
 
   /** Stand-in for generating from map data: the ready Chiari e Forti example, opened in the editor like a fresh model. */

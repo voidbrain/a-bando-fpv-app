@@ -5,7 +5,7 @@
   "name": "Bridge",
   "kind": "structure",
   "tags": ["bridge", "road"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A road or rail bridge: a beam on piers or an arch.",
   "thumbnail": "icon:bridge",

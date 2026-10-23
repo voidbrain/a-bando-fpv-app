@@ -5,7 +5,7 @@
   "name": "Lantern tower",
   "kind": "structure",
   "tags": ["industrial", "tower", "concrete"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A tall square concrete tower with a balcony and an open lantern on top (a factory's landmark).",
   "thumbnail": "icon:chimney",

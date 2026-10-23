@@ -5,7 +5,7 @@
   "name": "Jersey barriers",
   "kind": "structure",
   "tags": ["street", "barrier", "concrete"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A row of concrete road barriers.",
   "thumbnail": "icon:concrete",

@@ -27,7 +27,7 @@ const clip = (sn) => {
 };
 const head = '<!-- Written by tools/build-guide.mjs from src/app/core/tour.ts: edit the tour, then run the script. -->\n\n';
 
-let index = `${head}# A Bando guide\n\nThe app plays these as animated tours on the real interface: open **Guide me** (shown on the first visit, then from Views). Every step is also a short clip, used in these pages, in the hover tips (Guide me → Show tips on hover) and for articles.\n\n## Tours\n\n`;
+let index = `${head}# OpenBando guide\n\nThe app plays these as animated tours on the real interface: open **Guide me** (shown on the first visit, then from Views). Every step is also a short clip, used in these pages, in the hover tips (Guide me → Show tips on hover) and for articles.\n\n## Tours\n\n`;
 for (const t of TOURS) {
   const min = Math.max(1, Math.round(playTime(tourBeats(t).map((b) => b.beat)) / 60000));
   index += `- **${t.title}** (~${min} min): ${t.about} Steps: ${t.snippets.map((id) => SNIPPETS.find((s) => s.id === id).title.toLowerCase()).join(', ')}.\n`;

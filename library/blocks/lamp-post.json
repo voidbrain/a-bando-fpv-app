@@ -5,7 +5,7 @@
   "name": "Street lamp",
   "kind": "structure",
   "tags": ["street", "light"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A street lamp on a steel pole.",
   "thumbnail": "icon:structure",

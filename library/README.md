@@ -18,7 +18,7 @@ background (ETag) and keeps it for offline use.
 {
   "schema": 1, "id": "abando/billboard", "version": 1, "name": "Billboard",
   "kind": "structure",               // structure | building | group | pattern
-  "tags": ["sign"], "author": "A Bando", "licence": "CC-BY-4.0",   // CC-BY-4.0 | CC0 | ODbL
+  "tags": ["sign"], "author": "OpenBando", "licence": "CC-BY-4.0",   // CC-BY-4.0 | CC0 | ODbL
   "description": "One line.", "thumbnail": "icon:structure",      // a tool-icon key, or a small data: URI
   "params": [{ "key": "w", "label": "Width", "type": "number", "min": 2, "max": 20, "step": 0.5, "default": 8 }],
   "content": { "shapes": [ ... ] }    // and / or buildings, structures, walls, trees, or a pattern

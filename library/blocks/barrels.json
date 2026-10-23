@@ -5,7 +5,7 @@
   "name": "Oil barrels",
   "kind": "structure",
   "tags": ["yard", "barrel"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A cluster of rusty and blue drums.",
   "thumbnail": "icon:tank",

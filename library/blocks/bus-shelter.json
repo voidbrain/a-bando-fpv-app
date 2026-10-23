@@ -5,7 +5,7 @@
   "name": "Bus shelter",
   "kind": "structure",
   "tags": ["street", "shelter"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "Back wall, two sides and a flat roof.",
   "thumbnail": "icon:structure",

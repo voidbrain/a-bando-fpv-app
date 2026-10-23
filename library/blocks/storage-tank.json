@@ -5,7 +5,7 @@
   "name": "Storage tank",
   "kind": "structure",
   "tags": ["industrial", "tank"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A squat fuel or water tank.",
   "thumbnail": "icon:tank",

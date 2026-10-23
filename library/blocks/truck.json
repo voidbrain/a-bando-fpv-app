@@ -5,7 +5,7 @@
   "name": "Truck",
   "kind": "structure",
   "tags": ["vehicle", "truck"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A box truck.",
   "thumbnail": "icon:truck",

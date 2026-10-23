@@ -5,7 +5,7 @@
   "name": "Stairs",
   "kind": "structure",
   "tags": ["stairs"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A straight flight of stairs (indoors or out).",
   "thumbnail": "icon:stairs",

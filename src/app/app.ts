@@ -1,4 +1,7 @@
-import { Component, effect, inject, untracked } from '@angular/core';
+import { Component, afterNextRender, effect, inject, untracked } from '@angular/core';
+import { SHOWCASE, showcaseLink } from './core/tour';
+import { I18nService } from './services/i18n.service';
+import { TourService } from './services/tour.service';
 import { FlightService } from './services/flight.service';
 import { FrameLoopService } from './services/frame-loop.service';
 import { RadioService } from './services/radio.service';
@@ -11,6 +14,7 @@ import { CompassPanel } from './ui/panels/compass-panel';
 import { FlightsPanel } from './ui/panels/flights-panel';
 import { HelpPanel } from './ui/panels/help-panel';
 import { GuidePanel } from './ui/panels/guide-panel';
+import { WelcomePanel } from './ui/panels/welcome-panel';
 import { TourOverlay } from './ui/tour-overlay';
 import { LivePanel } from './ui/panels/live-panel';
 import { PathPanel } from './ui/panels/path-panel';
@@ -32,7 +36,7 @@ import { ToastHost } from './ui/toast-host';
   selector: 'app-root',
   imports: [
     Stage, ViewsPanel, FlightsPanel, SimulatorPanel, RadioPanel, TimelinePanel, SpeedPanel, AttitudePanel, CompassPanel, PathPanel,
-    BlackboxPanel, VideoPanel, LivePanel, RenderPanel, HelpPanel, GuidePanel, ViewportPanel, VersionBadge, StudioPanel, ToastHost, TourOverlay,
+    BlackboxPanel, VideoPanel, LivePanel, RenderPanel, HelpPanel, GuidePanel, WelcomePanel, ViewportPanel, VersionBadge, StudioPanel, ToastHost, TourOverlay,
   ],
   template: `
     <app-stage />
@@ -53,6 +57,7 @@ import { ToastHost } from './ui/toast-host';
     <app-render-panel />
     <app-help-panel />
     <app-guide-panel />
+    <app-welcome-panel />
     <app-viewport-panel type="orbit" />
     <app-viewport-panel type="chase" />
     <app-viewport-panel type="fpv" />
@@ -69,6 +74,13 @@ export class App {
   private openedRadio = false;
 
   constructor() {
+    // a showcase link (?tour=showcase&lang=it): set the language, then the one-minute tour plays by itself
+    const link = showcaseLink(location.search, location.hash);
+    if (link) {
+      const i18n = inject(I18nService), tour = inject(TourService);
+      if (link.lang) i18n.set(link.lang);
+      afterNextRender(() => setTimeout(() => void tour.playTour(SHOWCASE), 1200));
+    }
     inject(ShortcutsService).bind();
     inject(FrameLoopService).start();
 

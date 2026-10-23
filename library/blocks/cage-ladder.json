@@ -5,7 +5,7 @@
   "name": "Caged roof ladder",
   "kind": "structure",
   "tags": ["industrial", "ladder", "roof"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A vertical ladder inside a blue cylindrical safety cage, up through the roof to a small hood on top.",
   "thumbnail": "icon:stairs",

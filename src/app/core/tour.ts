@@ -9,7 +9,8 @@
  * Slow or online steps (generating from map data, the AI model) are stand-ins (`hook`) that show the real result.
  */
 
-export type Section = 'bandos' | 'model' | 'ai' | 'flight';
+/** `showcase`: the one-minute tour's own steps, not listed in the Guide panel or the help pages. */
+export type Section = 'bandos' | 'model' | 'ai' | 'flight' | 'showcase';
 
 export const SECTIONS: readonly { id: Section; title: string }[] = [
   { id: 'bandos', title: 'Bandos and the map' },
@@ -19,7 +20,7 @@ export const SECTIONS: readonly { id: Section; title: string }[] = [
 ];
 
 /** What the player can do besides moving the cursor; each one is implemented in the tour service. */
-export const HOOKS = ['panel', 'list', 'fakeGenerate', 'tool', 'select', 'view', 'ai', 'demoLog', 'demoVideo', 'autoSync', 'play', 'pause', 'closeBoxes'] as const;
+export const HOOKS = ['panel', 'list', 'fakeGenerate', 'tool', 'select', 'view', 'ai', 'demoLog', 'demoVideo', 'autoSync', 'play', 'pause', 'closeBoxes', 'layoutReset', 'orbit', 'flightSite', 'hide', 'camera', 'fakeSync', 'arrange', 'ghostAll'] as const;
 export type Hook = (typeof HOOKS)[number];
 
 export type At = readonly [number, number];
@@ -66,6 +67,8 @@ export interface Tour {
   title: string;
   about: string;
   snippets: string[];
+  /** Leave the panels as the tour arranged them (the showcase ends on its finished screen); others put the layout back. */
+  keepLayout?: boolean;
 }
 
 const p = (at: string, to?: At): TourAction => ({ do: 'point', at, ...(to ? { to } : {}) });
@@ -213,9 +216,51 @@ export const SNIPPETS: readonly Snippet[] = [
     beats: [{ say: 'Play: the drone flies its real path through the model, with the video in step.', actions: [hook('panel', 'timeline'), click('play'), wait(6000), hook('pause')] }],
   },
 
+  // ---- the one-minute showcase (Welcome → a bando → a synced replay → every camera): plays by itself
+  {
+    id: 'sc-welcome',
+    section: 'showcase',
+    title: 'Welcome',
+    beats: [
+      { say: 'OpenBando: your bandos in 3D, and your flights back inside them.', actions: [hook('layoutReset'), hook('orbit', 'on'), wait(2600)] },
+      { say: 'Build the place. Fly it again. Share it, or keep it secret.', actions: [p('welcome-build', [0.5, 0.3]), wait(900), click('welcome-fly', [0.5, 0.3]), wait(2200), p('welcome-share', [0.5, 0.3]), wait(900)] },
+    ],
+  },
+  {
+    id: 'sc-bando',
+    section: 'showcase',
+    title: 'Open a bando',
+    beats: [
+      { say: 'Open a bando: this one is shared without its address. The model brings its own ground.', actions: [click('close-welcome'), hook('panel', 'studio'), hook('list'), wait(700), press('example-villetta-no-place'), hook('flightSite'), hook('orbit', 'off'), hook('camera', 'orbit'), wait(1200), hook('hide', 'studio'), wait(1600)] },
+    ],
+  },
+  {
+    id: 'sc-load',
+    section: 'showcase',
+    title: 'Load the flight',
+    beats: [
+      { say: 'Drop the Blackbox log and the DVR of the same flight.', actions: [hook('panel', 'flights'), press('upload-log'), hook('demoLog'), wait(900), hook('panel', 'video'), press('load-video'), hook('demoVideo'), wait(900)] },
+      { say: 'Auto-sync matches the picture with the gyro: no clapperboard needed.', actions: [hook('panel', 'timeline'), press('auto-sync'), hook('fakeSync'), wait(900)] },
+    ],
+  },
+  {
+    id: 'sc-replay',
+    section: 'showcase',
+    title: 'Replay in sync',
+    beats: [
+      { say: 'Speed, attitude, sticks and the path: every number of the flight, in step with the video.', actions: [hook('arrange', 'replay'), hook('camera', 'chase'), click('play'), wait(8500)] },
+      { say: 'And every camera at once: chase, FPV, top and orbit.', actions: [hook('arrange', 'cameras'), wait(7000)] },
+      { say: 'Clear the glass: only the flight is left.', actions: [hook('ghostAll'), wait(6000)] },
+      { say: 'OpenBando. Build, Fly, Share.', actions: [wait(3500)] },
+    ],
+  },
 ];
 
+/** The one-minute showcase: Welcome, a bando without its address, a log and its video synced, every camera. */
+export const SHOWCASE: Tour = { id: 'showcase', title: 'The one-minute tour', about: 'What OpenBando does, played by itself.', snippets: ['sc-welcome', 'sc-bando', 'sc-load', 'sc-replay'], keepLayout: true };
+
 export const TOURS: readonly Tour[] = [
+  SHOWCASE,
   { id: 'full', title: 'Full tour', about: 'From a new bando to a synced replay.', snippets: ['place', 'generate', 'look-3d', 'select', 'adjust', 'add-building', 'trees', 'library', 'ai', 'log', 'video', 'sync', 'replay'] },
   { id: 'build', title: 'Build a bando', about: 'Find the place, generate the model, edit it.', snippets: ['place', 'generate', 'look-3d', 'select', 'adjust', 'add-building', 'trees', 'library'] },
   { id: 'fly', title: 'Fly and sync', about: 'Load a flight and its video, sync them, replay.', snippets: ['log', 'video', 'sync', 'replay'] },
@@ -305,3 +350,15 @@ export const AI_SCRIPTS: Readonly<Record<string, string>> = {
     ],
   }),
 };
+
+/**
+ * A link that plays the showcase by itself: `?tour=showcase` (also `#tour=showcase`), with `lang=it` / `lang=en` to set
+ * the language. Null when the address asks for nothing.
+ */
+export function showcaseLink(search: string, hash = ''): { lang: 'it' | 'en' | null } | null {
+  const q = new URLSearchParams(search);
+  const h = new URLSearchParams(hash.replace(/^#/, ''));
+  if ((q.get('tour') ?? h.get('tour')) !== 'showcase') return null;
+  const lang = q.get('lang') ?? h.get('lang');
+  return { lang: lang === 'it' || lang === 'en' ? lang : null };
+}

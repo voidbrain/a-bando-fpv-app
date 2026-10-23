@@ -5,7 +5,7 @@
   "name": "Excavator",
   "kind": "structure",
   "tags": ["vehicle", "construction"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A tracked excavator with its arm up.",
   "thumbnail": "icon:excavator",

@@ -5,7 +5,7 @@
   "name": "Water tower",
   "kind": "structure",
   "tags": ["tower", "water"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A concrete water tower on a column.",
   "thumbnail": "icon:waterTower",

@@ -5,7 +5,7 @@
   "name": "Tower crane",
   "kind": "structure",
   "tags": ["crane", "construction"],
-  "author": "A Bando",
+  "author": "OpenBando",
   "licence": "CC-BY-4.0",
   "description": "A construction tower crane with its jib.",
   "thumbnail": "icon:crane",
