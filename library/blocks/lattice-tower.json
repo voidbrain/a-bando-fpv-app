@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "id": "abando/lattice-tower",
+  "version": 1,
+  "name": "Lattice tower / pylon",
+  "kind": "structure",
+  "tags": ["tower", "steel", "power"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A steel lattice mast or power pylon.",
+  "thumbnail": "icon:lattice",
+  "params": [
+    {
+      "key": "h",
+      "label": "Height",
+      "type": "number",
+      "default": 30,
+      "min": 10,
+      "max": 80,
+      "step": 1
+    },
+    {
+      "key": "s",
+      "label": "Half width at the base",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 6,
+      "step": 0.5
+    }
+  ],
+  "content": {
+    "structures": [
+      {
+        "id": "s",
+        "kind": "lattice_tower",
+        "name": "Lattice tower",
+        "x": 0,
+        "z": 0,
+        "rotDeg": 0,
+        "height": {
+          "$": "h"
+        },
+        "size": {
+          "$": "s"
+        }
+      }
+    ]
+  }
+}

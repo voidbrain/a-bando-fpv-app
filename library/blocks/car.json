@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "id": "abando/car",
+  "version": 1,
+  "name": "Car",
+  "kind": "structure",
+  "tags": ["vehicle", "car"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "An abandoned car.",
+  "thumbnail": "icon:car",
+  "params": [],
+  "content": {
+    "structures": [
+      {
+        "id": "s",
+        "kind": "car",
+        "name": "Car",
+        "x": 0,
+        "z": 0,
+        "rotDeg": 0,
+        "height": 1.5,
+        "size": 1.8,
+        "length": 4.5
+      }
+    ]
+  }
+}

@@ -1,0 +1,133 @@
+{
+  "schema": 1,
+  "id": "abando/scaffolding",
+  "version": 1,
+  "name": "Scaffolding",
+  "kind": "structure",
+  "tags": ["construction", "steel"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A scaffold tower with planks every 2 m.",
+  "thumbnail": "icon:lattice",
+  "params": [
+    {
+      "key": "levels",
+      "label": "Levels",
+      "type": "int",
+      "default": 3,
+      "min": 1,
+      "max": 10
+    }
+  ],
+  "content": {
+    "shapes": [
+      {
+        "prim": "array",
+        "of": {
+          "prim": "array",
+          "of": {
+            "prim": "cylinder",
+            "at": {
+              "x": -1.25,
+              "y": 0,
+              "z": -0.5
+            },
+            "radius": 0.03,
+            "height": {
+              "$": "levels",
+              "mul": 2
+            },
+            "color": "#5f6a6e"
+          },
+          "count": 2,
+          "step": {
+            "x": 2.5,
+            "y": 0,
+            "z": 0
+          }
+        },
+        "count": 2,
+        "step": {
+          "x": 0,
+          "y": 0,
+          "z": 1
+        }
+      },
+      {
+        "prim": "array",
+        "of": {
+          "prim": "box",
+          "at": {
+            "x": 0,
+            "y": 2,
+            "z": -0.5
+          },
+          "size": {
+            "x": 2.5,
+            "y": 0.05,
+            "z": 0.05
+          },
+          "color": "#5f6a6e"
+        },
+        "count": {
+          "$": "levels"
+        },
+        "step": {
+          "x": 0,
+          "y": 2,
+          "z": 0
+        }
+      },
+      {
+        "prim": "array",
+        "of": {
+          "prim": "box",
+          "at": {
+            "x": 0,
+            "y": 2,
+            "z": 0.5
+          },
+          "size": {
+            "x": 2.5,
+            "y": 0.05,
+            "z": 0.05
+          },
+          "color": "#5f6a6e"
+        },
+        "count": {
+          "$": "levels"
+        },
+        "step": {
+          "x": 0,
+          "y": 2,
+          "z": 0
+        }
+      },
+      {
+        "prim": "array",
+        "of": {
+          "prim": "box",
+          "at": {
+            "x": 0,
+            "y": 2.03,
+            "z": 0
+          },
+          "size": {
+            "x": 2.4,
+            "y": 0.04,
+            "z": 0.95
+          },
+          "color": "#a07a4f"
+        },
+        "count": {
+          "$": "levels"
+        },
+        "step": {
+          "x": 0,
+          "y": 2,
+          "z": 0
+        }
+      }
+    ]
+  }
+}

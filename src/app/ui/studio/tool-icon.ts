@@ -67,6 +67,8 @@ export const TOOL_ICONS: Readonly<Record<string, readonly Stroke[]>> = {
   sand: [{ p: 'M2 18 C6 14 10 14 14 17 S20 19 22 16' }, { p: 'M4 11 C7 9 10 9 13 11', d: true }],
   rubble: [{ p: 'M3 20 L6 15 L10 17 L12 12 L16 15 L19 11 L21 20 Z' }, { p: 'M8 9 L10 7 L12 9 Z M15 6 L17 5 L18 7 Z' }],
   blocks: [{ p: 'M3 13 H11 V21 H3 Z M13 13 H21 V21 H13 Z M8 3 H16 V11 H8 Z' }],
+  gate: [{ p: 'M5 21 V5 H19 V21' }, { p: 'M3 21 H7 M17 21 H21' }],
+  diveGate: [{ p: 'M4 9 L12 5 L20 9 L12 13 Z' }, { p: 'M4 9 V20 M20 9 V20 M12 13 V21', d: true }],
   // ---- underground ----
   tunnel: [{ p: 'M2 20 C6 6 18 6 22 20' }, { p: 'M7 20 V15 a5 5 0 0 1 10 0 V20' }],
   bunker: [{ p: 'M2 9 H22' }, { p: 'M5 12 H19 V20 H5 Z', d: true }, { p: 'M12 9 V12' }],

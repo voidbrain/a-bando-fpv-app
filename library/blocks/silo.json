@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "id": "abando/silo",
+  "version": 1,
+  "name": "Silo",
+  "kind": "structure",
+  "tags": ["industrial", "farm", "tower"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A round grain or cement silo.",
+  "thumbnail": "icon:silo",
+  "params": [
+    {
+      "key": "h",
+      "label": "Height",
+      "type": "number",
+      "default": 18,
+      "min": 6,
+      "max": 40,
+      "step": 0.5
+    },
+    {
+      "key": "r",
+      "label": "Radius",
+      "type": "number",
+      "default": 4,
+      "min": 1.5,
+      "max": 10,
+      "step": 0.5
+    }
+  ],
+  "content": {
+    "structures": [
+      {
+        "id": "s",
+        "kind": "silo",
+        "name": "Silo",
+        "x": 0,
+        "z": 0,
+        "rotDeg": 0,
+        "height": {
+          "$": "h"
+        },
+        "size": {
+          "$": "r"
+        }
+      }
+    ]
+  }
+}

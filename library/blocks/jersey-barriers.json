@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "id": "abando/jersey-barriers",
+  "version": 1,
+  "name": "Jersey barriers",
+  "kind": "structure",
+  "tags": ["street", "barrier", "concrete"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A row of concrete road barriers.",
+  "thumbnail": "icon:concrete",
+  "params": [
+    {
+      "key": "n",
+      "label": "How many",
+      "type": "int",
+      "default": 5,
+      "min": 1,
+      "max": 20
+    }
+  ],
+  "content": {
+    "shapes": [
+      {
+        "prim": "array",
+        "of": {
+          "prim": "box",
+          "at": {
+            "x": {
+              "$": "n",
+              "mul": -1.025,
+              "add": 1.025
+            },
+            "y": 0.4,
+            "z": 0
+          },
+          "size": {
+            "x": 2,
+            "y": 0.8,
+            "z": 0.6
+          },
+          "color": "#a9aaa0"
+        },
+        "count": {
+          "$": "n"
+        },
+        "step": {
+          "x": 2.05,
+          "y": 0,
+          "z": 0
+        }
+      }
+    ]
+  }
+}

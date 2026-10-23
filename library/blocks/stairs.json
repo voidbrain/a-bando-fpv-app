@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "id": "abando/stairs",
+  "version": 1,
+  "name": "Stairs",
+  "kind": "structure",
+  "tags": ["stairs"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A straight flight of stairs (indoors or out).",
+  "thumbnail": "icon:stairs",
+  "params": [
+    {
+      "key": "h",
+      "label": "Rise",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 12,
+      "step": 0.1
+    },
+    {
+      "key": "l",
+      "label": "Length",
+      "type": "number",
+      "default": 5.4,
+      "min": 2,
+      "max": 20,
+      "step": 0.1
+    },
+    {
+      "key": "w",
+      "label": "Width",
+      "type": "number",
+      "default": 1.4,
+      "min": 0.8,
+      "max": 4,
+      "step": 0.1
+    }
+  ],
+  "content": {
+    "structures": [
+      {
+        "id": "s",
+        "kind": "stairs",
+        "name": "Stairs",
+        "x": 0,
+        "z": 0,
+        "rotDeg": 0,
+        "height": {
+          "$": "h"
+        },
+        "size": {
+          "$": "w"
+        },
+        "length": {
+          "$": "l"
+        }
+      }
+    ]
+  }
+}

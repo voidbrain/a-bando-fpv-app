@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "id": "abando/bridge",
+  "version": 1,
+  "name": "Bridge",
+  "kind": "structure",
+  "tags": ["bridge", "road"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A road or rail bridge: a beam on piers or an arch.",
+  "thumbnail": "icon:bridge",
+  "params": [
+    {
+      "key": "l",
+      "label": "Length",
+      "type": "number",
+      "default": 30,
+      "min": 10,
+      "max": 200,
+      "step": 1
+    },
+    {
+      "key": "w",
+      "label": "Width",
+      "type": "number",
+      "default": 7,
+      "min": 3,
+      "max": 30,
+      "step": 0.5
+    },
+    {
+      "key": "h",
+      "label": "Deck height",
+      "type": "number",
+      "default": 6,
+      "min": 2,
+      "max": 30,
+      "step": 0.5
+    },
+    {
+      "key": "style",
+      "label": "Style",
+      "type": "choice",
+      "default": "beam",
+      "options": ["beam", "arch"]
+    }
+  ],
+  "content": {
+    "structures": [
+      {
+        "id": "s",
+        "kind": "bridge",
+        "name": "Bridge",
+        "x": 0,
+        "z": 0,
+        "rotDeg": 0,
+        "height": {
+          "$": "h"
+        },
+        "size": {
+          "$": "w"
+        },
+        "length": {
+          "$": "l"
+        },
+        "style": {
+          "$": "style"
+        }
+      }
+    ]
+  }
+}
