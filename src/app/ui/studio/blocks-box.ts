@@ -78,7 +78,7 @@ export interface BlockArm {
                     @if (p.type === 'bool') {
                       <input type="checkbox" [checked]="!!values()[p.key]" (change)="setValue(p.key, checked($event))" />
                     } @else if (p.type === 'choice') {
-                      <select (change)="setValue(p.key, val($event))">
+                      <select [attr.aria-label]="p.label" (change)="setValue(p.key, val($event))">
                         @for (o of p.options ?? []; track o) {
                           <option [value]="o" [selected]="values()[p.key] === o">{{ o }}</option>
                         }

@@ -27,7 +27,7 @@ const MAX_AXES = 12;
       <div class="map">
         @for (c of controls; track c.key) {
           <span>{{ c.label }}</span>
-          <select [value]="axisOf(c.key)" (change)="setAxis(c.key, num($event))">
+          <select [attr.aria-label]="c.label + ' axis'" [value]="axisOf(c.key)" (change)="setAxis(c.key, num($event))">
             <option value="-1">—</option>
             @for (n of axisNumbers; track n) {
               <option [value]="n" [selected]="axisOf(c.key) === n">Axis {{ n }}</option>

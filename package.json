@@ -7,7 +7,8 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "examples": "esbuild tools/examples/build-examples.ts --bundle --platform=node --format=esm --outfile=.angular/build-examples.mjs --log-level=warning && node .angular/build-examples.mjs && node tools/build-catalog.mjs"
+    "examples": "esbuild tools/examples/build-examples.ts --bundle --platform=node --format=esm --outfile=.angular/build-examples.mjs --log-level=warning && node .angular/build-examples.mjs && node tools/build-catalog.mjs",
+    "e2e": "playwright test"
   },
   "private": true,
   "packageManager": "npm@11.17.0",
@@ -30,6 +31,8 @@
     "@angular/build": "^22.2.2",
     "@angular/cli": "^22.2.2",
     "@angular/compiler-cli": "^22.2.0",
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.64.1",
     "@types/leaflet": "1.9",
     "@types/three": "^0.186.0",
     "jsdom": "^30.0.0",
