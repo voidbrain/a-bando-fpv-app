@@ -36,7 +36,7 @@ export const PANELS: readonly PanelDef[] = [
   { id: 'path', title: 'Flight path', group: 'telemetry', sub: 'views', visible: false, anchor: { right: 12, bottom: 12 }, width: 330, resizable: true, height: 270 },
   { id: 'studio', title: 'Bandos editor', group: 'tools', visible: false, anchor: { right: 12, top: 60 }, width: 600, resizable: true, maxHeight: 800 },
   { id: 'blackbox', title: 'Blackbox', group: 'telemetry', sub: 'controls', visible: false, anchor: { right: 12, top: 330 }, width: 360 },
-  { id: 'video', title: 'Video', group: 'telemetry', sub: 'controls', visible: false, anchor: { left: 280, top: 12 }, width: 380 },
+  { id: 'video', title: 'Video', group: 'telemetry', sub: 'controls', visible: false, anchor: { left: 280, top: 12 }, width: 380, resizable: true },
   { id: 'live', title: 'Live link', group: 'telemetry', sub: 'controls', visible: false, anchor: { left: 280, top: 12 }, width: 300 },
   { id: 'render', title: 'Render', group: 'tools', visible: false, anchor: { left: 280, top: 12 }, width: 300 },
   { id: 'guide', title: 'Guide me', group: 'tools', visible: false, anchor: { left: 280, top: 12 }, width: 300, resizable: true, height: 420 },

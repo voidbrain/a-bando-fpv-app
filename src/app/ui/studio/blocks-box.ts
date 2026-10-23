@@ -118,7 +118,9 @@ export interface BlockArm {
         <textarea rows="2" placeholder="a rusty fuel pump with a hose" [value]="desc()" (input)="desc.set(val($event))" aria-label="Describe the object"></textarea>
         <div class="acts">
           <button class="btn" [disabled]="ai.busy() || !desc().trim()" (click)="describe()">@if (ai.busy()) {<i class="spin"></i> } Make it</button>
-          <span class="dim small">{{ ai.status() === 'ready' ? '' : 'Connect a model in the assistant (💬) first.' }}</span>
+          @if (ai.status() !== 'ready') {
+            <button class="btn" (click)="ai.open.set(true)" title="Open the AI assistant to connect a model">Connect a model in the AI assistant first</button>
+          }
         </div>
         @if (aiNote()) {
           <div class="small" [class.bad]="aiError()">{{ aiNote() }}</div>

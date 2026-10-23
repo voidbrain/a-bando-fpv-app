@@ -9,6 +9,7 @@ import { PlaybackService } from './playback.service';
 import { StorageService } from './storage.service';
 import { ToastService } from './toast.service';
 import { scanVideo } from './video-scanner';
+import { scanRate } from '../core/sync/features';
 
 const SYNC_KEY_PREFIX = 'abando-sync:';
 const MIN_RESTART_INTERVAL_MS = 400;
@@ -35,6 +36,8 @@ export class VideoService {
   /** Scan / sync progress and result line. */
   readonly status = signal('');
   readonly busy = signal(false);
+  /** The video and the active flight are synced (found, restored or set by hand): the panel then hides Load video. */
+  readonly synced = signal(false);
   /** Data for the alignment plot, set after an auto-sync. */
   readonly features = signal<SyncFeatures | null>(null);
   /** An exact render drives the video itself: normal syncing pauses. */
@@ -80,6 +83,7 @@ export class VideoService {
     this.fileName.set(file.name);
     this.loaded.set(true);
     this.features.set(null);
+    this.synced.set(false);
     this.toast.show(`Video loaded: ${file.name}`);
     this.restoreSync();
   }
@@ -87,6 +91,7 @@ export class VideoService {
   setOffset(seconds: number): void {
     const o = isFinite(seconds) ? seconds : 0;
     this.offset.set(o);
+    this.synced.set(this.loaded());
     this.lastSeekTarget = -1;
     const key = this.syncKey();
     if (key) this.storage.write(key, String(o));
@@ -139,9 +144,16 @@ export class VideoService {
       });
       const from = Math.max(0, fromSeconds || 0);
       const to = Math.min(from + (lengthSeconds || 90), v.duration || 1e9);
-      const samples = await scanVideo(v, from, to, (t) => this.status.set(`scanning ${t.toFixed(0)} / ${to.toFixed(0)} s`));
-      if (samples.length < 40) throw new Error('too few frames decoded (try a 1080p H.264 proxy)');
-      const outcome = matchVideoToLog(samples, f);
+      // fast first; when that decodes too few frames or finds no match (a 4K file the browser cannot keep up with), slowly
+      const rates = [...new Set([scanRate(v.videoWidth, v.videoHeight), 1])];
+      let outcome: ReturnType<typeof matchVideoToLog> | null = null, samples: Awaited<ReturnType<typeof scanVideo>> = [];
+      for (const [i, rate] of rates.entries()) {
+        const slow = i > 0 ? ' (again, slower)' : '';
+        samples = await scanVideo(v, from, to, (t) => this.status.set(`scanning ${t.toFixed(0)} / ${to.toFixed(0)} s${slow}`), rate);
+        outcome = samples.length >= 40 ? matchVideoToLog(samples, f) : null;
+        if (outcome?.offset != null) break;
+      }
+      if (samples.length < 40 || !outcome) throw new Error('too few frames decoded (try a 1080p H.264 proxy)');
       this.features.set(outcome.features);
       if (outcome.offset == null) {
         this.status.set(`no reliable match in ${from.toFixed(0)}–${to.toFixed(0)} s of video. Widen “scan s” / set “from s”, or sync manually.`);
@@ -208,6 +220,7 @@ export class VideoService {
   private restoreSync(): void {
     const key = this.syncKey();
     const saved = key ? this.storage.readRaw(key) : null;
+    this.synced.set(saved !== null);
     if (saved === null) return;
     this.offset.set(+saved || 0);
     this.lastSeekTarget = -1;

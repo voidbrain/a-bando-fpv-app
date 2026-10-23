@@ -6,10 +6,10 @@ const MIN_FRAME_GAP = 0.04;
 const STALL_MS = 8000;
 
 /**
- * Play a video fast (3× up to 1080p, slower for 4K: `scanRate`) from `from` to `to` seconds and measure, between consecutive 64x36 grayscale frames: how fast the
+ * Play a video fast (`rate`; by default 3× up to 1080p, slower for 4K: `scanRate`) from `from` to `to` seconds and measure, between consecutive 64x36 grayscale frames: how fast the
  * picture pans, how much it changes and how much brighter the sky half is than the ground half. Browser only.
  */
-export async function scanVideo(video: HTMLVideoElement, from: number, to: number, onProgress: (t: number) => void): Promise<VideoSample[]> {
+export async function scanVideo(video: HTMLVideoElement, from: number, to: number, onProgress: (t: number) => void, rate = scanRate(video.videoWidth, video.videoHeight)): Promise<VideoSample[]> {
   const canvas = document.createElement('canvas');
   canvas.width = FRAME_W;
   canvas.height = FRAME_H;
@@ -72,7 +72,7 @@ export async function scanVideo(video: HTMLVideoElement, from: number, to: numbe
       } else schedule(onFrame);
     };
     video.onerror = () => reject(new Error('decode error while scanning'));
-    video.playbackRate = scanRate(video.videoWidth, video.videoHeight);
+    video.playbackRate = rate;
     video.play().then(() => schedule(onFrame)).catch(reject);
   }).finally(() => clearInterval(watch));
   return out;

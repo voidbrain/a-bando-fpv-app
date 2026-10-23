@@ -151,7 +151,14 @@ export class TerrainTool {
       if (s.terrain?.strokes[h.idx]) s.terrain.strokes[h.idx] = st;
     });
     this.sculpting.set({ at: h.at, lower: h.lower, r: st.radius, k: st.strength });
+    // the ground grows where you can see it: the 3D views follow a few times a second, not only on release
+    const now = performance.now();
+    if (now - this.shown > 350) {
+      this.shown = now;
+      this.h.applyNow();
+    }
   }
+  private shown = 0;
 
   /** Turn a finished drag into a stroke on the spec (the terrain is created flat on first use). */
   commit(pts: Pt[], h0: number): void {

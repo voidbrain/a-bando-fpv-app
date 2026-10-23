@@ -999,6 +999,10 @@ export const IT: Readonly<Record<string, string>> = {
   'whole building': 'edificio intero',
   // ---- Welcome and the welcome tour (showcase)
   'Welcome': 'Benvenuto',
+  'Connect a model in the AI assistant first': 'Prima collega un modello nell’assistente AI',
+  'Open the AI assistant to connect a model': 'Apri l’assistente AI per collegare un modello',
+  'Sync again': 'Sincronizza di nuovo',
+  'Load another video': 'Carica un altro video',
   'The browser’s storage for this site is full: recent changes are kept only until this tab closes. Back up all (Bandos panel), then delete bandos you do not need or free space in the browser.': 'Lo spazio del browser per questo sito è pieno: le ultime modifiche restano solo finché questa scheda è aperta. Fai Backup di tutto (pannello Bando), poi elimina i bando che non ti servono o libera spazio nel browser.',
   'This browser does not let OpenBando keep data (a private window, or storage blocked for this site): changes last only until this tab closes. Back up all (Bandos panel) to keep them.': 'Questo browser non lascia a OpenBando conservare dati (finestra privata, o spazio bloccato per questo sito): le modifiche durano finché questa scheda è aperta. Fai Backup di tutto (pannello Bando) per tenerle.',
   'A change could not be saved (the browser interrupted the write). It is still here: save again, or Back up all (Bandos panel) to be safe.': 'Una modifica non è stata salvata (il browser ha interrotto la scrittura). È ancora qui: salva di nuovo, o fai Backup di tutto (pannello Bando) per sicurezza.',

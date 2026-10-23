@@ -1008,6 +1008,7 @@ export class BandoEditor {
     this.scene.pin.set(null);
     this.hover.set(null);
     this.dragPlacement.set(null);
+    this.blocks.armed.set(null); // a block picked in the Library is let go when another tool is chosen
     this.tool.set(t);
     if (t === 'wall' && this.b()) this.enterIndoor();
     if (t !== 'measure') {
