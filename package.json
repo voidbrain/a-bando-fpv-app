@@ -9,7 +9,8 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "examples": "esbuild tools/examples/build-examples.ts --bundle --platform=node --format=esm --outfile=.angular/build-examples.mjs --log-level=warning && node .angular/build-examples.mjs && node tools/build-catalog.mjs",
-    "check:i18n": "esbuild tools/i18n/check-i18n.ts --bundle --platform=node --format=esm --outfile=.angular/check-i18n.mjs --log-level=warning && node .angular/check-i18n.mjs"
+    "check:i18n": "esbuild tools/i18n/check-i18n.ts --bundle --platform=node --format=esm --outfile=.angular/check-i18n.mjs --log-level=warning && node .angular/check-i18n.mjs",
+    "clips": "playwright test --config=playwright.clips.config.ts && node tools/build-guide.mjs"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

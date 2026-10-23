@@ -9,10 +9,9 @@
  * Slow or online steps (generating from map data, the AI model) are stand-ins (`hook`) that show the real result.
  */
 
-export type Section = 'start' | 'bandos' | 'model' | 'ai' | 'flight';
+export type Section = 'bandos' | 'model' | 'ai' | 'flight';
 
 export const SECTIONS: readonly { id: Section; title: string }[] = [
-  { id: 'start', title: 'Getting started' },
   { id: 'bandos', title: 'Bandos and the map' },
   { id: 'model', title: 'Editing the model' },
   { id: 'ai', title: 'The AI assistant' },
@@ -45,10 +44,11 @@ export interface Beat {
 
 /**
  * What a snippet expects to find before it starts, so it plays the same on its own as inside a tour: `zone` = the
- * Bandos map of a new bando, `model` = a generated model open in the 2D editor (the tour's copy of the Villetta
- * example), `log` / `video` = the demo flight and its video loaded.
+ * Bandos map of a new bando, `model` = a generated model open in the 2D editor (the tour's copy of the Chiari e Forti
+ * example), `site` = the bando the demo flight belongs to (a copy of the example without its place), `log` / `video` =
+ * the demo flight and its video loaded (on that bando).
  */
-export type Need = 'zone' | 'model' | 'log' | 'video';
+export type Need = 'zone' | 'model' | 'site' | 'log' | 'video';
 
 export interface Snippet {
   id: string;
@@ -76,41 +76,20 @@ const hook = (h: Hook, arg?: string): TourAction => ({ do: 'hook', hook: h, ...(
 const drag = (at: string, from: At, to: At, ms = 900): TourAction => ({ do: 'drag', at, from, to, ms });
 const type = (at: string, text: string): TourAction => ({ do: 'type', at, text });
 
-/** The building the model snippets work on, in the Villetta example. */
-const SHED = 'Main store';
+/** The building the model snippets work on, in the Chiari e Forti example. */
+const SHED = 'Boat house';
 
 export const SNIPPETS: readonly Snippet[] = [
-  {
-    id: 'welcome',
-    section: 'start',
-    title: 'Welcome',
-    beats: [
-      { say: 'A Bando builds a 3D model of an abandoned place from open map data, then lets you fly it, replay your flights and sync the video.', actions: [p('app-stage', [0.5, 0.45]), wait(3800)] },
-      { say: 'Everything is in floating panels: drag one by its title, resize it by the corner, show or hide it in Views.', actions: [hook('closeBoxes'), p('#views', [0.5, 0.1]), wait(3200)] },
-    ],
-  },
-  {
-    id: 'open-bandos',
-    section: 'bandos',
-    title: 'Open the Bandos panel',
-    hover: ['examples'],
-    beats: [{ say: 'Bandos holds your places, and ready-made examples to open as a copy.', actions: [hook('panel', 'studio'), hook('list'), p('#studio', [0.3, 0.3]), wait(2600), p('examples'), wait(1800)] }],
-  },
-  {
-    id: 'create',
-    section: 'bandos',
-    title: 'Create a bando',
-    hover: ['new-bando'],
-    beats: [{ say: 'New bando opens the map.', actions: [hook('panel', 'studio'), hook('list'), click('new-bando'), wait(1500)] }],
-  },
+
+
+
   {
     id: 'place',
-    needs: ['zone'],
     section: 'bandos',
-    title: 'Place the area on the map',
-    hover: ['search'],
+    title: 'Start a bando: find the place',
+    hover: ['new-bando', 'search'],
     beats: [
-      { say: 'Search a place, or paste its coordinates.', actions: [type('search', '45.52848, 12.13364'), click('search-go'), wait(1800)] },
+      { say: 'New bando opens the map. Search a place, or paste its coordinates.', actions: [hook('panel', 'studio'), hook('list'), click('new-bando'), wait(900), type('search', '45.64690, 12.30022'), click('search-go'), wait(1800)] },
       { say: 'Frame the area: move the map, pull the frame by its edges and corners, turn it with the yellow knob.', actions: [p('map', [0.25, 0.3]), wait(700), p('map', [0.75, 0.7]), wait(1600)] },
     ],
   },
@@ -203,6 +182,7 @@ export const SNIPPETS: readonly Snippet[] = [
   },
   {
     id: 'log',
+    needs: ['site'],
     section: 'flight',
     title: 'Load a flight log',
     hover: ['upload-log'],
@@ -210,6 +190,7 @@ export const SNIPPETS: readonly Snippet[] = [
   },
   {
     id: 'video',
+    needs: ['site'],
     section: 'flight',
     title: 'Load the flight video',
     hover: ['load-video'],
@@ -231,17 +212,12 @@ export const SNIPPETS: readonly Snippet[] = [
     hover: ['play'],
     beats: [{ say: 'Play: the drone flies its real path through the model, with the video in step.', actions: [hook('panel', 'timeline'), click('play'), wait(6000), hook('pause')] }],
   },
-  {
-    id: 'finish',
-    section: 'start',
-    title: 'Where to go next',
-    beats: [{ say: 'That is the tour. Every step is also a short clip in this Guide panel; turn on hover tips to see them over the tools.', actions: [hook('panel', 'guide'), p('#guide', [0.5, 0.2]), wait(3600)] }],
-  },
+
 ];
 
 export const TOURS: readonly Tour[] = [
-  { id: 'full', title: 'Full tour', about: 'From a new bando to a synced replay, in about three minutes.', snippets: ['welcome', 'open-bandos', 'create', 'place', 'generate', 'look-3d', 'select', 'adjust', 'add-building', 'trees', 'library', 'ai', 'log', 'video', 'sync', 'replay', 'finish'] },
-  { id: 'build', title: 'Build a bando', about: 'Find the place, generate the model, edit it.', snippets: ['open-bandos', 'create', 'place', 'generate', 'look-3d', 'select', 'adjust', 'add-building', 'trees', 'library'] },
+  { id: 'full', title: 'Full tour', about: 'From a new bando to a synced replay.', snippets: ['place', 'generate', 'look-3d', 'select', 'adjust', 'add-building', 'trees', 'library', 'ai', 'log', 'video', 'sync', 'replay'] },
+  { id: 'build', title: 'Build a bando', about: 'Find the place, generate the model, edit it.', snippets: ['place', 'generate', 'look-3d', 'select', 'adjust', 'add-building', 'trees', 'library'] },
   { id: 'fly', title: 'Fly and sync', about: 'Load a flight and its video, sync them, replay.', snippets: ['log', 'video', 'sync', 'replay'] },
 ];
 

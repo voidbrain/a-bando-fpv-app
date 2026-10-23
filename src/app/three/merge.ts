@@ -4,7 +4,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 /**
  * Fewer draw calls for the flight view: the plain meshes of one building (or structure, or roof) that share a material
  * and shadow flags become one mesh, in that unit's own frame. Instanced, transparent and multi-material meshes stay as
- * they are. Returns which merged mesh replaced each original one (so the x-ray fades the merged mesh instead).
+ * they are, and so does a mesh with its own `userData.pick` (a column, a partition: the 3D editor clicks them one by one). Returns which merged mesh replaced each original one (so the x-ray fades the merged mesh instead).
  */
 export function mergeUnit(unit: THREE.Object3D): Map<THREE.Mesh, THREE.Mesh> {
   const replaced = new Map<THREE.Mesh, THREE.Mesh>();
@@ -14,6 +14,7 @@ export function mergeUnit(unit: THREE.Object3D): Map<THREE.Mesh, THREE.Mesh> {
   unit.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!m.isMesh || (m as unknown as THREE.InstancedMesh).isInstancedMesh || Array.isArray(m.material) || m.material.transparent || !m.visible) return;
+    if (m !== unit && m.userData['pick']) return;
     if (!m.geometry.getAttribute('position')) return;
     const key = `${m.material.uuid}|${m.castShadow ? 1 : 0}${m.receiveShadow ? 1 : 0}`;
     const b = buckets.get(key) ?? { mat: m.material, cast: m.castShadow, receive: m.receiveShadow, meshes: [] };

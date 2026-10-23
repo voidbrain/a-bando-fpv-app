@@ -223,6 +223,29 @@ input.mini {
 .lay input[type='range'] {
   width: 56px;
 }
+/* what is drawn under the model: map, its opacity, the ground style; one unit, so it wraps as a whole */
+.vgrp {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 11px;
+  white-space: nowrap;
+  label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  input[type='range'] {
+    width: 56px;
+  }
+  .mono {
+    min-width: 3.2em;
+    text-align: right;
+  }
+}
 .wrap {
   position: relative;
   /* dragging on the plan must never select the labels under the pointer */

@@ -15,8 +15,8 @@ test('first visit: panels, Views, Guide me', async ({ page }) => {
 
 test('the editor with a model, the inspector and the library', async ({ page }) => {
   await page.goto('/');
-  await page.locator('app-studio-panel .card.ex').filter({ hasText: /^Bando Villetta/ }).getByRole('button', { name: 'Open a copy' }).click();
-  await page.locator('app-studio-panel .card:not(.ex)').filter({ hasText: 'Bando Villetta' }).getByRole('button', { name: 'Edit area' }).click();
+  await page.locator('app-studio-panel .card.ex').filter({ hasText: /^Chiari e Forti/ }).getByRole('button', { name: 'Open a copy' }).click();
+  await page.locator('app-studio-panel .card:not(.ex)').filter({ hasText: 'Chiari e Forti' }).getByRole('button', { name: 'Edit area' }).click();
   await page.getByRole('button', { name: '2 · Model' }).click();
   await page.locator('app-bando-editor button').filter({ hasText: /^\W*Library$/ }).first().click();
   await expect(page.getByPlaceholder('Search blocks…')).toBeVisible();
@@ -25,7 +25,7 @@ test('the editor with a model, the inspector and the library', async ({ page }) 
 
 test('a guide step running (caption bar)', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Play: Open the Bandos panel', exact: true }).click();
+  await page.getByRole('button', { name: 'Play: Start a bando: find the place', exact: true }).click();
   await expect(page.locator('app-tour-overlay .bar')).toBeVisible();
   expect(await axe(page)).toEqual([]);
 });

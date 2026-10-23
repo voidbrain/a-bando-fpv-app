@@ -124,8 +124,8 @@ def serial_source(dev, baud, parser, dump):
             if dump: print('%3d bytes  %d CRSF frame(s)  %s' % (len(data), n, data[:32].hex(' ')))
 
 def simulate(parser):
-    """A fake flight: loops around the greenhouse/annex at the site, fed through real CRSF frames so the whole decode path is exercised."""
-    lat0, lon0, t0, k = 45.52870, 12.13335, time.time(), 0
+    """A fake flight: loops around a point of the Chiari e Forti example, fed through real CRSF frames so the whole decode path is exercised."""
+    lat0, lon0, t0, k = 45.64690, 12.30022, time.time(), 0
     print('simulating a flight around the site (fake data)')
     while True:
         t = time.time() - t0; ang = t * 0.18

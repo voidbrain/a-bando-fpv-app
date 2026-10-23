@@ -12,15 +12,6 @@
     @if (view3d()) {
       <label class="lay" title="Show the roofs in the 3D view"><input type="checkbox" [checked]="roofs3d()" (change)="roofs3d.set(checked($event))" /> roofs</label>
     }
-    @if (ed.draft().terrain) {
-      <label class="lay" title="How the ground is drawn: its own colours, coloured by height (also under the 2D plan), or as a wireframe (3D)">ground
-        <select [value]="terrain.groundStyle()" (change)="terrain.groundStyle.set(terrain.asGroundStyle($event))">
-          <option value="natural" [selected]="terrain.groundStyle() === 'natural'">natural</option>
-          <option value="height" [selected]="terrain.groundStyle() === 'height'">height map</option>
-          <option value="wire" [selected]="terrain.groundStyle() === 'wire'">wireframe</option>
-        </select>
-      </label>
-    }
     @if (!view3d()) {
       <button class="btn" [class.on]="indoor()" [disabled]="!b() || !!b()!.frame" (click)="toggleIndoor()" title="Take the roof off and edit one floor of the selected building: walls, doors, windows, voids, columns, stairs">{{ indoor() ? '✓ Indoors' : 'Indoors' }}</button>
       @if (indoor() && b(); as ib) {
@@ -43,18 +34,32 @@
     <button class="btn" [class.on]="ai.open()" (click)="ai.open.set(!ai.open())" data-tour="ai" title="Chat with the AI assistant to edit buildings and interiors">💬 AI @if (ai.busy()) { <i class="spin"></i> }</button>
     <button class="btn primary" (click)="save()">Save</button>
   }
-  @if (placeHidden()) {
-    <span class="dim small" title="This bando was shared without its place: no map, no map data, no Area step. Flights start on its take-off pad; pin start / end and the compass fine-tune them.">no map · place hidden</span>
-  } @else {
-    <label class="lay" title="Map under the model">🗺
-      <select aria-label="Map under the model" [value]="studio.basemap()" (change)="setBase($event)">
-        <option value="street">Street</option>
-        <option value="sat">Satellite</option>
-        <option value="off">Hidden</option>
-      </select>
-    </label>
-    <label class="lay" title="Map opacity"><input type="range" min="0.2" max="1" step="0.05" [value]="studio.mapOpacity()" (input)="setOpacity($event)" /></label>
-  }
+  <span class="vgrp" role="group" aria-label="What is drawn under the model">
+    @if (placeHidden()) {
+      <span class="dim" title="This bando was shared without its place: no map, no map data, no Area step. Flights start on its take-off pad; pin start / end and the compass fine-tune them.">no map · place hidden</span>
+    } @else {
+      <label title="The map drawn under the model">map
+        <select [value]="studio.basemap()" (change)="setBase($event)">
+          <option value="street">street</option>
+          <option value="sat">satellite</option>
+          <option value="off">none</option>
+        </select>
+      </label>
+      <label title="How strongly the map shows through">
+        <input type="range" min="0.2" max="1" step="0.05" aria-label="Map opacity" [value]="studio.mapOpacity()" (input)="setOpacity($event)" />
+        <span class="mono">{{ round(studio.mapOpacity() * 100) }}%</span>
+      </label>
+    }
+    @if (mode() === 'model' && ed.draft().terrain) {
+      <label title="How the ground is drawn: its own colours, coloured by height (also under the 2D plan), or as a wireframe (3D)">ground
+        <select [value]="terrain.groundStyle()" (change)="terrain.groundStyle.set(terrain.asGroundStyle($event))">
+          <option value="natural" [selected]="terrain.groundStyle() === 'natural'">natural</option>
+          <option value="height" [selected]="terrain.groundStyle() === 'height'">height map</option>
+          <option value="wire" [selected]="terrain.groundStyle() === 'wire'">wireframe</option>
+        </select>
+      </label>
+    }
+  </span>
 </div>
 <div class="wrap" #wrap tabindex="0" data-tour="map" [class.v3]="view3d() && overlayOn()" (keydown)="key($event)" (pointerdown)="closeMenus()" (contextmenu)="onContext($event)">
   <div class="map" #el></div>

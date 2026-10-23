@@ -2,11 +2,11 @@ import { DEFAULT_CALIBRATION, setSiteOrigin } from './constants';
 import { courseDegrees, rotateCalibrationAbout, solveCalibration, toGeo, toLocal, toLocalAt, turnTowards } from './geo';
 
 describe('geo', () => {
-  beforeAll(() => setSiteOrigin({ lat: 45.528698, lon: 12.133305 })); // these cases are written against this site
+  beforeAll(() => setSiteOrigin({ lat: 45.648698, lon: 12.303305 })); // these cases are written against this site (Chiari e Forti)
   afterAll(() => setSiteOrigin({ lat: 0, lon: 0 }));
 
   it('maps the site origin through the default calibration to (dx, dz)', () => {
-    const [x, z] = toLocal(45.528698, 12.133305, DEFAULT_CALIBRATION);
+    const [x, z] = toLocal(45.648698, 12.303305, DEFAULT_CALIBRATION);
     expect(x).toBeCloseTo(DEFAULT_CALIBRATION.dx, 6);
     expect(z).toBeCloseTo(DEFAULT_CALIBRATION.dz, 6);
   });
@@ -22,15 +22,15 @@ describe('geo', () => {
 
   it('north is -Z when the model is not rotated', () => {
     const cal = { rot: 0, dx: 0, dz: 0 };
-    const [x, z] = toLocal(45.528698 + 0.0001, 12.133305, cal);
+    const [x, z] = toLocal(45.648698 + 0.0001, 12.303305, cal);
     expect(Math.abs(x)).toBeLessThan(1e-6);
     expect(z).toBeLessThan(-10);
   });
 
   it('solves a calibration from two corner pairs that match in size', () => {
     // Model corners 40 m apart along +X; real corners due east and ~40 m apart -> rot 0, ratio ~1, tiny corner error.
-    const p1 = { lat: 45.5287, lon: 12.1333 };
-    const p2 = { lat: 45.5287, lon: 12.1333 + 40 / (111320 * Math.cos((45.5287 * Math.PI) / 180)) };
+    const p1 = { lat: 45.6487, lon: 12.3033 };
+    const p2 = { lat: 45.6487, lon: 12.3033 + 40 / (111320 * Math.cos((45.6487 * Math.PI) / 180)) };
     const r = solveCalibration(p1, p2, { x: -20, z: 0 }, { x: 20, z: 0 });
     expect(r).toBeTruthy();
     if (!r) return;
@@ -40,8 +40,8 @@ describe('geo', () => {
   });
 
   it('reports a size mismatch through the ratio (model / real) and splits the error between the corners', () => {
-    const p1 = { lat: 45.5287, lon: 12.1333 };
-    const p2 = { lat: 45.5287, lon: 12.134364 }; // ~83 m east of p1: twice the model's 40 m
+    const p1 = { lat: 45.6487, lon: 12.3033 };
+    const p2 = { lat: 45.6487, lon: 12.304364 }; // ~83 m east of p1: twice the model's 40 m
     const r = solveCalibration(p1, p2, { x: -20, z: 0 }, { x: 20, z: 0 });
     expect(r!.distanceRatio).toBeCloseTo(40 / 82.9, 2);
     expect(r!.cornerError).toBeCloseTo((82.9 - 40) / 2, 0);
@@ -49,7 +49,7 @@ describe('geo', () => {
 
 
   it('refuses corners that are too close to give a rotation', () => {
-    const p = { lat: 45.5287, lon: 12.1333 };
+    const p = { lat: 45.6487, lon: 12.3033 };
     expect(solveCalibration(p, { lat: p.lat + 1e-5, lon: p.lon }, { x: 0, z: 0 }, { x: 1, z: 1 })).toBeNull();
   });
 
