@@ -229,3 +229,12 @@ export function detectVideoOnset(samples: readonly VideoSample[]): { t: number; 
   }
   return null;
 }
+
+/**
+ * How fast to play a video while scanning it for auto-sync: 3× up to 1080p, 2× up to 1440p, 1× above (a 4K stream
+ * decoded at 3× drops most frames, and a scan with too few frames finds no match).
+ */
+export function scanRate(width: number, height: number): number {
+  const px = Math.max(width, height);
+  return px > 2600 ? 1 : px > 1920 ? 2 : 3;
+}

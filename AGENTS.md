@@ -211,6 +211,10 @@ npx tsc -p tools/examples/tsconfig.json   # the example-bando script
 - Every panel's title bar has `?` (hover tips on / off, the same setting as Guide me) and `×` (close; not on Views). The caption bar sits next to the target (`captionPlace`, tested) and stays near the last one between pointings. `TourService.open` shows a panel a step needs in the middle of the window, and `run` restores the whole layout (`LayoutStore.restore`) when the guide ends. Wait with `sleep`, never `requestAnimationFrame`: frames stop in a background tab and the guide would hang.
 - "Guide me" (`ui/panels/guide-panel.ts`, visible on the first visit) plays tours and single snippets, records a snippet as a WebM clip (tab capture), and turns on hover tips (a marked control shows its snippet after 0.7 s). `node tools/build-guide.mjs` writes `docs/guide/` from the tour; recorded clips go in `docs/guide/clips/<snippet>.webm|gif`.
 
+## Flight logs and video sync
+- Logs are parsed in a Web Worker (`services/log-parse.worker.ts` via `parseLogFile`; the parser itself is the pure `parseLog`); without `Worker` (tests) it parses in place.
+- Auto-sync plays the video fast to measure its motion (`scanVideo`): `scanRate` (core/sync) picks 3× up to 1080p, 2× up to 1440p, 1× for 4K so frames are not dropped. A watchdog ends the scan when no frame arrives for 8 s (a background tab stops decoding) instead of hanging.
+
 ## Water and ground layers
 - The Water tool draws an outline by hand or, in "Line" mode, a canal along a centre line (`stripOutline`, `waterWidth`). "Merge overlapping" in the inspector joins the selected water with every water it overlaps or touches (`mergeWaters` → `unionOutline`, a grid trace, in `core/layers.ts`).
 - Water, roads and surfaces are listed in ☰ Elements ("Water, roads, ground"); a row selects the element (`goTo`, kinds `water` / `road` / `surface`). On the plan they are still picked by their edge, so a click inside them pans the map.

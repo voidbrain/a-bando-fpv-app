@@ -1,5 +1,5 @@
 import { makeFlight, makeTelemetry, seeded } from '../testing/fixtures';
-import { GRID_DT, confidenceOf, crossCorrelate, detectVideoOnset, gridFromSamples, logGrid, upGrid, type VideoSample } from './features';
+import { GRID_DT, confidenceOf, crossCorrelate, detectVideoOnset, gridFromSamples, logGrid, upGrid, type VideoSample, scanRate } from './features';
 import { matchVideoToLog } from './matcher';
 
 const FLICKS = [5, 8, 9.5, 14, 17, 22, 26, 31, 38, 44];
@@ -109,5 +109,15 @@ describe('video <-> log matcher', () => {
     for (let t = 0; t < 60; t += 0.04) noise.push({ t, pan: rnd(), diff: rnd() * 0.01, mag: 0.001, tb: rnd() * 0.01 });
     const r = matchVideoToLog(noise, flight);
     expect(r.offset === null || r.confidence === 'low').toBeTruthy();
+  });
+});
+
+describe('scan speed', () => {
+  it('slows down for big videos so frames are not dropped', () => {
+    expect(scanRate(1280, 720)).toBe(3);
+    expect(scanRate(1920, 1080)).toBe(3);
+    expect(scanRate(2560, 1440)).toBe(2);
+    expect(scanRate(3840, 2160)).toBe(1);
+    expect(scanRate(2160, 3840)).toBe(1); // portrait
   });
 });
