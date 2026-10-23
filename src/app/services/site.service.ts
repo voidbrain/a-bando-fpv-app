@@ -1,4 +1,5 @@
 import { Injectable, computed, effect, inject, signal, untracked, type WritableSignal } from '@angular/core';
+import { ELEVATION_ATTRIBUTION } from '../core/elevation';
 import type { Calibration, GeoPoint } from '../core/models';
 import { setSiteOrigin } from '../core/constants';
 import { solveCalibration, toGeo } from '../core/geo';
@@ -398,6 +399,7 @@ export class SiteService {
         buildings.push({
           id: uid('b'),
           name: f.name || 'Greenhouse',
+          ...(f.name ? { nameFromMap: true as const } : {}),
           pos,
           rotDeg: rot,
           length: Math.max(6, L),
@@ -421,6 +423,7 @@ export class SiteService {
       buildings.push({
         id: uid('b'),
         name: f.name || `Building ${buildings.length + 1}`,
+        ...(f.name ? { nameFromMap: true as const } : {}),
         pos,
         rotDeg: rot,
         length: L,
@@ -471,6 +474,7 @@ export class SiteService {
     const ground = siteGround(spec);
     setTakeoff({ ...spec.droneStart, y: ground.start });
     setAutoAlign(!!spec.privacy && !spec.calibration);
+    this.scene.startFixed.set(!!spec.privacy); // no real place: flights start on the take-off pad, which stays put
     if (ground.grid !== this.groundGrid) {
       this.groundGrid = ground.grid;
       setActiveGround(ground.grid ? ground.at : null);
@@ -499,7 +503,7 @@ export class SiteService {
         s.terrain = { cell: r.dims.cell, half: r.dims.half, base: r.base, strokes: s.terrain?.strokes ?? [] };
       });
       this.applyDraft();
-      this.toast.show(`Real ground loaded (${r.base.datum} m above sea level at the centre).`);
+      this.toast.show(`Real ground loaded (${r.base.datum} m above sea level at the centre). ${ELEVATION_ATTRIBUTION}.`);
       return true;
     } catch (e) {
       this.toast.show(`Could not load the real ground: ${e instanceof Error ? e.message : 'network error'}.`);

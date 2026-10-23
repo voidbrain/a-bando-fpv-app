@@ -91,6 +91,8 @@ export interface StructureSpec {
   shapes?: ShapeSpec[];
   /** Placed from a library block. */
   block?: BlockRef;
+  /** Its name came from the map data (a road, a business): a copy shared without its place drops it. */
+  nameFromMap?: true;
 }
 
 /** A free-standing wall or fence on the site (not part of a building). */
@@ -177,6 +179,8 @@ export interface BuildingSpec {
   basement?: { height: number };
   /** Placed from a library block. */
   block?: BlockRef;
+  /** Its name came from the map data (a shop, a hospital): a copy shared without its place drops it. */
+  nameFromMap?: true;
 }
 
 export interface TreeSpec {
@@ -342,15 +346,6 @@ export function roomsAt(b: BuildingSpec, level: number, v: number): RoomRect[] {
     }
   }
   return out;
-}
-
-/** Is the site point (x, z) inside the footprint of `b`? Returns the building-local coordinates too. */
-export function pointInBuilding(b: BuildingSpec, x: number, z: number): { lx: number; lz: number } | null {
-  const dx = x - b.pos.x, dz = z - b.pos.z;
-  const a = (-b.rotDeg * Math.PI) / 180;
-  const lx = dx * Math.cos(a) - dz * Math.sin(a) + b.length / 2;
-  const lz = dx * Math.sin(a) + dz * Math.cos(a) + b.width / 2;
-  return lx >= -0.5 && lx <= b.length + 0.5 && lz >= -0.5 && lz <= b.width + 0.5 ? { lx, lz } : null;
 }
 
 // ---- generation from a location (Google Maps click / geocoded address) -------------------------------

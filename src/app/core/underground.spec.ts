@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { sanitizeLayers } from './layers';
 import type { UndergroundSpec } from './site-spec';
 import { buildHeights, heightAt } from './terrain';
-import { basementVolume, cutMask, floorUnder, isCut, newTunnel, sectionProfile, tunnelAxis, tunnelOutline, volumeSolids } from './underground';
+import { basementVolume, cutMask, floorUnder, newTunnel, sectionProfile, tunnelAxis, tunnelOutline, volumeSolids } from './underground';
 
 const hill = () => buildHeights({ cell: 1, half: { e: 80, n: 80 }, strokes: [{ op: 'hill', pts: [{ x: 0, z: 0 }], radius: 35, strength: 10 }] }).grid;
 const tunnel = (): UndergroundSpec => ({ id: 't', name: 'T', outline: tunnelOutline({ x: -45, z: 0 }, { x: 45, z: 0 }, 4), floor: -0.5, ceiling: 3, shape: 'box', wall: 0.4 });
@@ -16,8 +16,6 @@ describe('underground volumes', () => {
     expect(at(44, 0)).toBe(1);
     expect(at(0, 0)).toBe(0); // under the top of the hill: covered
     expect(at(0, 10)).toBe(0); // beside the tunnel: never cut
-    expect(isCut([v], 0, 0, 10)).toBe(false);
-    expect(isCut([v], -44, 0, 0)).toBe(true);
   });
 
   it('a point inside the tunnel stands on its floor, above the ceiling it does not', () => {

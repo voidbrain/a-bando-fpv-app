@@ -20,11 +20,6 @@ export function tunnelOutline(a: Vec2, b: Vec2, width: number): Vec2[] {
   ];
 }
 
-/** Is the ground at (x, z), height `h`, inside a volume (so it must be cut away)? */
-export function isCut(vols: readonly UndergroundSpec[], x: number, z: number, h: number): boolean {
-  return vols.some((v) => h > v.floor && h < v.ceiling + v.wall && insidePolygon(v.outline, x, z));
-}
-
 /** One flag per grid vertex: 1 = the ground there is cut (a portal or an open trench). */
 export function cutMask(g: HeightGrid, vols: readonly UndergroundSpec[]): Uint8Array {
   const m = new Uint8Array(g.nx * g.nz);

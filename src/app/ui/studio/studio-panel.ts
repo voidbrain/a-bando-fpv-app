@@ -66,7 +66,7 @@ import { BandoEditor } from './bando-editor';
             <div class="card ex">
               <div class="title static">
                 <b>{{ e.name }}</b>
-                <span class="dim small mono">{{ e.buildings }} buildings · {{ e.origin.lat.toFixed(4) }}, {{ e.origin.lon.toFixed(4) }}</span>
+                <span class="dim small mono">{{ e.buildings }} buildings · {{ e.privacy === 'hidden' ? 'place hidden' : (e.privacy === 'rounded' ? '~' : '') + e.origin.lat.toFixed(e.privacy === 'rounded' ? 2 : 4) + ', ' + e.origin.lon.toFixed(e.privacy === 'rounded' ? 2 : 4) }}</span>
               </div>
               @if (e.about) { <div class="dim small about">{{ e.about }}</div> }
               <div class="acts">

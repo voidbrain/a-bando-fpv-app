@@ -18,16 +18,10 @@ export const DEFAULT_FOV = 60;
 export const FPV_FOV = 100;
 export const RAD_MIN = 8;
 export const RAD_MAX = 520;
-/** FPV cameras are tilted up, as on a real racing quad. */
-export const DEFAULT_FPV_TILT_DEG = 25;
-
 export const createOrbitState = (view: CameraView | 'default' = 'default'): OrbitState =>
   view === 'top' ? { tg: new THREE.Vector3(0, 0, 0), th: -1.1, ph: 1, rad: 260 } : { tg: new THREE.Vector3(-10, 2, 0), th: -1.1, ph: 1, rad: 330 };
 
 export const fovFor = (view: CameraView): number => (view === 'fpv' ? FPV_FOV : DEFAULT_FOV);
-
-/** Near clipping distance, as in the original app. (FPV sits inside the drone, so it must stay tiny.) */
-export const nearFor = (_view: CameraView): number => 0.05;
 
 export interface FollowSubject {
   p: Vec3;
