@@ -4,5 +4,5 @@ dist/
 flight_data/
 flight-data/*
 
-# demo media for the guided tour (local only, never pushed)
+# full-size originals of the guide's demo flight (local only, never pushed; public/guide-demo/ is the published cut)
 public/demo/

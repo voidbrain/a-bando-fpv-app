@@ -33,7 +33,7 @@ for (const t of TOURS) {
 }
 index += `\n## Sections\n\n`;
 for (const s of SECTIONS) index += `- [${s.title}](${page(s)})\n`;
-index += `\n## Recording clips\n\n1. Run the app (\`npm start\`); for the flight steps put a log and its video in \`public/demo/\` as \`flight.csv\` and \`flight.mp4\` (that folder is never committed).\n2. Guide me → ⏺ next to a step: the browser asks to share the tab, the step plays, \`<step>.webm\` is downloaded.\n3. Save it as \`docs/guide/clips/<step>.webm\` (or convert: \`ffmpeg -i step.webm -vf "fps=12,scale=720:-1" step.gif\`) and run \`node tools/build-guide.mjs\`: the pages embed it.\n`;
+index += `\n## Recording clips\n\n1. Run the app (\`npm start\`); the flight steps use the demo flight in \`public/guide-demo/\`.\n2. Guide me → ⏺ next to a step: the browser asks to share the tab, the step plays, \`<step>.webm\` is downloaded.\n3. Save it as \`docs/guide/clips/<step>.webm\` (or convert: \`ffmpeg -i step.webm -vf "fps=12,scale=720:-1" step.gif\`) and run \`node tools/build-guide.mjs\`: the pages embed it.\n`;
 writeFileSync(join(dir, 'README.md'), index);
 
 for (const s of SECTIONS) {

@@ -818,7 +818,7 @@ export const IT: Readonly<Record<string, string>> = {
   'Guided tour: the answers are scripted, the changes are real.': 'Tour guidato: le risposte sono preparate, le modifiche sono vere.',
   'Recording needs permission to capture this tab.': 'La registrazione richiede il permesso di catturare questa scheda.',
   'The example could not be downloaded; the tour goes on without it.': 'Non è stato possibile scaricare l’esempio; il tour continua senza.',
-  'No demo file at public/{0}: load your own here.': 'Nessun file demo in public/{0}: carica il tuo qui.',
+  'The demo flight could not be loaded: load your own here.': 'Il volo demo non si è potuto caricare: carica il tuo qui.',
   'A Bando builds a 3D model of an abandoned place from open map data, then lets you fly it, replay your flights and sync the video.': 'A Bando costruisce un modello 3D di un luogo abbandonato dai dati aperti delle mappe, poi ti fa volarci dentro, rivedere i tuoi voli e sincronizzare il video.',
   'Everything is in floating panels: drag one by its title, resize it by the corner, show or hide it in Views.': 'Tutto sta in pannelli mobili: trascinali dal titolo, ridimensionali dall’angolo, mostrali o nascondili in Viste.',
   'Bandos holds your places, and ready-made examples to open as a copy.': 'Bandos contiene i tuoi luoghi, ed esempi pronti da aprire come copia.',

@@ -39,7 +39,8 @@ export interface TourState {
 
 /** The copy of the Villetta example the tour edits (replaced on every run, so the pilot's own copies stay untouched). */
 const TOUR_BANDO = { id: 'tour-villetta', name: 'Bando Villetta (tour)', file: 'library/bandos/villetta.json' };
-const DEMO = { log: 'demo/flight.csv', video: 'demo/flight.mp4' };
+/** A short cut of a real flight at Villetta (log thinned to ~100 Hz, video 480p): published with the app for the guide. */
+const DEMO = { log: 'guide-demo/flight.csv', video: 'guide-demo/flight.mp4' };
 const SETTINGS = 'abando-guide';
 
 class Stopped extends Error {}
@@ -463,7 +464,7 @@ export class TourService {
       if (!res.ok || (res.headers.get('content-type') ?? '').includes('text/html')) throw new Error();
       return new File([await res.blob()], name, { type });
     } catch {
-      this.toast.show(`No demo file at public/${path}: load your own here.`);
+      this.toast.show('The demo flight could not be loaded: load your own here.');
       return null;
     }
   }
