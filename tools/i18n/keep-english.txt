@@ -1,0 +1,8 @@
+# UI text that stays in English on purpose: names, units, product and format names. One per line, exactly as shown.
+tools/elrs_bridge.py
+--simulate
+CSV
+JSON
+https://my-pc.tailnet.ts.net or https://site.it/ai-proxy.php
+qwen2.5:7b
+Acro

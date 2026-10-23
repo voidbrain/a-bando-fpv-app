@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "types": [], "noUnusedLocals": true, "noUnusedParameters": true, "noEmit": true },
+  "files": ["../examples/node.d.ts", "check-i18n.ts"]
+}
