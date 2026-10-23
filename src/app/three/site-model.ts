@@ -5,7 +5,7 @@ import { WATER_COLOR, insidePolygon, roadDef, surfaceDef } from '../core/layers'
 import { BASEMENT_WALL, tunnelAxis, volumeSolids } from '../core/underground';
 import { NO_SLABS, ROOFLESS, roofCells, roofRuns, ruinRandom, wallPieces, wallTop } from '../core/ruin';
 import * as THREE from 'three';
-import { type BuildingSpec, type LevelSpec, type RoadSpec, type SiteSpec, type SurfaceSpec, type TreeSpec, type UndergroundSpec, createRandom } from '../core/site-spec';
+import { type BuildingSpec, type LevelSpec, type RoadSpec, type SiteSpec, type SurfaceSpec, type TreeSpec, type UndergroundSpec, createRandom, fixturesInSite } from '../core/site-spec';
 import { SiteCollider, type SolidBox, type TreeCylinder } from '../core/sim/collider';
 import { siteGround, type SiteGround } from '../core/site-ground';
 import { heightColor, heightRange, type HeightGrid } from '../core/terrain';
@@ -420,7 +420,8 @@ function buildGreenhouse(ctx: Ctx, b: BuildingSpec, target: THREE.Object3D, roof
   const GS = l.baseY, GW = b.width / 2, GK = l.vaultK ?? 0.7, GHT = GS + GW * GK;
   const glassMat = material('#9ec1b6', { transparent: true, opacity: 0.3, side: THREE.DoubleSide, roughness: 0.3, depthWrite: false });
   const TZ0 = -b.length / 2 + 0.66 * b.length, TZ1 = -b.length / 2 + 0.92 * b.length;
-  for (const [f0, f1] of [[0, 0.37], [0.37, 0.66], [0.92, 1]] as const) {
+  const glazed = b.glass !== false; // false: only the steel skeleton is left
+  for (const [f0, f1] of glazed ? ([[0, 0.37], [0.37, 0.66], [0.92, 1]] as const) : []) {
     const x0 = -b.length / 2 + f0 * b.length, x1 = -b.length / 2 + f1 * b.length;
     const v = vault(x1 - x0, GW, GK, glassMat, 14);
     v.castShadow = false;
@@ -447,6 +448,7 @@ function buildGreenhouse(ctx: Ctx, b: BuildingSpec, target: THREE.Object3D, roof
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
   target.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x56655f })));
+  if (!glazed) return; // a bare skeleton can be flown through
   ctx.solids.push(rotBoxLocal((-b.length / 2 + TZ0) / 2 + ctx.at[0], ctx.at[1], TZ0 + b.length / 2, 8, ctx.rot, GHT - 1.5, GHT, false));
   ctx.solids.push(rotBoxLocal((TZ1 + b.length / 2) / 2 + ctx.at[0], ctx.at[1], b.length / 2 - TZ1, 8, ctx.rot, GHT - 1.5, GHT, false));
 }
@@ -955,11 +957,12 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     }
   }
 
-  // ---- towers and bridges
-  for (const st of spec.structures ?? []) {
+  // ---- towers and bridges, and the fixtures of buildings (a click on one selects its building)
+  const fixtures = spec.buildings.flatMap((b) => fixturesInSite(b).map((st) => ({ st, pick: { kind: 'building', id: b.id } })));
+  for (const { st, pick } of [...(spec.structures ?? []).map((st) => ({ st, pick: { kind: 'structure', id: st.id } })), ...fixtures]) {
     const built = buildStructure(st);
     const sy = ground.at(st.x, st.z);
-    built.object.userData['pick'] = { kind: 'structure', id: st.id };
+    built.object.userData['pick'] = pick;
     built.object.position.y += sy;
     group.add(built.object);
     const firstSolid = solids.length;

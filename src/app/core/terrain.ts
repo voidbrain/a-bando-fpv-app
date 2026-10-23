@@ -257,8 +257,16 @@ export function applyStroke(g: HeightGrid, s: TerrainStroke): void {
 
 /** Level the ground under a pad (with a 2 m blend around it); returns the height it was levelled to. */
 export function flattenPad(g: HeightGrid, pad: FlatPad): number {
-  const y = pad.height ?? rangeUnder(g, pad.poly).min;
-  const blend = 2;
+  // the typical height under the footprint (not the lowest: a long building on a gentle slope would be buried at its
+  // high end), and a blend to the real ground that widens with the slope it absorbs
+  const under: number[] = [];
+  forCells(g, bbox(pad.poly, 0), (k, x, z) => {
+    if (insidePoly(pad.poly, x, z)) under.push(g.h[k]!);
+  });
+  if (!under.length) under.push(...pad.poly.map((p) => heightAt(g, p.x, p.z)));
+  under.sort((a, b) => a - b);
+  const y = pad.height ?? under[Math.floor(under.length / 2)]!;
+  const blend = Math.min(15, Math.max(2, 3 * (under[under.length - 1]! - under[0]!)));
   forCells(g, bbox(pad.poly, blend), (k, x, z) => {
     if (insidePoly(pad.poly, x, z)) {
       g.h[k] = y;

@@ -826,6 +826,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                   <label class="fld">rotation° <input type="number" step="5" [value]="bd.rotDeg.toFixed(0)" (change)="mutate(setRot, num($event))" /></label>
                   @if (bd.frame) {
                     <label class="fld">arch height <input type="number" min="0.3" max="1.3" step="0.05" [value]="bd.levels[0]?.vaultK ?? 0.7" (change)="editLevel(setArch, num($event))" /></label>
+                    <label class="fld" title="Off: only the steel skeleton is left (and it can be flown through)">glass <input type="checkbox" [checked]="bd.glass !== false" (change)="mutate(setGlass, checked($event))" /></label>
                   } @else if (lvl(); as l) {
                     <label class="fld">wall height m <input type="number" min="1" step="0.5" [value]="l.height" (change)="editLevel(setHeight, num($event))" data-tour="wall-height" /></label>
                   }
@@ -4204,7 +4205,12 @@ export class BandoEditor {
       if (Object.keys(walls).length) b.ruinWalls = walls;
       else delete b.ruinWalls;
     };
-  /** A yes / no property of a building: set, or removed when off (old bandos stay as they were). */
+  /** A greenhouse keeps its glass unless told otherwise (the field only exists when it is off). */
+  protected readonly setGlass = (b: BuildingSpec, on: boolean): void => {
+    if (on) delete b.glass;
+    else b.glass = false;
+  };
+    /** A yes / no property of a building: set, or removed when off (old bandos stay as they were). */
   protected readonly setFlag =
     (key: 'roofless' | 'crenels') =>
     (b: BuildingSpec, on: boolean): void => {

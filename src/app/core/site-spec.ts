@@ -158,6 +158,8 @@ export interface BuildingSpec {
   floorColor?: string;
   /** Greenhouse-style thin steel frame instead of masonry walls (walls ignored). */
   frame?: 'greenhouse';
+  /** A greenhouse without its glass: only the steel skeleton is left (default: glazed, with a torn stretch). */
+  glass?: boolean;
   /** How ruined it is, 0 (intact, the default) to 1 (a shell): broken walls, no roof from 0.35 (see core/ruin.ts). */
   ruin?: number;
   /** A different ruin level for some walls (building-local sides, as in `LevelSpec.sides`), 0..1: one fallen facade. */
@@ -166,6 +168,11 @@ export interface BuildingSpec {
   roofless?: boolean;
   /** Battlements (merlons) along the top of the walls. */
   crenels?: boolean;
+  /**
+   * Structures that belong to the building (a roof ladder, a chimney on it): in its own frame (x, z from its centre,
+   * `rotDeg` added to the building's), so they move, turn and go with it and show in its inspector preview.
+   */
+  fixtures?: StructureSpec[];
   /** A basement under the ground floor, `height` metres deep inside (see core/underground.ts basementVolume). */
   basement?: { height: number };
   /** Placed from a library block. */
@@ -397,6 +404,14 @@ export function emptySpec(origin: { lat: number; lon: number } = { lat: 0, lon: 
 
 
 /** Keep only the fields we understand (localStorage content may be old or corrupt). */
+const cleanStructures = (list: readonly StructureSpec[]): StructureSpec[] => list.filter((x) => x && typeof x.kind === 'string').map((x) => (x.kind === 'shapes' ? { ...x, shapes: sanitizeShapes(x.shapes) } : x));
+
+/** A building's fixtures in site coordinates (their frame turned and moved with the building). */
+export function fixturesInSite(b: BuildingSpec): StructureSpec[] {
+  const a = (b.rotDeg * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+  return (b.fixtures ?? []).map((f) => ({ ...f, x: b.pos.x + f.x * c - f.z * s, z: b.pos.z + f.x * s + f.z * c, rotDeg: (((f.rotDeg + b.rotDeg) % 360) + 360) % 360 }));
+}
+
 export function sanitizeSpec(raw: unknown): SiteSpec | null {
   if (!raw || typeof raw !== 'object') return null;
   const s = raw as Partial<SiteSpec>;
@@ -426,11 +441,11 @@ export function sanitizeSpec(raw: unknown): SiteSpec | null {
     bearingDeg: typeof s.bearingDeg === 'number' ? s.bearingDeg : 0,
     genScale: typeof s.genScale === 'number' ? s.genScale : 1,
     groundColor: typeof s.groundColor === 'string' ? s.groundColor : '#789b52',
-    buildings: s.buildings.filter((b) => b && typeof b.length === 'number') as BuildingSpec[],
+    buildings: (s.buildings.filter((b) => b && typeof b.length === 'number') as BuildingSpec[]).map((b) => (Array.isArray(b.fixtures) ? { ...b, fixtures: cleanStructures(b.fixtures) } : b)),
     pads: Array.isArray(s.pads) ? (s.pads as PadSpec[]) : [],
     walls: Array.isArray(s.walls) ? (s.walls as WallSpec[]) : [],
     // a 'shapes' structure carries primitives from files or AI output: they are checked and capped like the rest
-    structures: Array.isArray(s.structures) ? (s.structures as StructureSpec[]).filter((x) => x && typeof x.kind === 'string').map((x) => (x.kind === 'shapes' ? { ...x, shapes: sanitizeShapes(x.shapes) } : x)) : [],
+    structures: Array.isArray(s.structures) ? cleanStructures(s.structures as StructureSpec[]) : [],
     trees: Array.isArray(s.trees) ? (s.trees as TreeSpec[]) : [],
     seed: typeof s.seed === 'number' ? s.seed : 7,
     extent: typeof s.extent === 'number' ? s.extent : 500,

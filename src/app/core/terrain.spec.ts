@@ -70,7 +70,7 @@ describe('strokes', () => {
 });
 
 describe('buildHeights', () => {
-  it('feathers the edges back to 0 and levels pads to the lowest ground under them', () => {
+  it('feathers the edges back to 0 and levels pads to the typical ground under them', () => {
     const t = flat();
     t.strokes.push({ op: 'raise', pts: [{ x: -60, z: 0 }, { x: 60, z: 0 }], radius: 200, strength: 4, falloff: 'flat' });
     const { grid } = buildHeights(t);
@@ -78,9 +78,15 @@ describe('buildHeights', () => {
     expect(heightAt(grid, 50, 0)).toBeCloseTo(0);
     const slope = emptyGrid(flat());
     for (let j = 0; j < slope.nz; j++) for (let i = 0; i < slope.nx; i++) slope.h[j * slope.nx + i] = i * 0.1;
+    // the pad is levelled to the median height under it (it used to be the lowest, which buried long buildings on a
+    // slope at their high end), and the ground around ramps to it
+    const before = heightAt(slope, 11.5, 2.5);
     const y = flattenPad(slope, { poly: [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 5 }, { x: 0, z: 5 }] });
-    expect(y).toBeCloseTo(5);
-    expect(rangeUnder(slope, [{ x: 1, z: 1 }, { x: 9, z: 1 }, { x: 9, z: 4 }, { x: 1, z: 4 }]).max).toBeCloseTo(5);
+    expect(y).toBeGreaterThan(5.3);
+    expect(y).toBeLessThan(5.7);
+    const r = rangeUnder(slope, [{ x: 1, z: 1 }, { x: 9, z: 1 }, { x: 9, z: 4 }, { x: 1, z: 4 }]);
+    expect(r.max - r.min).toBeLessThan(1e-6);
+    expect(Math.abs(heightAt(slope, 11.5, 2.5) - y)).toBeLessThan(Math.abs(before - y)); // just outside, closer to the pad than before
   });
 
   it('real ground keeps its slope up to the edge (it used to be forced down there, making walls and pits)', () => {
