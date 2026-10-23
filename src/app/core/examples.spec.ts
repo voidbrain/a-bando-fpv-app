@@ -28,10 +28,10 @@ describe('example bandos', () => {
       expect(spec!.buildings.length).toBeGreaterThan(5);
       expect(spec!.terrain?.base?.key).toBeTruthy(); // the real ground is fetched again on the pilot's machine
     }
-    // the factory's ruin and its landmarks come from the library
+    // the factory's roofless mill with battlements, and its landmarks from the library
     const c = sanitizeSpec(chiari)!;
-    expect(c.buildings.some((b) => (b.ruin ?? 0) > 0.5)).toBe(true);
-    expect(c.structures?.map((s) => s.block?.id).sort()).toEqual(['abando/lantern-tower', 'abando/water-tower']);
+    expect(c.buildings.find((b) => b.name === 'Ruined mill')).toMatchObject({ roofless: true, crenels: true });
+    expect(c.structures?.map((s) => s.block?.id).sort()).toEqual(['abando/sign-tower', 'abando/water-tower']);
     expect(sanitizeSpec(villetta)!.buildings.find((b) => b.block?.id === 'abando/vault-shed')?.levels[0]?.roof).toBe('vault');
   });
 });

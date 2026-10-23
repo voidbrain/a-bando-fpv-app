@@ -75,13 +75,14 @@ export class SiteLibraryService {
       /* corrupt index: nothing to move */
     }
     let n = 0;
+    const now = Date.now(); // once: a clock tick between two bandos must not swap their order
     ids.forEach((id, i) => {
       const t = this.storage.readRaw(legacyKey(id));
       if (!t || this.store.get('sites', id)) return;
       try {
         const spec = sanitizeSpec(JSON.parse(t) as unknown);
         if (spec) {
-          this.store.put('sites', id, { savedAt: Date.now() - i, spec } satisfies SiteRecord);
+          this.store.put('sites', id, { savedAt: now - i, spec } satisfies SiteRecord);
           n++;
         }
       } catch {

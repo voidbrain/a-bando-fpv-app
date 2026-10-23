@@ -178,7 +178,7 @@
    ]
   },
   {
-   "id": "b-mvks3ckm-6a98",
+   "id": "b-mvkthh1b-hrw6",
    "name": "Main store",
    "pos": {
     "x": 61.899,
@@ -945,7 +945,7 @@
    "block": {
     "id": "abando/vault-shed",
     "v": 1,
-    "inst": "blk-mvks3ckm-ciyt",
+    "inst": "blk-mvkthh1b-31y0",
     "params": {
      "len": 148.9,
      "hall": 13.475,

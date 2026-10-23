@@ -833,6 +833,8 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                       <button class="btn" [disabled]="bd.levels.length < 2" (click)="removeFloor()" title="Remove the selected floor">－</button>
                     </div>
                     <label class="fld" title="0 = intact. A little ruin already has breaches in the facades and holes in the roof; from 20 % the wall tops break (upper floors first), from 60 % the roof is gone, from 75 % the upper floors">ruined % <input type="range" min="0" max="100" step="5" [value]="(bd.ruin ?? 0) * 100" (change)="mutate(setRuin, num($event))" /></label>
+                    <label class="fld" title="An open shell: the roof and the upper floors are gone, the walls stand as the ruin level says">open shell <input type="checkbox" [checked]="!!bd.roofless" (change)="mutate(setFlag('roofless'), checked($event))" /></label>
+                    <label class="fld" title="Battlements along the top of the walls (on a flat roof or an open shell)">battlements <input type="checkbox" [checked]="!!bd.crenels" (change)="mutate(setFlag('crenels'), checked($event))" /></label>
                     <label class="fld" title="A basement under the ground floor: the ground is cut under the building; reach it through a void in the ground floor">basement m <input type="number" min="0" max="12" step="0.5" [value]="bd.basement?.height ?? 0" (change)="mutate(setBasement, num($event))" /></label>
                   </div>
                   @if (topLevel(); as tl) {
@@ -4133,7 +4135,14 @@ export class BandoEditor {
   protected readonly setLength = (b: BuildingSpec, v: number): void => { b.length = Math.max(2, v); };
   protected readonly setWidth = (b: BuildingSpec, v: number): void => { b.width = Math.max(2, v); };
   protected readonly setRot = (b: BuildingSpec, v: number): void => { b.rotDeg = v; };
-  /** 0 = intact (the field is removed); otherwise how ruined, as a fraction. */
+  /** A yes / no property of a building: set, or removed when off (old bandos stay as they were). */
+  protected readonly setFlag =
+    (key: 'roofless' | 'crenels') =>
+    (b: BuildingSpec, on: boolean): void => {
+      if (on) b[key] = true;
+      else delete b[key];
+    };
+    /** 0 = intact (the field is removed); otherwise how ruined, as a fraction. */
   protected readonly setRuin = (b: BuildingSpec, pct: number): void => {
     if (pct > 0) b.ruin = Math.min(1, pct / 100);
     else delete b.ruin;

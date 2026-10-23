@@ -33,6 +33,8 @@ export const AI_SCHEMA = {
           length: { type: 'number' },
           value: { type: 'number' },
           ruin: { type: 'number' },
+          roofless: { type: 'boolean' },
+          crenels: { type: 'boolean' },
           name: { type: 'string' },
           roof: { type: 'string', enum: ['gable', 'flat', 'vault'] },
           turn: { type: 'boolean' },
@@ -75,7 +77,7 @@ Commands (all fields optional except op; distances in metres; "position" and x0.
 - add_columns: pattern (row|grid), count, spacing, axis (length|width), size, level. convert: to (greenhouse|building): the building is rebuilt, its interior is lost.
 - set_facade: facade (doors = every bay a full-height door, panels = every bay a lower panel with an opening above, store = repeated 2 panels + 1 door), side (omit = all walls), bay (metres between piers, default 5), level.
 - set_columns: rows (default 3), step (metres between columns along the hall), inset (edge rows from the long walls), size, level. Replaces the columns of that floor.
-- set_ruin: ruin (percent: 0 = intact, 15 = holes in the roof and breaches in the facades, 40 = broken wall tops and a roof full of holes, 60+ = no roof, 75+ = no upper floors).
+- set_ruin: ruin (percent: 0 = intact, 15 = holes in the roof and breaches in the facades, 40 = broken wall tops and a roof full of holes, 60+ = no roof, 75+ = no upper floors), roofless (true = an open shell: roof and floors gone, walls standing), crenels (true = battlements on the wall tops). Any of the three.
 - industrial_store: the standard warehouse shell on a rectangular building (long walls = repeated 2 panels + 1 door, one end all doors, the other all lower panels, 4 rows of columns). Optional bay, rows, step, inset, size, level.
 "building" is the building's name; leave it out for the selected one.
 
@@ -106,6 +108,8 @@ export function buildContext(spec: SiteSpec, selectedId: string): string {
       columns: b.levels.reduce((n, l) => n + (l.columns?.length ?? 0), 0),
       type: b.frame ? 'greenhouse' : undefined,
       ruined_percent: b.ruin ? Math.round(b.ruin * 100) : undefined,
+      open_shell: b.roofless || undefined,
+      battlements: b.crenels || undefined,
     };
   });
   const structs = (spec.structures ?? []).slice(0, 30).map((s) => ({ name: s.name, kind: s.kind, height: s.height }));

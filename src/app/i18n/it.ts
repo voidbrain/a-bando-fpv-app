@@ -242,7 +242,7 @@ export const IT: Readonly<Record<string, string>> = {
   'Could not download “{0}”. Check the connection and try again.': 'Impossibile scaricare “{0}”. Controlla la connessione e riprova.',
   'Site “{0}” loaded.': 'Bando “{0}” caricato.',
   'An abandoned shed of four barrel-vault halls with its annex, an old greenhouse frame and concrete aprons, in the fields near Treviso.': 'Un capannone abbandonato di quattro navate a volta con il suo annesso, il telaio di una vecchia serra e piazzali in cemento, nei campi vicino a Treviso.',
-  'The old Chiari e Forti oil factory on the Sile river: brick blocks with broken roofs, roofless galleries by the river, the water tower and the "cuore" lantern tower.': 'La vecchia fabbrica dell’olio Chiari e Forti sul Sile: blocchi in mattoni con i tetti sfondati, gallerie senza tetto sul fiume, la torre dell’acqua e la torre a lanterna del “cuore”.',
+  'The old Chiari e Forti oil factory on the Sile river: brick and ochre blocks with broken roofs, the roofless mill with its battlemented tower by the river, the water tower and the Olio Cuore sign tower.': 'La vecchia fabbrica dell’olio Chiari e Forti sul Sile: blocchi in mattoni e ocra con i tetti sfondati, il mulino senza tetto con la sua torre merlata sul fiume, la torre dell’acqua e la torre insegna dell’Olio Cuore.',
 
   // ---- zone map
   '← Bandos': '← Bandos',
@@ -546,6 +546,11 @@ export const IT: Readonly<Record<string, string>> = {
   'Flat': 'Piano',
   'None': 'Nessuno',
   'ruined %': 'rovina %',
+  'open shell': 'guscio aperto',
+  'An open shell: the roof and the upper floors are gone, the walls stand as the ruin level says': 'Un guscio aperto: il tetto e i piani superiori non ci sono più, i muri stanno in piedi come dice il livello di rovina',
+  'battlements': 'merli',
+  'Battlements along the top of the walls (on a flat roof or an open shell)': 'Merli lungo la cima dei muri (su un tetto piano o un guscio aperto)',
+  'Sign tower': 'Torre insegna',
   '0 = intact. A little ruin already has breaches in the facades and holes in the roof; from 20 % the wall tops break (upper floors first), from 60 % the roof is gone, from 75 % the upper floors': '0 = intatto. Una piccola rovina ha già brecce nelle facciate e buchi nel tetto; dal 20 % le cime dei muri si spezzano (prima i piani alti), dal 60 % il tetto non c’è più, dal 75 % nemmeno i piani superiori',
   'basement m': 'seminterrato m',
   'A basement under the ground floor: the ground is cut under the building; reach it through a void in the ground floor': 'Un seminterrato sotto il piano terra: il terreno è tagliato sotto l’edificio; ci si arriva da un vuoto nel piano terra',

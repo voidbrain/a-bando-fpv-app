@@ -25,6 +25,16 @@ describe('ai commands', () => {
     expect(runCommands(s, normalizeCommands([{ op: 'set_ruin' }]).cmds, '').changed).toBe(false);
   });
 
+  it('set_ruin makes an open shell with battlements, and takes them away', () => {
+    const s = site();
+    runCommands(s, normalizeCommands([{ op: 'set_ruin', ruin: 15, roofless: true, crenels: true }]).cmds, '');
+    expect(s.buildings[0]).toMatchObject({ ruin: 0.15, roofless: true, crenels: true });
+    runCommands(s, normalizeCommands([{ op: 'set_ruin', roofless: false, crenels: false }]).cmds, '');
+    expect(s.buildings[0]!.roofless).toBeUndefined();
+    expect(s.buildings[0]!.crenels).toBeUndefined();
+    expect(s.buildings[0]!.ruin).toBe(0.15);
+  });
+
   it('puts a door on the south wall in the middle', () => {
     const s = site();
     const r = runCommands(s, normalizeCommands([{ op: 'add_door', side: 'south' }]).cmds, '');

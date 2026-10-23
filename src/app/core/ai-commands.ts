@@ -53,6 +53,9 @@ export interface AiCommand {
   value?: number;
   /** set_ruin: how ruined, percent (0 = intact, 100 = a shell). */
   ruin?: number;
+  /** set_ruin: an open shell (no roof, no upper floors); battlements on the wall tops. */
+  roofless?: boolean;
+  crenels?: boolean;
   name?: string;
   roof?: 'gable' | 'flat' | 'vault';
   /** set_roof: turn the roof a quarter, and repeat the module `count` times (3 gables ...). */
@@ -118,6 +121,8 @@ export function normalizeCommands(raw: unknown): { cmds: AiCommand[]; errors: st
     if (o['roof'] === 'gable' || o['roof'] === 'flat' || o['roof'] === 'vault') c.roof = o['roof'];
     if (typeof o['doors'] === 'boolean') c.doors = o['doors'];
     if (typeof o['turn'] === 'boolean') c.turn = o['turn'];
+    if (typeof o['roofless'] === 'boolean') c.roofless = o['roofless'];
+    if (typeof o['crenels'] === 'boolean') c.crenels = o['crenels'];
     if (typeof o['structure'] === 'string' && (STRUCTURE_KINDS as readonly string[]).includes(o['structure'])) c.structure = o['structure'] as StructureKind;
     if (o['state'] === 'open' || o['state'] === 'closed') c.state = o['state'];
     if (o['what'] === 'door' || o['what'] === 'window') c.what = o['what'];
@@ -321,17 +326,27 @@ export function runCommands(spec: SiteSpec, cmds: AiCommand[], selectedId: strin
         ok(`added floor ${b.levels.length} to ${label} (a copy of the floor below; the roof moved up)`);
         break;
       case 'set_ruin': {
-        if (c.ruin === undefined) {
-          res.errors.push('set_ruin: needs ruin, a percentage (0 = intact)');
+        if (c.ruin === undefined && c.roofless === undefined && c.crenels === undefined) {
+          res.errors.push('set_ruin: needs ruin (a percentage, 0 = intact), roofless or crenels');
           break;
         }
         if (b.frame) {
           res.errors.push(`set_ruin: ${label} is a greenhouse frame`);
           break;
         }
-        if (c.ruin > 0) b.ruin = c.ruin / 100;
-        else delete b.ruin;
-        ok(c.ruin > 0 ? `${label} ruined ${c.ruin.toFixed(0)} %` : `${label} restored (intact)`);
+        const said: string[] = [];
+        if (c.ruin !== undefined) {
+          if (c.ruin > 0) b.ruin = c.ruin / 100;
+          else delete b.ruin;
+          said.push(c.ruin > 0 ? `ruined ${c.ruin.toFixed(0)} %` : 'intact walls');
+        }
+        for (const key of ['roofless', 'crenels'] as const) {
+          if (c[key] === undefined) continue;
+          if (c[key]) b[key] = true;
+          else delete b[key];
+          said.push(`${c[key] ? '' : 'no '}${key === 'roofless' ? 'open shell' : 'battlements'}`);
+        }
+        ok(`${label}: ${said.join(', ')}`);
         break;
       }
       case 'set_wall_height': {
