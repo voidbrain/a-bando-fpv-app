@@ -3,6 +3,7 @@ import { buildStructure } from './structures';
 import { fenceDef, postsAlong } from '../core/fences';
 import { WATER_COLOR, insidePolygon, roadDef, surfaceDef } from '../core/layers';
 import { BASEMENT_WALL, tunnelAxis, volumeSolids } from '../core/underground';
+import { NO_SLABS, ROOFLESS, ruinPieces, ruinRandom } from '../core/ruin';
 import * as THREE from 'three';
 import { type BuildingSpec, type LevelSpec, type RoadSpec, type SiteSpec, type SurfaceSpec, type TreeSpec, type UndergroundSpec, createRandom } from '../core/site-spec';
 import { SiteCollider, type SolidBox, type TreeCylinder } from '../core/sim/collider';
@@ -86,6 +87,8 @@ const material = (color: string, o: THREE.MeshStandardMaterialParameters = {}): 
  * carries position + rotation); collider boxes are registered directly in site space through `at` / `rot`.
  */
 interface Ctx {
+  /** While a ruined building is built: its level, the floor being built, and its random source. */
+  ruin: { level: number; li: number; floors: number; rnd: () => number } | null;
   /** Centre of the building currently being built, in site coordinates. */
   at: [number, number];
   /** Rotation of that building (degrees about Y), baked conservatively into the collider AABBs. */
@@ -141,16 +144,24 @@ function openingLeaf(ctx: Ctx, target: THREE.Object3D, l: LevelSpec, o: { kind: 
   else ctx.addBox(target, across, y, along, 0.12, h, o.w, mat, true, o.kind === 'door');
 }
 
+/** One wall run as built: whole, or broken into pieces with their tops cut when the building is ruined. */
+function ruinedRun(ctx: Ctx, len: number, h: number): { from: number; len: number; cut: number }[] {
+  const r = ctx.ruin;
+  return (r ? ruinPieces(len, h, r.level, r.li, r.floors, r.rnd) : [{ from: 0, len, cut: 0 }]).filter((p) => h - p.cut > 0.05);
+}
+
 function buildSide(ctx: Ctx, b: BuildingSpec, l: LevelSpec, side: 'n' | 's' | 'e' | 'w', target: THREE.Object3D): void {
   const runLen = side === 'n' || side === 's' ? b.length : b.width; // n and s run along the length, e and w along the width
   const acrossPos = side === 'w' ? -b.length / 2 : side === 'e' ? b.length / 2 : side === 'n' ? -b.width / 2 : b.width / 2;
   const th = 0.5;
   const wall = (from: number, len: number, y: number, hh: number): void => {
     if (len < 0.01 || hh < 0.01) return;
-    const m = from + len / 2 - runLen / 2;
-    const yy = l.baseY + y; // y is measured from this floor's slab
-    if (side === 'w' || side === 'e') ctx.addBox(target, acrossPos, yy, m, th, hh, len, ctx.mat.wall, true, true);
-    else ctx.addBox(target, m, yy, acrossPos, len, hh, th, ctx.mat.wall, true, true);
+    for (const r of ruinedRun(ctx, len, hh)) {
+      const m = from + r.from + r.len / 2 - runLen / 2;
+      const yy = l.baseY + y - r.cut / 2; // y is measured from this floor's slab; a ruined piece loses its top
+      if (side === 'w' || side === 'e') ctx.addBox(target, acrossPos, yy, m, th, hh - r.cut, r.len, ctx.mat.wall, true, true);
+      else ctx.addBox(target, m, yy, acrossPos, r.len, hh - r.cut, th, ctx.mat.wall, true, true);
+    }
   };
   let p = 0;
   for (const o of (l.doors[side] ?? []).slice().sort((x, y) => x.c - y.c)) {
@@ -176,10 +187,12 @@ function buildPolyWalls(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.O
     const wall = (from: number, to: number, y: number, hh: number): void => {
       const len = to - from;
       if (len < 0.01 || hh < 0.01) return;
-      const m = (from + to) / 2;
-      const yy = l.baseY + y;
-      if (e.axis === 'x') ctx.addBox(target, m, yy, e.at, len, hh, th, ctx.mat.wall, true, true);
-      else ctx.addBox(target, e.at, yy, m, th, hh, len, ctx.mat.wall, true, true);
+      for (const r of ruinedRun(ctx, len, hh)) {
+        const m = from + r.from + r.len / 2;
+        const yy = l.baseY + y - r.cut / 2;
+        if (e.axis === 'x') ctx.addBox(target, m, yy, e.at, r.len, hh - r.cut, th, ctx.mat.wall, true, true);
+        else ctx.addBox(target, e.at, yy, m, th, hh - r.cut, r.len, ctx.mat.wall, true, true);
+      }
     };
     let p = e.from - th / 2;
     for (const { o, c } of ops) {
@@ -272,7 +285,7 @@ function buildFloorAndColumns(ctx: Ctx, b: BuildingSpec, l: LevelSpec, inner: TH
   for (const r of rects) {
     const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2, w = r.x1 - r.x0, d = r.z1 - r.z0;
     if (l.baseY === 0) ctx.addBox(inner, cx, 0.05, cz, w, 0.1, d, floorMat, false, false);
-    else ctx.addBox(inner, cx, l.baseY, cz, w, 0.2, d, floorMat, false, false);
+    else if ((ctx.ruin?.level ?? 0) < NO_SLABS) ctx.addBox(inner, cx, l.baseY, cz, w, 0.2, d, floorMat, false, false); // a deep ruin has lost its upper floors
   }
   if (l.baseY === 0) {
     const water = material('#3d86b6', { transparent: true, opacity: 0.78, roughness: 0.15 });
@@ -642,6 +655,7 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
 
   const mats: Record<string, THREE.MeshStandardMaterial> = {};
   const ctx: Ctx = {
+    ruin: null,
     at: [0, 0],
     rot: 0,
     solids,
@@ -765,15 +779,18 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     ctx.at = [b.pos.x, b.pos.z];
     ctx.rot = b.rotDeg;
     const floorMat = material(b.floorColor ?? '#a9aaa0');
-    for (const l of b.levels) {
+    const ruin = Math.min(1, Math.max(0, b.ruin ?? 0));
+    for (const [li, l] of b.levels.entries()) {
+      ctx.ruin = ruin > 0.01 && !b.frame ? { level: ruin, li, floors: b.levels.length, rnd: ruinRandom(`${b.id}:${li}`) } : null;
       buildFloorAndColumns(ctx, b, l, inner, floorMat);
       if (b.frame === 'greenhouse') {
         buildGreenhouse(ctx, b, inner, localRoof);
         break;
       }
       buildWalls(ctx, b, l, inner);
-      buildRoof(ctx, b, l, localRoof);
+      if (ruin < ROOFLESS) buildRoof(ctx, b, l, localRoof); // a ruin past this has lost its roof
     }
+    ctx.ruin = null;
     if (b.basement && !b.frame) buildBasement(ctx, b, inner, floorMat);
     // roofs live under the building but belong to the global roof group for hide/show
     roof.attach(localRoof);

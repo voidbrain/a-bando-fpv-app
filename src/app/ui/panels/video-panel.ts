@@ -17,8 +17,8 @@ import { Panel } from '../panel/panel';
         <div class="dim small">The video is on the main page (Views panel → Main page).</div>
       }
       <div class="row">
-        <label class="btn">Load video<input type="file" accept="video/*" hidden (change)="load($event)" /></label>
-        <button class="btn primary" [disabled]="video.busy()" (click)="video.autoSync(scanFrom(), scanLength())">Auto-sync</button>
+        <label class="btn" data-tour="load-video">Load video<input type="file" accept="video/*" hidden (change)="load($event)" /></label>
+        <button class="btn primary" [disabled]="video.busy()" (click)="video.autoSync(scanFrom(), scanLength())" data-tour="auto-sync">Auto-sync</button>
       </div>
       <div class="dim small">{{ video.status() }}</div>
       <details class="adv">

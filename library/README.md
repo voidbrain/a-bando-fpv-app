@@ -35,3 +35,10 @@ background (ETag) and keeps it for offline use.
   `{ "columns": { "rows": 4, "step": 10, "inset": 4 } }`, `{ "store": { "bay": 5, "step": 10, "rows": 4, "inset": 4 } }`.
 
 Hand-made blocks are CC-BY-4.0 unless stated; blocks built from OpenStreetMap data are ODbL.
+
+## Example bandos
+
+`bandos/*.json` are ready-made bandos (a site spec plus an `about` line) that the Bandos panel lists under Examples.
+The same build copies them to `public/library/bandos/` and writes the list `public/library/bandos.json`; the tests load
+every one. Make one by generating it in the app, refining it, exporting it with its exact place, and adding `about`.
+They use catalogue blocks like any bando, so a block they need belongs in `blocks/` too.

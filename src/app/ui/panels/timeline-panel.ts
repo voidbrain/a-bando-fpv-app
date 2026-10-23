@@ -17,7 +17,7 @@ import { Panel } from '../panel/panel';
         <button class="btn" title="Back to start" (click)="playback.seekTo(0)">⏮</button>
         <button class="btn" [class.on]="t.playing() && t.direction() < 0" title="Play backwards" (click)="playback.playReverse()">◀</button>
         <button class="btn" [class.on]="!t.playing()" title="Pause" (click)="playback.pause()">⏸</button>
-        <button class="btn" [class.on]="t.playing() && t.direction() > 0" title="Play (P)" (click)="playback.play()">▶</button>
+        <button class="btn" [class.on]="t.playing() && t.direction() > 0" title="Play (P)" (click)="playback.play()" data-tour="play">▶</button>
         <button class="btn" (click)="playback.seekBy(-10)">−10s</button>
         <button class="btn" (click)="playback.seekBy(-1)">−1s</button>
         <button class="btn" (click)="playback.seekBy(1)">+1s</button>

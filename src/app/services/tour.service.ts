@@ -1,0 +1,410 @@
+import { Service, inject, signal } from '@angular/core';
+import { AI_SCRIPTS, tourBeats, type At, type Beat, type Hook, type Snippet, type Tour, type TourAction } from '../core/tour';
+import { sanitizeSpec } from '../core/site-spec';
+import type { PanelId } from '../ui/panel-defs';
+import { LayoutStore } from '../state/layout.store';
+import { AiService } from './ai.service';
+import { DownloadService } from './download.service';
+import { FlightService } from './flight.service';
+import { PlaybackService } from './playback.service';
+import { SiteService } from './site.service';
+import { StorageService } from './storage.service';
+import { StudioService } from './studio.service';
+import { ToastService } from './toast.service';
+import { VideoService } from './video.service';
+
+/** What the open editor lets the tour do (it registers itself while it exists). */
+export interface TourEditor {
+  tool(id: string): void;
+  select(name: string): boolean;
+  model(): void;
+  closeBoxes(): void;
+}
+
+export interface TourState {
+  title: string;
+  /** Beat number (1-based) and how many. */
+  index: number;
+  total: number;
+  say: string;
+  paused: boolean;
+  /** Recording the screen for a clip. */
+  recording: boolean;
+}
+
+/** The copy of the Villetta example the tour edits (replaced on every run, so the pilot's own copies stay untouched). */
+const TOUR_BANDO = { id: 'tour-villetta', name: 'Bando Villetta (tour)', file: 'library/bandos/villetta.json' };
+const DEMO = { log: 'demo/flight.csv', video: 'demo/flight.mp4' };
+const SETTINGS = 'abando-guide';
+
+class Stopped extends Error {}
+
+/**
+ * Plays the guided tour on the real interface: a drawn cursor glides to each target, clicks, types and drags with
+ * synthetic events, and a caption says what happens. Slow or online work (generating from map data, the AI model) is
+ * replaced by the real result of a ready example. Esc or Stop ends it at once; a snippet can also be recorded to a
+ * video clip for the docs.
+ */
+@Service()
+export class TourService {
+  private readonly layout = inject(LayoutStore);
+  private readonly studio = inject(StudioService);
+  private readonly site = inject(SiteService);
+  private readonly ai = inject(AiService);
+  private readonly flights = inject(FlightService);
+  private readonly video = inject(VideoService);
+  private readonly playback = inject(PlaybackService);
+  private readonly toast = inject(ToastService);
+  private readonly downloads = inject(DownloadService);
+  private readonly storage = inject(StorageService);
+
+  readonly state = signal<TourState | null>(null);
+  readonly cursor = signal<{ x: number; y: number; down: boolean } | null>(null);
+  /** A click ring, bumped on every click. */
+  readonly ring = signal<{ x: number; y: number; n: number } | null>(null);
+  /** The box of the current target, outlined. */
+  readonly focus = signal<{ x: number; y: number; w: number; h: number } | null>(null);
+  /** Show a snippet as a tip when hovering a tool it explains. */
+  readonly tips = signal(this.storage.read(SETTINGS, { tips: false }).tips);
+
+  editor: TourEditor | null = null;
+  private stop = false;
+  private paused = false;
+  private skip = false;
+
+  setTips(on: boolean): void {
+    this.tips.set(on);
+    this.storage.write(SETTINGS, { tips: on });
+  }
+
+  playTour(t: Tour): Promise<void> {
+    return this.run(t.title, tourBeats(t).map((b) => b.beat));
+  }
+
+  playSnippet(s: Snippet): Promise<void> {
+    return this.run(s.title, s.beats);
+  }
+
+  /** Play a snippet while recording this tab, then save the clip (WebM). The browser asks which tab to share. */
+  async record(s: Snippet): Promise<void> {
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false, preferCurrentTab: true } as DisplayMediaStreamOptions);
+    } catch {
+      this.toast.show('Recording needs permission to capture this tab.');
+      return;
+    }
+    const chunks: Blob[] = [];
+    const rec = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm' });
+    rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    const done = new Promise<void>((ok) => (rec.onstop = () => ok()));
+    rec.start(250);
+    await this.sleep(600).catch(() => undefined);
+    await this.run(s.title, s.beats, true);
+    rec.stop();
+    stream.getTracks().forEach((t) => t.stop());
+    await done;
+    this.downloads.save(`${s.id}.webm`, new Blob(chunks, { type: 'video/webm' }), 'video/webm');
+  }
+
+  end(): void {
+    this.stop = true;
+  }
+
+  togglePause(): void {
+    this.paused = !this.paused;
+    this.state.update((s) => (s ? { ...s, paused: this.paused } : s));
+  }
+
+  next(): void {
+    this.skip = true;
+    if (this.paused) this.togglePause();
+  }
+
+  private async run(title: string, beats: readonly Beat[], recording = false): Promise<void> {
+    if (this.state()) this.end();
+    while (this.state()) await new Promise((r) => setTimeout(r, 50));
+    this.stop = this.paused = this.skip = false;
+    const c = this.cursor() ?? { x: innerWidth / 2, y: innerHeight / 2, down: false };
+    this.cursor.set({ ...c, down: false });
+    try {
+      for (const [i, b] of beats.entries()) {
+        this.state.set({ title, index: i + 1, total: beats.length, say: b.say ?? this.state()?.say ?? '', paused: this.paused, recording });
+        this.skip = false;
+        for (const a of b.actions) {
+          if (this.skip) break;
+          await this.act(a);
+        }
+      }
+      await this.sleep(400);
+    } catch (e) {
+      if (!(e instanceof Stopped)) console.warn('tour', e);
+    } finally {
+      this.ai.demo.set(false);
+      this.state.set(null);
+      this.cursor.set(null);
+      this.focus.set(null);
+      this.ring.set(null);
+    }
+  }
+
+  /** Wait, honouring pause, stop and skip. */
+  private async sleep(ms: number): Promise<void> {
+    const end = performance.now() + ms;
+    while (performance.now() < end || this.paused) {
+      if (this.stop) throw new Stopped();
+      if (this.skip && !this.paused) return;
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    if (this.stop) throw new Stopped();
+  }
+
+  private async act(a: TourAction): Promise<void> {
+    switch (a.do) {
+      case 'wait':
+        return this.sleep(a.ms);
+      case 'hook':
+        return this.hook(a.hook, a.arg);
+      case 'point':
+      case 'click':
+      case 'press': {
+        const el = await this.find(a.at);
+        if (!el) return;
+        const p = this.freePoint(el, a.to);
+        await this.glide(p.x, p.y, el);
+        if (a.do === 'point') return;
+        await this.tap(p.x, p.y);
+        if (a.do === 'click') this.clickAt(el, p.x, p.y);
+        return;
+      }
+      case 'type': {
+        const el = await this.find(a.at);
+        if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return;
+        const p = this.pointIn(el);
+        await this.glide(p.x, p.y, el);
+        await this.tap(p.x, p.y);
+        el.focus();
+        el.value = '';
+        for (const ch of a.text) {
+          el.value += ch;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          await this.sleep(45);
+        }
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        return;
+      }
+      case 'drag': {
+        const el = await this.find(a.at);
+        if (!el) return;
+        const from = this.freePoint(el, a.from), to = this.freePoint(el, a.to);
+        await this.glide(from.x, from.y, el);
+        const target = this.hitAt(from.x, from.y) ?? el;
+        this.pointer(target, 'pointerdown', from.x, from.y, 1);
+        this.cursor.set({ ...from, down: true });
+        const steps = Math.max(8, Math.round((a.ms ?? 900) / 30));
+        for (let i = 1; i <= steps; i++) {
+          const t = ease(i / steps), x = from.x + (to.x - from.x) * t, y = from.y + (to.y - from.y) * t;
+          this.cursor.set({ x, y, down: true });
+          this.pointer(target, 'pointermove', x, y, 1);
+          await this.sleep((a.ms ?? 900) / steps);
+        }
+        this.pointer(target, 'pointerup', to.x, to.y, 0);
+        this.cursor.set({ ...to, down: false });
+        return;
+      }
+    }
+  }
+
+  /** A `data-tour` name or a CSS selector; waits a little for it to appear (panels open, lists load). */
+  private async find(at: string): Promise<HTMLElement | null> {
+    const sel = /^[#.[]/.test(at) || at.startsWith('app-') ? at : `[data-tour~="${at}"]`;
+    for (let i = 0; i < 40; i++) {
+      const el = [...document.querySelectorAll<HTMLElement>(sel)].find((e) => {
+        const r = e.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      });
+      if (el) {
+        el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        return el;
+      }
+      await this.sleep(50);
+    }
+    console.warn('tour: nothing to point at for', at);
+    return null;
+  }
+
+  /**
+   * A point of the target that is really visible (not under a floating box, the palette or another panel), as near
+   * as possible to the asked one; the asked one when there is none.
+   */
+  private freePoint(el: HTMLElement, at: At = [0.5, 0.5]): { x: number; y: number } {
+    const want = this.pointIn(el, at);
+    const free = (x: number, y: number): boolean => {
+      const h = this.hitAt(x, y);
+      return !!h && el.contains(h) && !h.closest('app-float-box, .palette, .opts, .fly');
+    };
+    if (free(want.x, want.y) || el.closest('button, a, label, input, select, textarea')) return want;
+    const r = el.getBoundingClientRect();
+    for (let ring = 1; ring <= 8; ring++)
+      for (let k = 0; k < 8 * ring; k++) {
+        const ang = (k / (8 * ring)) * Math.PI * 2;
+        const x = want.x + Math.cos(ang) * ring * r.width * 0.05, y = want.y + Math.sin(ang) * ring * r.height * 0.05;
+        if (x > r.left + 4 && x < r.right - 4 && y > r.top + 4 && y < r.bottom - 4 && free(x, y)) return { x, y };
+      }
+    return want;
+  }
+
+  private pointIn(el: HTMLElement, at: At = [0.5, 0.5]): { x: number; y: number } {
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width * at[0], y: r.top + r.height * at[1] };
+  }
+
+  /** Move the cursor in a slight arc, outlining the target. */
+  private async glide(x: number, y: number, el?: HTMLElement): Promise<void> {
+    if (el) {
+      const r = el.getBoundingClientRect();
+      this.focus.set({ x: r.left, y: r.top, w: r.width, h: r.height });
+    }
+    const c = this.cursor() ?? { x, y, down: false };
+    const d = Math.hypot(x - c.x, y - c.y);
+    const steps = Math.max(6, Math.min(30, Math.round(d / 25)));
+    for (let i = 1; i <= steps; i++) {
+      const t = ease(i / steps), lift = Math.sin(Math.PI * t) * Math.min(40, d * 0.12);
+      this.cursor.set({ x: c.x + (x - c.x) * t, y: c.y + (y - c.y) * t - lift, down: false });
+      await this.sleep(16);
+    }
+  }
+
+  private async tap(x: number, y: number): Promise<void> {
+    this.cursor.set({ x, y, down: true });
+    this.ring.set({ x, y, n: (this.ring()?.n ?? 0) + 1 });
+    await this.sleep(140);
+    this.cursor.set({ x, y, down: false });
+  }
+
+  private hitAt(x: number, y: number): HTMLElement | null {
+    return document.elementFromPoint(x, y) as HTMLElement | null;
+  }
+
+  /** Buttons, labels and inputs get a plain click; anything else (the map, the plan) the full pointer sequence. */
+  private clickAt(el: HTMLElement, x: number, y: number): void {
+    if (el.closest('button, a, label, input, select, summary')) {
+      el.click();
+      return;
+    }
+    const t = this.hitAt(x, y) ?? el;
+    this.pointer(t, 'pointerdown', x, y, 1);
+    this.pointer(t, 'pointerup', x, y, 0);
+    t.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 }));
+  }
+
+  private pointer(t: Element, type: string, x: number, y: number, buttons: number): void {
+    t.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, button: 0, buttons, pointerId: 1, pointerType: 'mouse', isPrimary: true }));
+  }
+
+  private async hook(h: Hook, arg?: string): Promise<void> {
+    switch (h) {
+      case 'panel': {
+        const id = arg as PanelId;
+        this.layout.setVisible(id, true);
+        this.layout.raise(id);
+        return this.sleep(300);
+      }
+      case 'list':
+        if (this.studio.view() !== 'list') this.studio.back();
+        return this.sleep(300);
+      case 'closeBoxes':
+        this.editor?.closeBoxes();
+        return;
+      case 'fakeGenerate':
+        return this.fakeGenerate();
+      case 'tool': {
+        const el = await this.find(`tool-${arg}`);
+        if (el) {
+          const p = this.pointIn(el);
+          await this.glide(p.x, p.y, el);
+          await this.tap(p.x, p.y);
+        }
+        this.editor?.tool(arg ?? 'select');
+        return this.sleep(200);
+      }
+      case 'select':
+        this.editor?.select(arg ?? '');
+        return this.sleep(300);
+      case 'view':
+        return;
+      case 'ai': {
+        // 'on' / 'off' show the chat without a model; anything else is the name of a scripted answer to send
+        if (arg === 'on' || arg === 'off') {
+          this.ai.demo.set(arg === 'on');
+          return this.sleep(200);
+        }
+        const box = document.querySelector<HTMLTextAreaElement>('[data-tour~="ai-input"]');
+        const text = box?.value || 'edit';
+        if (box) box.value = '';
+        await this.ai.send(text, AI_SCRIPTS[arg ?? ''] ?? '{}');
+        return;
+      }
+      case 'demoLog': {
+        const f = await this.demoFile(DEMO.log, 'btfl_demo.csv', 'text/csv');
+        if (f) await this.flights.loadFiles([f]);
+        return;
+      }
+      case 'demoVideo': {
+        const f = await this.demoFile(DEMO.video, 'demo-flight.mp4', 'video/mp4');
+        if (f) this.video.load(f);
+        return this.sleep(f ? 800 : 0);
+      }
+      case 'autoSync': {
+        for (let i = 0; i < 60 && !this.video.loaded(); i++) await this.sleep(100);
+        if (this.video.loaded()) void this.video.autoSync(0, 60);
+        return;
+      }
+      case 'play':
+        this.playback.play();
+        return;
+      case 'pause':
+        this.playback.pause();
+        return;
+    }
+  }
+
+  /** Stand-in for generating from map data: the ready Villetta example, opened in the editor like a fresh model. */
+  private async fakeGenerate(): Promise<void> {
+    this.site.generating.set(true);
+    try {
+      const res = await fetch(new URL(TOUR_BANDO.file, document.baseURI).toString());
+      const spec = sanitizeSpec(await res.json());
+      await this.sleep(1600);
+      if (!spec) throw new Error('example');
+      if (this.site.peek(TOUR_BANDO.id)) this.site.remove(TOUR_BANDO.id);
+      spec.id = TOUR_BANDO.id;
+      spec.name = TOUR_BANDO.name;
+      spec.createdAt = Date.now();
+      this.site.importJson(JSON.stringify(spec));
+    } catch {
+      this.toast.show('The example could not be downloaded; the tour goes on without it.');
+      return;
+    } finally {
+      this.site.generating.set(false);
+    }
+    this.studio.edit(TOUR_BANDO.id);
+    await this.sleep(700);
+    this.editor?.model();
+    await this.sleep(500);
+  }
+
+  /** The tour's demo media (a local folder that is never published); a note when it is missing. */
+  private async demoFile(path: string, name: string, type: string): Promise<File | null> {
+    try {
+      const res = await fetch(new URL(path, document.baseURI).toString());
+      if (!res.ok || (res.headers.get('content-type') ?? '').includes('text/html')) throw new Error();
+      return new File([await res.blob()], name, { type });
+    } catch {
+      this.toast.show(`No demo file at public/${path}: load your own here.`);
+      return null;
+    }
+  }
+}
+
+const ease = (t: number): number => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);

@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "id": "abando/lantern-tower",
+  "version": 1,
+  "name": "Lantern tower",
+  "kind": "structure",
+  "tags": ["industrial", "tower", "concrete"],
+  "author": "A Bando",
+  "licence": "CC-BY-4.0",
+  "description": "A tall square concrete tower with a balcony and an open lantern on top (a factory's landmark).",
+  "thumbnail": "icon:chimney",
+  "params": [
+    { "key": "h", "label": "Height", "type": "number", "default": 34, "min": 15, "max": 70, "step": 1 },
+    { "key": "w", "label": "Side", "type": "number", "default": 7, "min": 4, "max": 14, "step": 0.5 }
+  ],
+  "content": {
+    "shapes": [
+      { "prim": "box", "at": { "x": 0, "y": { "$": "h", "mul": 0.5, "add": -3.5 }, "z": 0 }, "size": { "x": { "$": "w" }, "y": { "$": "h", "add": -7 }, "z": { "$": "w" } }, "color": "#b9b5ab" },
+      { "prim": "box", "at": { "x": 0, "y": { "$": "h", "add": -6.8 }, "z": 0 }, "size": { "x": { "$": "w", "add": 1.4 }, "y": 0.4, "z": { "$": "w", "add": 1.4 } }, "color": "#a19d94" },
+      { "prim": "box", "at": { "x": { "$": "w", "mul": -0.42 }, "y": { "$": "h", "add": -4.6 }, "z": { "$": "w", "mul": -0.42 } }, "size": { "x": 0.7, "y": 4, "z": 0.7 }, "color": "#b9b5ab" },
+      { "prim": "box", "at": { "x": { "$": "w", "mul": 0.42 }, "y": { "$": "h", "add": -4.6 }, "z": { "$": "w", "mul": -0.42 } }, "size": { "x": 0.7, "y": 4, "z": 0.7 }, "color": "#b9b5ab" },
+      { "prim": "box", "at": { "x": { "$": "w", "mul": -0.42 }, "y": { "$": "h", "add": -4.6 }, "z": { "$": "w", "mul": 0.42 } }, "size": { "x": 0.7, "y": 4, "z": 0.7 }, "color": "#b9b5ab" },
+      { "prim": "box", "at": { "x": { "$": "w", "mul": 0.42 }, "y": { "$": "h", "add": -4.6 }, "z": { "$": "w", "mul": 0.42 } }, "size": { "x": 0.7, "y": 4, "z": 0.7 }, "color": "#b9b5ab" },
+      { "prim": "box", "at": { "x": 0, "y": { "$": "h", "add": -2.3 }, "z": 0 }, "size": { "x": { "$": "w", "add": 0.6 }, "y": 0.6, "z": { "$": "w", "add": 0.6 } }, "color": "#a19d94" },
+      { "prim": "box", "at": { "x": 0, "y": { "$": "h", "add": -1 }, "z": 0 }, "size": { "x": { "$": "w", "mul": 0.6 }, "y": 2, "z": { "$": "w", "mul": 0.6 } }, "color": "#b9b5ab" }
+    ]
+  }
+}

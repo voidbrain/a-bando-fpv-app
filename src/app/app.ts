@@ -10,6 +10,8 @@ import { BlackboxPanel } from './ui/panels/blackbox-panel';
 import { CompassPanel } from './ui/panels/compass-panel';
 import { FlightsPanel } from './ui/panels/flights-panel';
 import { HelpPanel } from './ui/panels/help-panel';
+import { GuidePanel } from './ui/panels/guide-panel';
+import { TourOverlay } from './ui/tour-overlay';
 import { LivePanel } from './ui/panels/live-panel';
 import { PathPanel } from './ui/panels/path-panel';
 import { RadioPanel } from './ui/panels/radio-panel';
@@ -30,7 +32,7 @@ import { ToastHost } from './ui/toast-host';
   selector: 'app-root',
   imports: [
     Stage, ViewsPanel, FlightsPanel, SimulatorPanel, RadioPanel, TimelinePanel, SpeedPanel, AttitudePanel, CompassPanel, PathPanel,
-    BlackboxPanel, VideoPanel, LivePanel, RenderPanel, HelpPanel, ViewportPanel, VersionBadge, StudioPanel, ToastHost,
+    BlackboxPanel, VideoPanel, LivePanel, RenderPanel, HelpPanel, GuidePanel, ViewportPanel, VersionBadge, StudioPanel, ToastHost, TourOverlay,
   ],
   template: `
     <app-stage />
@@ -50,11 +52,13 @@ import { ToastHost } from './ui/toast-host';
     <app-live-panel />
     <app-render-panel />
     <app-help-panel />
+    <app-guide-panel />
     <app-viewport-panel type="orbit" />
     <app-viewport-panel type="chase" />
     <app-viewport-panel type="fpv" />
     <app-viewport-panel type="top" />
     <app-toast-host />
+    <app-tour-overlay />
   `,
 })
 export class App {

@@ -16,6 +16,7 @@ A Bando is a dark, dense instrument for FPV pilots: a 3D map and site editor, a 
 - **Join clauses with " · "** in hints, readouts and secondary lines: "3 fl · 42×18 m", "14.20 m · 90°".
 - **Units are metric and always shown:** m, km/h, °. Put units in field labels ("Height (m)"), not in inputs.
 - **Floors** are named G, L1, L2… (level 0 is G).
+- **Languages.** The interface is written in English and translated through `src/app/i18n/<lang>.ts`; Italian keeps the same voice: short, direct, "tu", no exclamation marks. "Bando" is not translated.
 - **Say what happened, then what to do.** "Map data is busy (too many requests). Try again in a minute." An AI edit is reported from what actually changed ("3 changes applied"), never from the model's own reply.
 
 ## Visual foundations
@@ -52,7 +53,7 @@ A Bando is a dark, dense instrument for FPV pilots: a 3D map and site editor, a 
 ### States and motion
 
 - Hover: one step lighter (`control-hover`) or a white wash. Disabled: 45% opacity. Selected: `accent` border or fill.
-- Motion is functional only: the toast's 0.2s rise and fade, the 0.8s spinner. No decorative animation.
+- Motion is functional only: the toast's 0.2s rise and fade, the 0.8s spinner, and the guided tour's cursor, click ring and target outline (they show where the action is). No decorative animation.
 - Focus: the app relies on the browser's default focus ring today. New work should give interactive elements a visible 2px `accent` outline (about 11:1 on `panel-solid`) so it meets WCAG AA.
 
 ### Layering
@@ -82,4 +83,5 @@ is `.row` scoped to `ElementsBox`; the guideline calls it `.el-row` to keep it a
   `src/styles.scss` AND to `tokens.json` (name, value, usage) in the same change.
 - A new tool: its colour goes in `tools` and in `tokens.json` as `tool-<id>`, distinct from every other tool and the accent.
 - A new or changed shared component: update its `components/<Name>.md` (or add one).
+- New user-facing text: its Italian goes in `src/app/i18n/it.ts`; a control the guided tour uses keeps its `data-tour` mark.
 - Text on a fill keeps 4.5:1 contrast (3:1 for icons, borders and focus rings), as `AGENTS.md` requires.

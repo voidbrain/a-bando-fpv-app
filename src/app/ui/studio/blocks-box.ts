@@ -1,4 +1,5 @@
 import { Component, computed, inject, input, output, signal } from '@angular/core';
+import { tr } from '../../services/i18n.service';
 import { blockFrom, detachInstance, outdated, paramValues, removeInstance, updateInstance, type BlockKind, type BlockSpec, type ParamValue } from '../../core/blocks';
 import { searchBlocks } from '../../core/catalog';
 import type { BuildingSpec, StructureSpec } from '../../core/site-spec';
@@ -54,7 +55,7 @@ export interface BlockArm {
         }
         @for (b of shown(); track b.id) {
           <div class="item" [class.sel]="b.id === selId()">
-            <button class="row" (click)="pick(b)" [attr.aria-expanded]="b.id === selId()">
+            <button class="row" (click)="pick(b)" [attr.aria-expanded]="b.id === selId()" [attr.data-tour]="'block-' + b.id">
               <span class="th">
                 @if (iconOf(b); as ic) {
                   <app-tool-icon [name]="ic" />
@@ -92,7 +93,7 @@ export interface BlockArm {
                     <button class="btn primary" [disabled]="!building()" (click)="apply.emit({ block: b, params: values(), rot: 0 })" [title]="building() ? 'Apply to the selected building, this floor' : 'Select a building first'">Apply to floor</button>
                   } @else {
                     <label class="lay">turn <input class="mini" type="number" step="15" [value]="rot()" (change)="rot.set(num($event))" />°</label>
-                    <button class="btn primary" (click)="arm.emit({ block: b, params: values(), rot: rot() })" title="Then click the map where it goes (Esc stops)">Place</button>
+                    <button class="btn primary" (click)="arm.emit({ block: b, params: values(), rot: rot() })" data-tour="block-place" title="Then click the map where it goes (Esc stops)">Place</button>
                   }
                   @if (b.id.startsWith('local/')) {
                     <button class="btn" (click)="exportOne(b)">Export</button>
@@ -245,7 +246,7 @@ export class BlocksBox {
     const b = this.building(), s = this.structure();
     const anchor = b ? b.pos : s ? { x: s.x, z: s.z } : null;
     if (!anchor) return;
-    const name = prompt('Name of the new block', b?.name ?? s?.name ?? 'My block');
+    const name = prompt(tr('Name of the new block'), b?.name ?? s?.name ?? 'My block');
     if (!name?.trim()) return;
     const made = blockFrom(name.trim(), 'me', { buildings: b ? [b] : [], structures: s ? [s] : [] }, anchor, b?.rotDeg ?? s?.rotDeg ?? 0);
     const saved = made ? this.lib.saveOwn(made) : null;

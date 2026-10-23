@@ -1,4 +1,5 @@
 import { Component, DestroyRef, ElementRef, afterNextRender, afterRenderEffect, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { tr } from '../../services/i18n.service';
 import { uiResets } from '../../state/layout.store';
 import { raiseZ } from '../stacking';
 import { FormsModule } from '@angular/forms';
@@ -43,6 +44,7 @@ import { ElementPreview } from './element-preview';
 import { ToolIcon } from './tool-icon';
 import type { SitePick } from '../../three/site-view';
 import { SiteView } from './site-view';
+import { TourService } from '../../services/tour.service';
 import type { PreviewTarget } from '../../three/element-preview';
 
 type Tool = 'select' | 'building' | 'structure' | 'stairs' | 'merge' | 'cut' | 'wing' | 'tree' | 'scatter' | 'fence' | 'door' | 'window' | 'wall' | 'void' | 'column' | 'measure' | 'terrain' | 'road' | 'surface' | 'water' | 'tunnel';
@@ -118,12 +120,12 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
       <ng-content />
       <div class="seg">
         <button [class.on]="mode() === 'area'" [disabled]="placeHidden()" (click)="setMode('area')" [title]="placeHidden() ? 'This bando was shared without its place: there is no map area to edit' : ''">1 · Area</button>
-        <button [class.on]="mode() === 'model'" [disabled]="!hasModel()" (click)="setMode('model')" [title]="hasModel() ? '' : 'Generate the model first'">2 · Model</button>
+        <button [class.on]="mode() === 'model'" [disabled]="!hasModel()" (click)="setMode('model')" data-tour="tab-model" [title]="hasModel() ? '' : 'Generate the model first'">2 · Model</button>
       </div>
       @if (mode() === 'model') {
         <div class="seg" title="2D edits the plan; 3D just looks around the whole bando">
-          <button [class.on]="!view3d()" (click)="view3d.set(false)">2D</button>
-          <button [class.on]="view3d()" (click)="setView3d()">3D</button>
+          <button [class.on]="!view3d()" (click)="view3d.set(false)" data-tour="view-2d">2D</button>
+          <button [class.on]="view3d()" (click)="setView3d()" data-tour="view-3d">3D</button>
         </div>
         @if (view3d()) {
           <label class="lay" title="Show the roofs in the 3D view"><input type="checkbox" [checked]="roofs3d()" (change)="roofs3d.set(checked($event))" /> roofs</label>
@@ -154,9 +156,9 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
       @if (mode() === 'model') {
         <button class="btn" [disabled]="!ed.canUndo()" (click)="undo()" title="Undo (Ctrl+Z)">↶</button>
         <button class="btn" [disabled]="!ed.canRedo()" (click)="redo()" title="Redo">↷</button>
-        <button class="btn" [class.on]="blocksOpen()" (click)="blocksOpen.set(!blocksOpen())" title="Library: ready-made objects, buildings and patterns, yours and from the online catalogue">▦ Library</button>
+        <button class="btn" [class.on]="blocksOpen()" (click)="blocksOpen.set(!blocksOpen())" data-tour="library" title="Library: ready-made objects, buildings and patterns, yours and from the online catalogue">▦ Library</button>
         <button class="btn" [class.on]="elementsOpen()" (click)="elementsOpen.set(!elementsOpen())" title="Elements: list of all buildings, structures, walls and trees (grouped by area), with thumbnails and links">☰ Elements</button>
-        <button class="btn" [class.on]="ai.open()" (click)="ai.open.set(!ai.open())" title="Chat with the AI assistant to edit buildings and interiors">💬 AI @if (ai.busy()) { <i class="spin"></i> }</button>
+        <button class="btn" [class.on]="ai.open()" (click)="ai.open.set(!ai.open())" data-tour="ai" title="Chat with the AI assistant to edit buildings and interiors">💬 AI @if (ai.busy()) { <i class="spin"></i> }</button>
         <button class="btn primary" (click)="save()">Save</button>
       }
       <label class="lay" title="Map under the model">🗺
@@ -168,7 +170,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
       </label>
       <label class="lay" title="Map opacity"><input type="range" min="0.2" max="1" step="0.05" [value]="studio.mapOpacity()" (input)="setOpacity($event)" /></label>
     </div>
-    <div class="wrap" #wrap tabindex="0" [class.v3]="view3d() && overlayOn()" (keydown)="key($event)" (pointerdown)="closeMenus()" (contextmenu)="onContext($event)">
+    <div class="wrap" #wrap tabindex="0" data-tour="map" [class.v3]="view3d() && overlayOn()" (keydown)="key($event)" (pointerdown)="closeMenus()" (contextmenu)="onContext($event)">
       <div class="map" #el></div>
 
       @if (overlayOn() && !view3d()) {
@@ -495,7 +497,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
               <i class="psep"></i>
             }
             <div class="pg">
-              <button class="pbtn" [class.on]="g.on" [style.--tc]="g.shown.color" (pointerdown)="pbDown(g.id, g.items.length)" (pointerup)="pbUp()" (pointerleave)="pbUp()" (click)="pbClick(g.shown)" (contextmenu)="g.items.length > 1 ? toggleFly(g.id, $event) : $event.preventDefault()" [title]="g.shown.name + ' · ' + g.shown.hint + (g.items.length > 1 ? ' · hold or click the corner for the other tools' : '')">
+              <button class="pbtn" [attr.data-tour]="toolMarks(g.items)" [class.on]="g.on" [style.--tc]="g.shown.color" (pointerdown)="pbDown(g.id, g.items.length)" (pointerup)="pbUp()" (pointerleave)="pbUp()" (click)="pbClick(g.shown)" (contextmenu)="g.items.length > 1 ? toggleFly(g.id, $event) : $event.preventDefault()" [title]="g.shown.name + ' · ' + g.shown.hint + (g.items.length > 1 ? ' · hold or click the corner for the other tools' : '')">
                 <app-tool-icon [name]="g.shown.icon" />
                 @if (g.items.length > 1) {
                   <span class="tri" (pointerdown)="$event.stopPropagation()" (click)="toggleFly(g.id, $event)"></span>
@@ -610,8 +612,8 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
           }
         </div>
         <div class="search">
-          <input type="text" [(ngModel)]="query" placeholder="Search a place or lat,lon" (keydown.enter)="search()" aria-label="Search a place" />
-          <button class="btn" (click)="search()" [disabled]="searching()">Go</button>
+          <input type="text" [(ngModel)]="query" placeholder="Search a place or lat,lon" (keydown.enter)="search()" aria-label="Search a place" data-tour="search" />
+          <button class="btn" (click)="search()" [disabled]="searching()" data-tour="search-go">Go</button>
         </div>
         @if (hits().length) {
           <div class="hits">
@@ -653,7 +655,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
       }
 
       @if (mode() === 'model' && overlayOn()) {
-        <app-float-box fid="inspector-v4" title="Inspector" [x]="8" [y]="58" [w]="300" [h]="340" [right]="true" [cols]="true">
+        <app-float-box fid="inspector-v4" data-tour="inspector" title="Inspector" [x]="8" [y]="58" [w]="300" [h]="340" [right]="true" [cols]="true">
           @if (previewTarget(); as pt) {
             <app-element-preview [target]="pt" [key]="previewKey()" [caption]="previewCaption()" (picked)="onPreviewPick($event)" />
           }
@@ -817,7 +819,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                   @if (bd.frame) {
                     <label class="fld">arch height <input type="number" min="0.3" max="1.3" step="0.05" [value]="bd.levels[0]?.vaultK ?? 0.7" (change)="editLevel(setArch, num($event))" /></label>
                   } @else if (lvl(); as l) {
-                    <label class="fld">wall height m <input type="number" min="1" step="0.5" [value]="l.height" (change)="editLevel(setHeight, num($event))" /></label>
+                    <label class="fld">wall height m <input type="number" min="1" step="0.5" [value]="l.height" (change)="editLevel(setHeight, num($event))" data-tour="wall-height" /></label>
                   }
                 </div>
                 @if (!bd.frame) {
@@ -827,9 +829,10 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                       @for (l of bd.levels; track $index) {
                         <button class="btn" [class.on]="$index === level() && floorFocus()" [class.cur]="$index === level()" (click)="pickLevel($index)" title="Show only this floor solid, the rest of the building ghosted (click again for the whole building)">{{ levelName($index) }}</button>
                       }
-                      <button class="btn" (click)="addLevel()" title="Add a floor on top (a copy of the last one; the roof moves up)">＋</button>
+                      <button class="btn" (click)="addLevel()" data-tour="add-floor" title="Add a floor on top (a copy of the last one; the roof moves up)">＋</button>
                       <button class="btn" [disabled]="bd.levels.length < 2" (click)="removeFloor()" title="Remove the selected floor">－</button>
                     </div>
+                    <label class="fld" title="0 = intact. A ruin has broken walls, more on the upper floors; from 35 % it has no roof, from 60 % no upper floors">ruined % <input type="range" min="0" max="100" step="5" [value]="(bd.ruin ?? 0) * 100" (change)="mutate(setRuin, num($event))" /></label>
                     <label class="fld" title="A basement under the ground floor: the ground is cut under the building; reach it through a void in the ground floor">basement m <input type="number" min="0" max="12" step="0.5" [value]="bd.basement?.height ?? 0" (change)="mutate(setBasement, num($event))" /></label>
                   </div>
                   @if (topLevel(); as tl) {
@@ -902,7 +905,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
           }
         </span>
         <button class="btn" (click)="setServer()" title="Use your own OpenStreetMap data server (e.g. the PHP proxy) instead of the public ones">Data server…</button>
-        <button class="btn primary" (click)="generate()" [disabled]="studio.busy()">{{ studio.busy() ? 'Building…' : studio.isNew() ? 'Generate 3D' : 'Regenerate 3D' }}</button>
+        <button class="btn primary" (click)="generate()" [disabled]="studio.busy()" data-tour="generate">{{ studio.busy() ? 'Building…' : studio.isNew() ? 'Generate 3D' : 'Regenerate 3D' }}</button>
       }
     </div>
   `,
@@ -1512,6 +1515,8 @@ export class BandoEditor {
     });
   });
   protected readonly groupCur = signal<Record<string, string>>({});
+  /** `data-tour` marks of a palette button: every tool of its group (the guided tour and the hover tips find them). */
+  protected toolMarks = (items: readonly Entry[]): string => [...new Set(items.map((i) => `tool-${i.tool}`))].join(' ');
 
   // ---- stacking: the toolbars share one order with the float boxes; the last opened or clicked is on top ----
   protected readonly palOwner = {};
@@ -2518,6 +2523,29 @@ export class BandoEditor {
 
   constructor() {
     afterNextRender(() => this.init());
+    // the guided tour drives the editor through these (it cannot reach protected state otherwise)
+    const tour = inject(TourService);
+    tour.editor = {
+      tool: (id) => {
+        const e = this.entries().find((x) => x.tool === id);
+        if (e) this.pickEntry(e);
+      },
+      select: (name) => {
+        const b = this.ed.draft().buildings.find((x) => x.name === name);
+        if (b) this.ed.select(b.id);
+        return !!b;
+      },
+      model: () => this.setMode('model'),
+      closeBoxes: () => {
+        this.armed.set(null);
+        this.blocksOpen.set(false);
+        this.elementsOpen.set(false);
+        this.ai.open.set(false);
+      },
+    };
+    this.destroyRef.onDestroy(() => {
+      if (tour.editor) tour.editor = null;
+    });
     effect(() => {
       this.tool(); // a new tool's options come on top
       untracked(() => this.optsZ.set(raiseZ(this.optsOwner)));
@@ -2727,7 +2755,7 @@ export class BandoEditor {
 
   /** Point the generator at your own Overpass endpoint (blank = the public servers). */
   protected setServer(): void {
-    const v = prompt('Your Overpass / proxy URL (leave empty to use the public servers):', GeoService.endpoint);
+    const v = prompt(tr('Your Overpass / proxy URL (leave empty to use the public servers):'), GeoService.endpoint);
     if (v === null) return;
     GeoService.endpoint = v;
     this.toast.show(v.trim() ? 'Using your data server first.' : 'Using the public data servers.');
@@ -3260,7 +3288,7 @@ export class BandoEditor {
   }
 
   protected convertTo(to: 'greenhouse' | 'building'): void {
-    if (!confirm(`Convert to a ${to}? Its interior walls, doors, windows, columns, voids and outline are lost (you can still Undo).`)) return;
+    if (!confirm(tr(`Convert to a ${to}? Its interior walls, doors, windows, columns, voids and outline are lost (you can still Undo).`))) return;
     if (this.indoor()) this.exitIndoor();
     this.mutate((b) => convertBuilding(b, to), 0);
     this.level.set(0);
@@ -4105,7 +4133,12 @@ export class BandoEditor {
   protected readonly setLength = (b: BuildingSpec, v: number): void => { b.length = Math.max(2, v); };
   protected readonly setWidth = (b: BuildingSpec, v: number): void => { b.width = Math.max(2, v); };
   protected readonly setRot = (b: BuildingSpec, v: number): void => { b.rotDeg = v; };
-  /** 0 removes the basement; otherwise its inside height (2 – 12 m). */
+  /** 0 = intact (the field is removed); otherwise how ruined, as a fraction. */
+  protected readonly setRuin = (b: BuildingSpec, pct: number): void => {
+    if (pct > 0) b.ruin = Math.min(1, pct / 100);
+    else delete b.ruin;
+  };
+    /** 0 removes the basement; otherwise its inside height (2 – 12 m). */
   protected readonly setBasement = (b: BuildingSpec, v: number): void => {
     if (v > 0) b.basement = { height: Math.min(12, Math.max(2, v)) };
     else delete b.basement;
