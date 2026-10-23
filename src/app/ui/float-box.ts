@@ -1,4 +1,5 @@
 import { Component, DestroyRef, ElementRef, afterNextRender, inject, input, signal } from '@angular/core';
+import { raiseZ } from './stacking';
 
 interface Geo {
   x: number;
@@ -21,6 +22,9 @@ interface Geo {
     '[style.min-height]': 'open() ? minH() + "px" : null',
     '[style.height]': 'open() ? geo().h + "px" : "auto"',
     '[class.closed]': '!open()',
+    // hidden until it knows its place (the parent may not be laid out yet): it no longer flashes at the top-left
+    '[style.visibility]': 'shown() ? null : "hidden"',
+    '[style.z-index]': 'z()',
     '(pointerdown)': 'down($event)',
     '(document:pointerup)': 'up()',
     '(document:pointercancel)': 'up()',
@@ -53,7 +57,6 @@ interface Geo {
     }
     :host {
       position: absolute;
-      z-index: 1200;
       display: flex;
       flex-direction: column;
       min-width: 160px;
@@ -112,7 +115,8 @@ interface Geo {
       flex: 1;
       min-height: 0;
       overflow: auto;
-      padding: 6px 8px;
+      /* room at the bottom so the resize corners never sit on the last row */
+      padding: 6px 8px 16px;
       display: flex;
       flex-direction: column;
       gap: 6px;
@@ -137,7 +141,12 @@ export class FloatBox {
   protected readonly open = signal(true);
   private ro: ResizeObserver | null = null;
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.ro?.disconnect());
+    // never stay invisible: if the parent is still not laid out after half a second, show the box where it is
+    const failsafe = setTimeout(() => this.shown.set(true), 500);
+    inject(DestroyRef).onDestroy(() => {
+      clearTimeout(failsafe);
+      this.ro?.disconnect();
+    });
     afterNextRender(() => {
       this.init();
       const par = this.host.nativeElement.parentElement;
@@ -151,6 +160,9 @@ export class FloatBox {
   }
 
   protected readonly geo = signal<Geo>({ x: 8, y: 8, w: 260, h: 220 });
+  protected readonly shown = signal(false);
+  /** Opened last = on top; clicking it brings it to the front again. */
+  protected readonly z = signal(raiseZ(this));
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private drag: { dx: number; dy: number } | null = null;
   private resizing = false;
@@ -169,6 +181,7 @@ export class FloatBox {
       return;
     }
     this.ready = true;
+    queueMicrotask(() => this.shown.set(true));
     let g: Geo = this.defaults();
     try {
       const raw = localStorage.getItem(this.key());
@@ -214,6 +227,7 @@ export class FloatBox {
 
   protected down(e: PointerEvent): void {
     this.init();
+    this.z.set(raiseZ(this));
     const r = this.host.nativeElement.getBoundingClientRect();
     // the native resize grip lives in the bottom-right corner
     this.resizing = this.open() && e.clientX > r.right - 22 && e.clientY > r.bottom - 22;

@@ -26,7 +26,7 @@ export interface BlockArm {
   selector: 'app-blocks-box',
   imports: [FloatBox, ToolIcon],
   template: `
-    <app-float-box fid="blocks-v1" title="Blocks" [x]="70" [y]="8" [w]="300" [h]="440" [minW]="250" [minH]="180">
+    <app-float-box fid="blocks-v1" title="Library" [x]="70" [y]="8" [w]="300" [h]="440" [minW]="250" [minH]="180">
       <div class="top">
         <input type="search" class="q" placeholder="Search blocks…" [value]="q()" (input)="q.set(val($event))" aria-label="Search blocks" />
         <button class="btn" (click)="lib.sync()" [disabled]="lib.status() === 'syncing'" [title]="syncTitle()" aria-label="Check the online catalogue for new blocks">@if (lib.status() === 'syncing') {<i class="spin"></i>} @else {↻}</button>
