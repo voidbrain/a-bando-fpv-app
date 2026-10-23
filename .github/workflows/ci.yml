@@ -24,11 +24,16 @@ jobs:
       - name: Build the block catalogue
         run: node tools/build-catalog.mjs
 
+      - name: Example bandos match their script
+        # tools/examples/build-examples.ts rebuilds them from the map data and survey in tools/examples/data; a change to
+        # the generator, a block or the script that is not rebuilt shows up here
+        run: npm run examples && git diff --exit-code -- library/bandos public/library
+
       - name: Test
         run: npx ng test --watch=false
 
       - name: Type check
-        run: npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
+        run: npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters && npx tsc -p tools/examples/tsconfig.json
 
       - name: Build
         run: npm run build

@@ -40,8 +40,14 @@ Hand-made blocks are CC-BY-4.0 unless stated; blocks built from OpenStreetMap da
 
 `bandos/*.json` are ready-made bandos (a site spec plus an `about` line) that the Bandos panel lists under Examples.
 The same build copies them to `public/library/bandos/` and writes the list `public/library/bandos.json`; the tests load
-every one. Make one by generating it in the app, refining it, exporting it with its exact place, and adding `about`.
-They use catalogue blocks like any bando, so a block they need belongs in `blocks/` too.
+every one. They are built by a script, not edited by hand: `npm run examples` runs `tools/examples/build-examples.ts`, which
+starts from what the app generated from OpenStreetMap for each place (`tools/examples/data/*.osm.json`, plus Overpass
+answers for waterways) and applies the refinements from photos and survey points, each one commented. CI rebuilds them
+and fails if the files differ, so change the script (or its data), not the JSON. They use catalogue blocks like any
+bando, so a block they need belongs in `blocks/` too.
+
+To add a place: generate it in the app, save its spec (before editing) as `tools/examples/data/<name>.osm.json`, add a
+section to the script, and run `npm run examples`.
 
 An example can be shared without its place: export it from the app with "place hidden" (its ground travels inside,
 map names are dropped), add `about`, and save it here (`villetta-no-place.json`). The list shows "place hidden" for

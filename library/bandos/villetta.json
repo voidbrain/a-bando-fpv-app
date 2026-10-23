@@ -19,7 +19,7 @@
  "groundColor": "#789b52",
  "buildings": [
   {
-   "id": "b-mvkpg13s-fn03",
+   "id": "example-villetta-b-1",
    "name": "House",
    "pos": {
     "x": -11.26,
@@ -72,7 +72,7 @@
    ]
   },
   {
-   "id": "b-mvkpg13s-6lot",
+   "id": "example-villetta-b-2",
    "name": "House",
    "pos": {
     "x": 117.652,
@@ -125,7 +125,7 @@
    ]
   },
   {
-   "id": "b-mvkpg13t-cjnw",
+   "id": "example-villetta-b-3",
    "name": "House",
    "pos": {
     "x": -80.75,
@@ -178,7 +178,7 @@
    ]
   },
   {
-   "id": "b-mvl19fpn-2q3j",
+   "id": "example-villetta-b-4",
    "name": "Main store",
    "pos": {
     "x": 64.497,
@@ -959,7 +959,7 @@
    "block": {
     "id": "abando/vault-shed",
     "v": 1,
-    "inst": "blk-mvl19fpn-hmlb",
+    "inst": "example-villetta-blk-5",
     "params": {
      "len": 150.241,
      "hall": 13.8,
@@ -973,7 +973,7 @@
    },
    "fixtures": [
     {
-     "id": "st-mvl19fpp-i2h5",
+     "id": "example-villetta-st-6",
      "kind": "shapes",
      "name": "Caged roof ladder",
      "x": -52.754,
@@ -1012,7 +1012,7 @@
      "block": {
       "id": "abando/cage-ladder",
       "v": 1,
-      "inst": "blk-mvl19fpp-i1j4",
+      "inst": "example-villetta-blk-7",
       "params": {
        "h": 7.8
       },
@@ -1726,7 +1726,7 @@
  ],
  "structures": [
   {
-   "id": "st-mvkpg13r-3o4h",
+   "id": "example-villetta-st-8",
    "kind": "bridge",
    "name": "Via Leonardo da Vinci",
    "x": -109.802,
@@ -1738,7 +1738,7 @@
    "style": "beam"
   },
   {
-   "id": "st-mvl19fpr-bfrg",
+   "id": "example-villetta-st-9",
    "kind": "bridge",
    "name": "Footbridge",
    "x": -24.657,
@@ -1751,7 +1751,7 @@
    "block": {
     "id": "abando/bridge",
     "v": 1,
-    "inst": "blk-mvl19fpr-9v28",
+    "inst": "example-villetta-blk-10",
     "params": {
      "l": 10,
      "w": 3,
@@ -1766,7 +1766,7 @@
    }
   },
   {
-   "id": "st-mvl19fpr-7i4r",
+   "id": "example-villetta-st-11",
    "kind": "bridge",
    "name": "Footbridge",
    "x": 239.402,
@@ -1779,7 +1779,7 @@
    "block": {
     "id": "abando/bridge",
     "v": 1,
-    "inst": "blk-mvl19fpr-70fe",
+    "inst": "example-villetta-blk-12",
     "params": {
      "l": 10,
      "w": 3,

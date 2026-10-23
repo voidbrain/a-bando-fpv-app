@@ -98,6 +98,7 @@ You are an expert in TypeScript, Angular, and scalable web application developme
 npx ng test --watch=false
 npx ng build
 npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
+npx tsc -p tools/examples/tsconfig.json   # the example-bando script
 ```
 
 - A test that fails because the code changed is stale: fix the test deliberately and say why. Tests that encoded the old
@@ -189,7 +190,8 @@ npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
 
 ## Ruins, example bandos
 - `BuildingSpec.ruin` (0..1, absent = intact) is a property, not a kind (`core/ruin.ts`). The roof goes first: `roofRuns` / `roofCells` leave holes in gable, vault and flat roofs (each kept part has its own collider, so the holes can be flown through), gone from `ROOFLESS` (0.6); upper slabs go from `NO_SLABS` (0.75). Once the building is open to the sky (past `ROOFLESS`, or `roofless`), each wall loses its upper part along one smooth broken line over the whole building height (`wallTop`, seeded per wall; `wallPieces` cuts each stretch to it) and never has holes lower down. `BuildingSpec.ruinWalls` gives single walls of a rectangle their own level (local sides n/s/e/w; inspector "ruin by wall", AI `set_ruin` with `side`). `BuildingSpec.roofless` makes an open shell at any level; `crenels` adds battlements, none where a wall's top has fallen. Inspector: "ruined %", "open shell", "battlements"; AI: `set_ruin` (ruin percent, roofless, crenels).
-- Example bandos live in `library/bandos/*.json` (a SiteSpec plus an `about` line); `tools/build-catalog.mjs` copies them to `public/library/bandos/` and lists them in `public/library/bandos.json`. The Bandos list offers them under Examples ("Open a copy" imports them like a file). They were generated from OSM in the app and then refined; the building blocks they use (`abando/vault-shed`, `abando/lantern-tower`, `abando/water-tower`) are ordinary catalogue blocks. `core/examples.spec.ts` checks every published example loads.
+- Example bandos are generated: `npm run examples` (`tools/examples/build-examples.ts`, inputs in `tools/examples/data/`) rebuilds `library/bandos/*.json` byte for byte (ids are renumbered stably), and CI fails when they differ. Change the script, never the JSON.
+- Example bandos live in `library/bandos/*.json` (a SiteSpec plus an `about` line); `tools/build-catalog.mjs` copies them to `public/library/bandos/` and lists them in `public/library/bandos.json`. The Bandos list offers them under Examples ("Open a copy" imports them like a file). The blocks they use (`abando/vault-shed`, `abando/sign-tower`, `abando/water-tower`, `abando/cage-ladder`, `abando/bridge`) are ordinary catalogue blocks. `core/examples.spec.ts` checks every published example loads.
 
 ## Languages
 - The templates stay in English. `I18nService` (`services/i18n.service.ts`) rewrites what the page shows (text nodes, `title`, `placeholder`, `aria-label`) through a dictionary (`src/app/i18n/<lang>.ts`) with a MutationObserver, keeps the English to restore it, and skips `textarea`, `svg`, `[contenteditable]` and `[translate="no"]` (the chat, the pilot's own text). Choice: saved setting (`abando-lang`) → browser language → English; the flag next to the version badge changes it.
