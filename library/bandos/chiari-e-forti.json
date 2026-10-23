@@ -2369,7 +2369,7 @@
  "walls": [],
  "structures": [
   {
-   "id": "st-mvkrripc-2b5",
+   "id": "st-mvks3cku-92ct",
    "kind": "water_tower",
    "name": "Water tower",
    "x": 12.143,
@@ -2380,7 +2380,7 @@
    "block": {
     "id": "abando/water-tower",
     "v": 1,
-    "inst": "blk-mvkrripc-1pun",
+    "inst": "blk-mvks3cku-8gzv",
     "params": {
      "h": 26,
      "r": 4.5
@@ -2393,7 +2393,7 @@
    }
   },
   {
-   "id": "st-mvkrripd-14l4",
+   "id": "st-mvks3ckv-eqbz",
    "kind": "shapes",
    "name": "Cuore tower",
    "x": 41.303,
@@ -2518,7 +2518,7 @@
    "block": {
     "id": "abando/lantern-tower",
     "v": 1,
-    "inst": "blk-mvkrripd-3ku",
+    "inst": "blk-mvks3cku-asj7",
     "params": {
      "h": 45,
      "w": 7

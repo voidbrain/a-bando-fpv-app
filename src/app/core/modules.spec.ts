@@ -46,11 +46,13 @@ describe('building modules', () => {
     expect(north.length).toBe(6);
     expect(north.every((x) => x.kind === 'window' && x.sill === 1.5)).toBe(true);
     expect(south.every((x) => x.kind === 'door')).toBe(true);
-    // 4 rows (1 - 2 - 1) x 5 columns (every 10 m, none within 1 m of the end), nothing doubled
+    // 4 rows (1 ——— 1 - 1 ——— 1) x 3 columns (every third pier: bays of 5 m → every 15 m), nothing doubled
+    // (the rows used to be evenly spread and 10 m apart; the store's own layout follows its roof valleys and piers)
     const cols = b.levels[0]!.columns!;
-    expect(cols.length).toBe(20);
-    expect(new Set(cols.map((c) => `${c.x}/${c.z}`)).size).toBe(20);
-    expect(new Set(cols.map((c) => c.x)).size).toBe(4); // an edge row each side + two in the middle
+    expect(cols.length).toBe(12);
+    expect(new Set(cols.map((c) => `${c.x}/${c.z}`)).size).toBe(12);
+    expect([...new Set(cols.map((c) => c.x))].sort((p, q) => p - q)).toEqual([7.5, 13.8, 16.2, 22.5]);
+    expect([...new Set(cols.map((c) => c.z))].sort((p, q) => p - q)).toEqual([15, 30, 45]);
   });
 
   it('running the preset twice gives the same result', () => {
@@ -60,6 +62,12 @@ describe('building modules', () => {
     applyStore(b, 0);
     expect(JSON.stringify(b.levels[0])).toBe(first);
     expect(setColumnRows(b, 0, { rows: 1 })).toBe(5);
+  });
+
+  it('column rows can be put at given distances across the hall', () => {
+    const b = store().buildings[0]!;
+    setColumnRows(b, 0, { cross: [5, 10, 99], step: 20 });
+    expect([...new Set(b.levels[0]!.columns!.map((c) => c.z))]).toEqual([5, 10]); // 99 is outside the hall
   });
 
   it('refuses shaped buildings and walls that are too short', () => {
