@@ -335,7 +335,19 @@ export function runCommands(spec: SiteSpec, cmds: AiCommand[], selectedId: strin
           break;
         }
         const said: string[] = [];
-        if (c.ruin !== undefined) {
+        if (c.ruin !== undefined && c.side) {
+          // one wall only: the wall facing that way gets its own ruin level
+          const w = b.footprint ? null : wallFacing(b, c.side);
+          if (!w) {
+            res.errors.push(`set_ruin: ${label} has no ${c.side} wall it can ruin on its own (only plain rectangles can)`);
+            break;
+          }
+          const key = w.axis === 'x' ? (w.at < 0 ? 'n' : 's') : w.at < 0 ? 'w' : 'e';
+          b.ruinWalls = { ...b.ruinWalls, [key]: c.ruin / 100 };
+          if (!c.ruin) delete b.ruinWalls[key];
+          if (!Object.keys(b.ruinWalls).length) delete b.ruinWalls;
+          said.push(`${c.side} wall ruined ${c.ruin.toFixed(0)} %`);
+        } else if (c.ruin !== undefined) {
           if (c.ruin > 0) b.ruin = c.ruin / 100;
           else delete b.ruin;
           said.push(c.ruin > 0 ? `ruined ${c.ruin.toFixed(0)} %` : 'intact walls');

@@ -1,12 +1,13 @@
 import { Component, computed, input, output, signal } from '@angular/core';
 import { columnGroups, stairsIn, treeZones, type Pt } from '../../core/elements';
 import { listOpenings, outlineOf } from '../../core/openings';
-import type { BuildingSpec, SiteSpec, StructureKind } from '../../core/site-spec';
+import { WATER_COLOR, polygonArea, roadDef, surfaceDef } from '../../core/layers';
+import type { BuildingSpec, SiteSpec, StructureKind, Vec2 } from '../../core/site-spec';
 import { FloatBox } from '../float-box';
 
 /** Where a click in the list should take the editor. */
 export interface ElementGo {
-  kind: 'building' | 'structure' | 'fence' | 'trees' | 'floor' | 'columns' | 'wall' | 'void' | 'opening';
+  kind: 'building' | 'structure' | 'fence' | 'trees' | 'floor' | 'columns' | 'wall' | 'void' | 'opening' | 'water' | 'road' | 'surface';
   /** building id (floor, columns, wall, void, opening) */
   id?: string;
   /** index into structures / walls / partitions / voids; for an opening, see `opening`. */
@@ -82,6 +83,23 @@ const toSite = (b: BuildingSpec, x: number, z: number): Pt => {
                 <button class="row" (click)="go.emit({ kind: 'fence', index: f.i, x: f.x, z: f.z, size: f.len })">
                   <svg viewBox="0 0 40 40" class="th"><line x1="6" y1="30" x2="34" y2="10" stroke="#c9c5b8" stroke-width="4" stroke-linecap="round" /></svg>
                   <span class="nm">Wall {{ f.i + 1 }}</span><span class="dim small">{{ f.len.toFixed(0) }} m</span>
+                </button>
+              }
+            </details>
+          }
+          @if (ground().length) {
+            <details>
+              <summary><b>Water, roads, ground</b><span class="cnt">{{ ground().length }}</span></summary>
+              @for (g of ground(); track g.key) {
+                <button class="row" (click)="go.emit({ kind: g.kind, index: g.i, x: g.x, z: g.z, size: g.size })">
+                  <svg viewBox="0 0 40 40" class="th">
+                    @if (g.kind === 'road') {
+                      <polyline [attr.points]="g.points" fill="none" [attr.stroke]="g.color" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+                    } @else {
+                      <polygon [attr.points]="g.points" [attr.fill]="g.color" stroke="#c9c5b8" stroke-width="1" />
+                    }
+                  </svg>
+                  <span class="nm">{{ g.name }}</span><span class="dim small">{{ g.info }}</span>
                 </button>
               }
             </details>
@@ -227,6 +245,25 @@ export class ElementsBox {
   protected readonly fences = computed(() =>
     (this.spec().walls ?? []).map((w, i) => ({ i, x: (w.a.x + w.b.x) / 2, z: (w.a.z + w.b.z) / 2, len: Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z) })).filter(() => this.match('wall')),
   );
+
+  /** Water, roads and ground surfaces, each with a small outline (roads as their centre line). */
+  protected readonly ground = computed(() => {
+    const s = this.spec();
+    const thumb = (pts: readonly Vec2[]): { points: string; x: number; z: number; size: number } => {
+      const xs = pts.map((p) => p.x), zs = pts.map((p) => p.z);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+      const k = 32 / Math.max(1, x1 - x0, z1 - z0);
+      const points = pts.map((p) => `${(4 + (p.x - x0) * k + (32 - (x1 - x0) * k) / 2).toFixed(1)},${(4 + (p.z - z0) * k + (32 - (z1 - z0) * k) / 2).toFixed(1)}`).join(' ');
+      return { points, x: (x0 + x1) / 2, z: (z0 + z1) / 2, size: Math.max(10, x1 - x0, z1 - z0) };
+    };
+    const len = (pts: readonly Vec2[]): number => pts.slice(1).reduce((a, p, i) => a + Math.hypot(p.x - pts[i]!.x, p.z - pts[i]!.z), 0);
+    const rows = [
+      ...(s.waters ?? []).map((w, i) => ({ key: `w${i}`, kind: 'water' as const, i, name: `Water ${i + 1}`, info: `${Math.round(polygonArea(w.pts))} m² · ${w.depth} m deep`, color: WATER_COLOR, ...thumb(w.pts) })),
+      ...(s.roads ?? []).map((r, i) => ({ key: `r${i}`, kind: 'road' as const, i, name: `${roadDef(r.kind).label} ${i + 1}`, info: `${Math.round(len(r.pts))} m · ${r.width} m wide`, color: roadDef(r.kind).color, ...thumb(r.pts) })),
+      ...(s.surfaces ?? []).map((x, i) => ({ key: `s${i}`, kind: 'surface' as const, i, name: `${surfaceDef(x.kind).label} ${i + 1}`, info: `${Math.round(polygonArea(x.pts))} m²`, color: surfaceDef(x.kind).color, ...thumb(x.pts) })),
+    ];
+    return rows.filter((r) => r.points && this.match(r.name));
+  });
 
   /** Columns are never listed one by one: one entry per row of a floor. */
   private readonly floorCols = computed(() => {

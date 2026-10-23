@@ -1,52 +1,45 @@
 /**
- * Ruined buildings: a `ruin` level from 0 (intact) to 1 (a shell). A little ruin already shows: breaches in the facades
- * and holes in the roof. More ruin breaks the wall tops (upper floors first), opens the roof wider until it is gone
- * from {@link ROOFLESS}, and takes the upper floor slabs from {@link NO_SLABS}. Seeded, so the same building always
- * crumbles the same way. Pure.
+ * Ruined buildings: a `ruin` level from 0 (intact) to 1 (a shell). The roof goes first: holes from any ruin, gone
+ * from {@link ROOFLESS}; the upper floor slabs go from {@link NO_SLABS}. Once a building is open to the sky (no roof,
+ * or an open shell) its walls lose their upper part along one smooth, broken line, never holes lower down. Seeded,
+ * so the same building always crumbles the same way. Pure.
  */
 import { createRandom } from './site-spec';
 
 export const ROOFLESS = 0.6;
 export const NO_SLABS = 0.75;
-/** Below this the wall tops stay straight (only breaches and roof holes). */
-const JAGGED = 0.2;
 
-export interface RuinPiece {
-  /** Start along the wall and length (metres). */
-  from: number;
-  len: number;
-  /** How much of its top is gone (metres); a piece with cut ≥ its height is missing entirely. */
-  cut: number;
-  /** A breach through the wall between these heights (from the bottom of the piece). */
-  hole?: { y0: number; y1: number };
+/**
+ * The broken top of one wall `len` long and `h` high (the whole building, all floors): how high it still stands at
+ * each point along it. A smooth line through a few seeded heights about 7 m apart, so walls fall in broad bites, with
+ * a little roughness on the edge. `ruin` 0 → the whole wall stands.
+ */
+export function wallTop(len: number, h: number, ruin: number, rnd: () => number): (x: number) => number {
+  if (ruin <= 0.01 || len <= 0) return () => h;
+  const n = Math.max(2, Math.ceil(len / 7) + 1);
+  const knots = Array.from({ length: n }, () => Math.pow(rnd(), 0.8));
+  const phase = rnd() * 100;
+  return (x: number): number => {
+    const u = Math.min(n - 1, Math.max(0, (x / len) * (n - 1)));
+    const i = Math.floor(u), f = u - i, c = (1 - Math.cos(Math.PI * f)) / 2;
+    const smooth = knots[i]! * (1 - c) + knots[Math.min(i + 1, n - 1)]! * c;
+    const lost = Math.min(0.95, ruin * (0.35 + 0.9 * smooth)); // the share of the height that has fallen
+    const rough = 0.25 * Math.sin(x * 2.3 + phase) * Math.sin(x * 0.9 + phase * 0.7);
+    return Math.max(0, Math.min(h, h * (1 - lost) + rough));
+  };
 }
 
 /**
- * Break one wall run (`len` long, `h` high) of floor `li` of `floors` into pieces. `ruin` 0 → one intact piece.
- * Breaches span one to three pieces; higher floors lose more of their top.
+ * The standing pieces of one stretch of wall, from `from` to `from + len` along it (metres), between heights
+ * `bottom` and `top` of the building, cut to the broken line `standing` (absent = the wall is whole).
  */
-export function ruinPieces(len: number, h: number, ruin: number, li: number, floors: number, rnd: () => number): RuinPiece[] {
-  if (ruin <= 0.01 || len < 0.05) return [{ from: 0, len, cut: 0 }];
-  const upper = floors > 1 ? li / (floors - 1) : 1;
-  const top = (Math.max(0, ruin - JAGGED) / (1 - JAGGED)) * (0.35 + 0.65 * upper);
-  const breach = Math.min(0.45, ruin * 0.55);
+export function wallPieces(from: number, len: number, bottom: number, top: number, standing?: (x: number) => number): { from: number; len: number; top: number }[] {
+  if (!standing) return [{ from, len, top }];
   const n = Math.max(1, Math.round(len / 1.5));
-  const out: RuinPiece[] = [];
-  let left = 0, y0 = 0, y1 = 0;
+  const out: { from: number; len: number; top: number }[] = [];
   for (let i = 0; i < n; i++) {
-    const missing = rnd() < top * 0.45 * upper;
-    const cut = Math.min(h, missing ? h : h * top * Math.pow(rnd(), 0.8));
-    if (left === 0 && !missing && h > 1.5 && rnd() < breach * 0.5) {
-      left = 1 + Math.floor(rnd() * 3);
-      y0 = h * (0.12 + 0.35 * rnd());
-      y1 = Math.min(h - 0.3, y0 + h * (0.25 + 0.35 * rnd()));
-    }
-    const p: RuinPiece = { from: (len * i) / n, len: len / n, cut };
-    if (left > 0) {
-      left--;
-      if (y1 > y0 + 0.3 && y1 < h - cut - 0.15) p.hole = { y0, y1 };
-    }
-    out.push(p);
+    const a = from + (len * i) / n, t = Math.min(top, standing(a + len / n / 2));
+    if (t - bottom > 0.05) out.push({ from: a, len: len / n, top: t });
   }
   return out;
 }

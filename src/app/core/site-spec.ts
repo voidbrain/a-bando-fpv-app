@@ -160,6 +160,8 @@ export interface BuildingSpec {
   frame?: 'greenhouse';
   /** How ruined it is, 0 (intact, the default) to 1 (a shell): broken walls, no roof from 0.35 (see core/ruin.ts). */
   ruin?: number;
+  /** A different ruin level for some walls (building-local sides, as in `LevelSpec.sides`), 0..1: one fallen facade. */
+  ruinWalls?: Partial<Record<'n' | 's' | 'e' | 'w', number>>;
   /** An open shell: no roof and no upper floors left, whatever `ruin` says about the walls. */
   roofless?: boolean;
   /** Battlements (merlons) along the top of the walls. */
