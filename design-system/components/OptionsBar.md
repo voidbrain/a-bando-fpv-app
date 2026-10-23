@@ -10,7 +10,7 @@ OptionsBar is the chip bar beside the palette holding the active tool's options.
 - Show only the active tool's options. Select has its own (box / lasso, magnet).
 - It opens beside the active tool's button, on the side of the palette with more room (right by default), at the same
   height. Its grip drags it elsewhere (remembered as `abando-float-opts`); double-click the grip to put it back beside
-  the tool. Same layer as the palette, above the float boxes.
+  the tool. It joins the shared stacking order and comes on top when a tool is picked or it is clicked.
 
 ## Consumer provides
 

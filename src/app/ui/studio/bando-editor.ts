@@ -1,5 +1,6 @@
 import { Component, DestroyRef, ElementRef, afterNextRender, afterRenderEffect, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { uiResets } from '../../state/layout.store';
+import { raiseZ } from '../stacking';
 import { FormsModule } from '@angular/forms';
 import * as L from 'leaflet';
 import { contains, edgesOf, type Pt, type Rect } from '../../core/footprint';
@@ -153,8 +154,8 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
       @if (mode() === 'model') {
         <button class="btn" [disabled]="!ed.canUndo()" (click)="undo()" title="Undo (Ctrl+Z)">↶</button>
         <button class="btn" [disabled]="!ed.canRedo()" (click)="redo()" title="Redo">↷</button>
-        <button class="btn" [class.on]="blocksOpen()" (click)="blocksOpen.set(!blocksOpen())" title="Blocks: ready-made objects, buildings and patterns from your library and the online catalogue">▦ Blocks</button>
-        <button class="btn" [class.on]="elementsOpen()" (click)="elementsOpen.set(!elementsOpen())" title="Elements: list of all buildings, structures, walls and trees (grouped by area), with thumbnails and links">☰</button>
+        <button class="btn" [class.on]="blocksOpen()" (click)="blocksOpen.set(!blocksOpen())" title="Library: ready-made objects, buildings and patterns, yours and from the online catalogue">▦ Library</button>
+        <button class="btn" [class.on]="elementsOpen()" (click)="elementsOpen.set(!elementsOpen())" title="Elements: list of all buildings, structures, walls and trees (grouped by area), with thumbnails and links">☰ Elements</button>
         <button class="btn" [class.on]="ai.open()" (click)="ai.open.set(!ai.open())" title="Chat with the AI assistant to edit buildings and interiors">💬 AI @if (ai.busy()) { <i class="spin"></i> }</button>
         <button class="btn primary" (click)="save()">Save</button>
       }
@@ -487,7 +488,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
         </svg>
       }
       @if (mode() === 'model' && overlayOn()) {
-        <div #pal class="palette" role="toolbar" aria-label="Tools" aria-orientation="vertical" [style.left.px]="palXY().x" [style.top.px]="palXY().y" (pointerdown)="$event.stopPropagation()">
+        <div #pal class="palette" role="toolbar" aria-label="Tools" aria-orientation="vertical" [style.left.px]="palXY().x" [style.top.px]="palXY().y" [style.z-index]="palZ()" (pointerdown)="$event.stopPropagation(); palZ.set(raiseZ(palOwner))">
           <div class="tgrip" title="Drag to move the tools · double-click to put them back" (pointerdown)="tbDown($event, 'pal')" (pointermove)="tbMove($event)" (pointerup)="tbUp($event)" (pointercancel)="tbUp($event)" (dblclick)="tbReset('pal')" aria-hidden="true">⠿</div>
           @for (g of groups(); track g.id) {
             @if (g.sep) {
@@ -516,7 +517,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
           }
         </div>
         @if (!view3d() || tool() !== 'select') {
-          <div class="opts" role="toolbar" [attr.aria-label]="toolName() + ' options'" [style.left.px]="optsXY().left" [style.right.px]="optsXY().right" [style.top.px]="optsXY().top" [style.max-width.px]="optsXY().max" (pointerdown)="$event.stopPropagation()">
+          <div class="opts" role="toolbar" [attr.aria-label]="toolName() + ' options'" [style.left.px]="optsXY().left" [style.right.px]="optsXY().right" [style.top.px]="optsXY().top" [style.max-width.px]="optsXY().max" [style.z-index]="optsZ()" (pointerdown)="$event.stopPropagation(); optsZ.set(raiseZ(optsOwner))">
             <span class="tgrip" title="Drag to move the options · double-click to put them back beside the tool" (pointerdown)="tbDown($event, 'opts')" (pointermove)="tbMove($event)" (pointerup)="tbUp($event)" (pointercancel)="tbUp($event)" (dblclick)="tbReset('opts')" aria-hidden="true">⠿</span>
             <b [style.color]="toolColor()">{{ toolName() }}</b>
                 @switch (tool()) {
@@ -862,7 +863,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                         <button class="btn" (click)="applyBlockPattern({ block: pb, params: modValues()[pb.id] ?? {}, rot: 0 })" [disabled]="!!bd.footprint && needsRect(pb)" [title]="(pb.description ?? '') + ' Replaces what was there; still editable one by one.'">Apply</button>
                       </div>
                     } @empty {
-                      <div class="dim small">No pattern blocks yet: open ▦ Blocks to fetch the catalogue.</div>
+                      <div class="dim small">No pattern blocks yet: open ▦ Library to fetch the catalogue.</div>
                     }
                   </details>
                 }
@@ -940,12 +941,11 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
     .sp {
       flex: 1;
     }
-    /* the tool palette and its options sit above the float boxes (inspector, elements, assistant) */
+    /* the palette and its options share one stacking order with the float boxes (ui/stacking.ts): last clicked on top */
     .palette {
       position: absolute;
       left: 8px;
       top: 8px;
-      z-index: 1250;
       display: flex;
       flex-direction: column;
       gap: 2px;
@@ -1006,7 +1006,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
     }
     .ctx {
       position: absolute;
-      z-index: 1300;
+      z-index: 9000;
       display: flex;
       flex-direction: column;
       min-width: 170px;
@@ -1097,7 +1097,6 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
     .opts {
       /* left / right / top are bound: beside the active tool, or where it was dragged */
       position: absolute;
-      z-index: 1250;
       display: flex;
       flex-wrap: wrap;
       align-items: center;
@@ -1513,6 +1512,13 @@ export class BandoEditor {
     });
   });
   protected readonly groupCur = signal<Record<string, string>>({});
+
+  // ---- stacking: the toolbars share one order with the float boxes; the last opened or clicked is on top ----
+  protected readonly palOwner = {};
+  protected readonly optsOwner = {};
+  protected readonly palZ = signal(raiseZ(this.palOwner));
+  protected readonly optsZ = signal(raiseZ(this.optsOwner));
+  protected readonly raiseZ = raiseZ;
 
   // ---- movable toolbars: the palette and the options bar remember where they were dragged ----
   private readonly palEl = viewChild<ElementRef<HTMLElement>>('pal');
@@ -2512,6 +2518,10 @@ export class BandoEditor {
 
   constructor() {
     afterNextRender(() => this.init());
+    effect(() => {
+      this.tool(); // a new tool's options come on top
+      untracked(() => this.optsZ.set(raiseZ(this.optsOwner)));
+    });
     effect(() => {
       // pinned areas: dashed yellow outlines on the map, numbered like their chips in the footer
       const areas = this.studio.areas(), on = this.mapOn() && this.mode() === 'area';

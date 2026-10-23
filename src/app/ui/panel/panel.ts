@@ -126,6 +126,10 @@ import { PANEL_BY_ID, type PanelId } from '../panel-defs';
     :host(.min) .body {
       display: none;
     }
+    /* room at the bottom so the resize corners never sit on the last row */
+    :host(.resizable) .body {
+      padding-bottom: 16px;
+    }
     /* collapsed panels are not resizable (the remembered expanded size must survive untouched) */
     :host(.min.resizable) {
       resize: none;

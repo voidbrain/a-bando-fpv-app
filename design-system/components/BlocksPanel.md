@@ -5,7 +5,7 @@ and kind.
 
 ## Use
 
-- Opened from the editor bar (`▦ Blocks`). A row shows the block's picture (a tool icon), name and `vN` (or "mine").
+- Opened from the editor bar (`▦ Library`; the float box is titled Library). A row shows the block's picture (a tool icon), name and `vN` (or "mine").
   Clicking a row expands it: description, author and licence, its parameters as fields, then the actions.
 - Actions: **Place** (then click the map; the hint and a dashed ring follow the pointer; Esc stops), **Apply to floor**
   for patterns (needs a selected building), **Copy to mine**, **Export**, **Delete** (own blocks only).
