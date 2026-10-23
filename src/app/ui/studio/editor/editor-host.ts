@@ -28,6 +28,7 @@ export type Drag =
   | { t: 'scatter'; pts: Pt[] }
   | { t: 'terrain'; pts: Pt[]; h0: number }
   | { t: 'layer'; pts: Pt[] }
+  | { t: 'layerPt'; kind: 'road' | 'surface' | 'water'; i: number; k: number }
   | { t: 'under'; a: Pt; b: Pt }
   | { t: 'fenceEnd'; i: number; end: 0 | 1 }
   | { t: 'voidDraw'; a: Pt; b: Pt }

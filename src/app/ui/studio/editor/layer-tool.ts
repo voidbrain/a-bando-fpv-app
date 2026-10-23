@@ -1,6 +1,6 @@
 import { computed, signal } from '@angular/core';
 import type { Pt } from '../../../core/footprint';
-import { ROADS, SURFACES, WATER_COLOR, layerShape, mergeWaters, pathLength, roadDef, surfaceDef } from '../../../core/layers';
+import { ROADS, SURFACES, WATER_COLOR, insertPoint, layerShape, mergeWaters, pathLength, removePoint, roadDef, surfaceDef } from '../../../core/layers';
 import type { RoadKind, RoadSpec, SurfaceKind } from '../../../core/site-spec';
 import { defaultTerrain } from '../../../core/terrain';
 import type { PickOption } from '../pick-menu';
@@ -50,6 +50,53 @@ export class LayerTool {
     const p = this.h.pick();
     return p?.t === t && p.i === i;
   };
+
+  /** The points of the selected road / surface / water, for editing them one by one (with the Select tool, outdoors). */
+  readonly editPts = computed(() => {
+    const p = this.h.pick();
+    if (this.h.tool() !== 'select' || (p?.t !== 'road' && p?.t !== 'surface' && p?.t !== 'water')) return null;
+    const pts = (p.t === 'road' ? this.roadSel() : p.t === 'surface' ? this.surfaceSel() : this.waterSel())?.pts;
+    return pts ? { kind: p.t, i: p.i, pts, closed: p.t !== 'road' } : null;
+  });
+
+  /** A press on a point: drag it; with Alt, remove it (an outline keeps 3 points, a road 2). */
+  pointDown(e: PointerEvent, k: number): void {
+    const ep = this.editPts();
+    if (!ep) return;
+    e.stopPropagation();
+    if (e.altKey) {
+      const next = removePoint(ep.pts, k, ep.closed ? 3 : 2);
+      if (!next) return void this.h.toast.show(ep.closed ? 'An outline keeps at least 3 points.' : 'A road keeps at least 2 points.');
+      this.setPts(ep.kind, ep.i, next);
+      return;
+    }
+    this.h.capture(e);
+    this.h.drag.set({ t: 'layerPt', kind: ep.kind, i: ep.i, k });
+  }
+
+  /** A double-click on the selected line or outline: a new point there (one undo step). */
+  addPoint(e: MouseEvent): void {
+    const ep = this.editPts();
+    if (!ep) return;
+    e.stopPropagation();
+    const r = insertPoint(ep.pts, this.h.toWorld(e as PointerEvent), ep.closed);
+    if (r) this.setPts(ep.kind, ep.i, r.pts);
+  }
+
+  /** A point being dragged (inside the drag's gesture: no undo step of its own). */
+  movePoint(s: { roads?: { pts: Pt[] }[]; surfaces?: { pts: Pt[] }[]; waters?: { pts: Pt[] }[] }, d: { kind: 'road' | 'surface' | 'water'; i: number; k: number }, p: Pt): void {
+    const list = d.kind === 'road' ? s.roads : d.kind === 'surface' ? s.surfaces : s.waters;
+    const x = list?.[d.i];
+    if (x?.pts[d.k]) x.pts[d.k] = { x: Math.round(p.x * 10) / 10, z: Math.round(p.z * 10) / 10 };
+  }
+
+  private setPts(kind: 'road' | 'surface' | 'water', i: number, pts: Pt[]): void {
+    this.h.ed.commitSite((s) => {
+      const x = (kind === 'road' ? s.roads : kind === 'surface' ? s.surfaces : s.waters)?.[i];
+      if (x) x.pts = pts;
+    });
+    this.h.applyNow();
+  }
 
   setRoadKind(k: RoadKind): void {
     this.roadKind.set(k);

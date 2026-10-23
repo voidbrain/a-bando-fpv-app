@@ -93,6 +93,10 @@ export class SceneService {
       if (this.ready()) this.host?.site.setRoofHidden(this.view.roofHidden());
     });
     effect(() => {
+      const sat = this.view.satGround();
+      if (this.ready()) this.host?.site.setGroundStyle(sat ? 'satellite' : 'natural');
+    });
+    effect(() => {
       if (!this.ready()) return;
       const rot = this.calibration.rot();
       this.host?.setNorth(rot);
@@ -162,6 +166,7 @@ export class SceneService {
       this.xray.enabled = this.view.xray();
     }
     this.sim.world = site.collider;
+    site.setGroundStyle(untracked(() => this.view.satGround()) ? 'satellite' : 'natural');
     const t = takeoffSpot();
     this.sim.reposition(t.x, t.z, t.y ?? 0);
     untracked(() => this.host?.paths.rebuild(this.flights.all, this.flights.speedMax));

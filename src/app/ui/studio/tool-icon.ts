@@ -94,6 +94,7 @@ export const TOOL_ICONS: Readonly<Record<string, readonly Stroke[]>> = {
   xray: [{ p: 'M4 6 H14 V18 H4 Z', d: true }, { p: 'M10 10 H20 V20 H10 Z' }],
   follow: [{ p: 'M12 3 a9 9 0 1 0 0.01 0', d: true }, { p: 'M12 8 L15.5 16 L12 14 L8.5 16 Z', f: true }],
   recentre: [{ p: 'M12 3 V7 M12 17 V21 M3 12 H7 M17 12 H21' }, { p: 'M7 12 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0' }],
+  satellite: [{ p: 'M4 18 L10 12 L13 15 L20 8' }, { p: 'M3 4 H21 V20 H3 Z' }, dot(8, 8, 1.4)],
   resetLayout: [{ p: 'M4 12 a8 8 0 1 0 2.5 -5.8' }, { p: 'M3 3 V7.5 H7.5' }],
 };
 

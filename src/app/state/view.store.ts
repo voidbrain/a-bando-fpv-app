@@ -14,13 +14,15 @@ export interface ViewState {
   /** Fade obstacles between the camera and the drone. */
   xray: boolean;
   roofHidden: boolean;
+  /** The satellite picture laid on the 3D ground (a bando with a place and real ground). */
+  satGround: boolean;
   collisions: boolean;
   /** Up-tilt of the FPV camera, degrees. */
   fpvTiltDeg: number;
 }
 
 const KEY = 'abando-ng-view';
-const DEFAULTS: ViewState = { mainSource: '3d', cameraView: 'orbit', orbitFollow: true, replayFollow: true, xray: true, roofHidden: false, collisions: true, fpvTiltDeg: 25 };
+const DEFAULTS: ViewState = { mainSource: '3d', cameraView: 'orbit', orbitFollow: true, replayFollow: true, xray: true, roofHidden: false, satGround: false, collisions: true, fpvTiltDeg: 25 };
 
 export const ViewStore = signalStore(
   { providedIn: 'root' },
@@ -38,6 +40,7 @@ export const ViewStore = signalStore(
     toggleXray: () => patchState(store, (s) => ({ xray: !s.xray })),
     setRoofHidden: (roofHidden: boolean) => patchState(store, { roofHidden }),
     toggleRoof: () => patchState(store, (s) => ({ roofHidden: !s.roofHidden })),
+    toggleSatGround: () => patchState(store, (s) => ({ satGround: !s.satGround })),
     toggleCollisions: () => patchState(store, (s) => ({ collisions: !s.collisions })),
     setFpvTilt: (fpvTiltDeg: number) => patchState(store, { fpvTiltDeg: isFinite(fpvTiltDeg) ? fpvTiltDeg : 0 }),
   })),

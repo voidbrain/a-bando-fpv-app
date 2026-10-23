@@ -218,6 +218,26 @@ export class PreviewRenderer {
   private minDist = 2;
   private maxDist = 400;
 
+  /** Point the camera at a box, from far enough to see all of it (`keepRange`: zooming out stays as far as before). */
+  private frame(box: THREE.Box3, keepRange = false): void {
+    const size = box.getSize(new THREE.Vector3());
+    const r = Math.max(1, size.length() / 2);
+    box.getCenter(this.centre);
+    this.dist = (r / Math.sin((this.camera.fov * Math.PI) / 360)) * 1.05;
+    this.minDist = r * 0.6;
+    this.maxDist = keepRange ? Math.max(this.maxDist, r * 12) : r * 12;
+  }
+
+  /** Zoom to one of the building's fixtures (a roof ladder, a chimney), or back to the whole thing (null). */
+  zoomTo(fixture: number | null): void {
+    if (!this.content) return;
+    let target: THREE.Object3D = this.content;
+    if (fixture !== null) this.content.traverse((o) => void (o.userData['fixture'] === fixture && (target = o)));
+    const box = new THREE.Box3().setFromObject(target);
+    if (box.isEmpty()) return;
+    this.frame(box, target !== this.content);
+  }
+
   /** Replace what is shown. `reframe` re-centres the camera (a different object); otherwise the view is kept. */
   show(target: PreviewTarget, reframe: boolean): void {
     if (this.content) {
@@ -228,14 +248,7 @@ export class PreviewRenderer {
     this.scene.add(this.content);
     const box = new THREE.Box3().setFromObject(this.content);
     if (box.isEmpty()) return;
-    if (reframe || this.dist === 30) {
-      const size = box.getSize(new THREE.Vector3());
-      const r = Math.max(1, size.length() / 2);
-      box.getCenter(this.centre);
-      this.dist = (r / Math.sin((this.camera.fov * Math.PI) / 360)) * 1.05;
-      this.minDist = r * 0.6;
-      this.maxDist = r * 12;
-    }
+    if (reframe || this.dist === 30) this.frame(box);
     // the compass ring lies around the thing; its red arrow points to the real north
     const half = box.getSize(new THREE.Vector3()).length() / 2;
     this.compass.position.set(this.centre.x, 0.06, this.centre.z);

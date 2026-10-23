@@ -101,3 +101,35 @@ export function rotateCalibrationAbout(cal: Calibration, pivot: { x: number; z: 
 export function turnTowards(pivot: { x: number; z: number }, from: { x: number; z: number }, to: { x: number; z: number }): number {
   return (Math.atan2(to.z - pivot.z, to.x - pivot.x) - Math.atan2(from.z - pivot.z, from.x - pivot.x)) * DEG;
 }
+
+/**
+ * Coordinates typed by the pilot: decimal ("45.6469, 12.3002", "45.6469 12.3002") or degrees, minutes and seconds
+ * ("45°38'48.8\"N 12°18'00.8\"E"; S and W are negative). Null when it is not a valid latitude and longitude.
+ */
+export function parseLatLon(text: string): GeoPoint | null {
+  const t = text.trim();
+  const dms = [...t.matchAll(/(\d+(?:\.\d+)?)\s*°\s*(?:(\d+(?:\.\d+)?)\s*['′]\s*)?(?:(\d+(?:\.\d+)?)\s*["″]\s*)?([NSEWnsew])?/g)];
+  let lat: number, lon: number;
+  if (dms.length === 2) {
+    const val = (m: RegExpMatchArray): number => (+m[1]! + +(m[2] ?? 0) / 60 + +(m[3] ?? 0) / 3600) * (/[SWsw]/.test(m[4] ?? '') ? -1 : 1);
+    [lat, lon] = [val(dms[0]!), val(dms[1]!)];
+    if (/[EWew]/.test(dms[0]![4] ?? '')) [lat, lon] = [lon, lat]; // written longitude first
+  } else {
+    const m = /^(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)$/.exec(t);
+    if (!m) return null;
+    [lat, lon] = [+m[1]!, +m[2]!];
+  }
+  return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && isFinite(lat) && isFinite(lon) ? { lat, lon } : null;
+}
+
+/** A point given in degrees, in the bando's own metres (x east, z south from its origin). */
+export function siteFromLatLon(origin: GeoPoint, p: GeoPoint): { x: number; z: number } {
+  const [x, z] = toLocalAt(origin, p.lat, p.lon, { rot: 0, dx: 0, dz: 0 });
+  return { x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 };
+}
+
+/** A bando point in degrees (6 decimals, about 10 cm), as the pilot would type it back. */
+export function latLonText(origin: GeoPoint, p: { x: number; z: number }): string {
+  const [lat, lon] = toGeoAt(origin, p.x, p.z, { rot: 0, dx: 0, dz: 0 });
+  return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+}

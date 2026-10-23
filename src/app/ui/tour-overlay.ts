@@ -31,7 +31,7 @@ import { TourService } from '../services/tour.service';
       </svg>
     }
     @if (tour.state(); as s) {
-      <div #bar class="bar" role="status" aria-live="polite" [style.left.px]="barAt().left" [style.top.px]="barAt().top">
+      <div #bar class="bar" role="status" aria-live="polite" [attr.data-preparing]="s.preparing || null" [style.left.px]="barAt().left" [style.top.px]="barAt().top">
         <div class="head">
           <b>{{ s.title }}</b>
           <span class="dim small mono">{{ s.index }} / {{ s.total }}</span>

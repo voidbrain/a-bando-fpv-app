@@ -13,7 +13,16 @@ import { PreviewRenderer, type PreviewTarget } from '../../three/element-preview
     <div class="tb">
       <button [class.on]="!roofHidden()" [disabled]="indoor()" (click)="toggleRoof()" [title]="indoor() ? 'The roof is hidden while editing indoors' : roofOn() ? 'Hide the roof' : 'Show the roof'">⌂</button>
       <button [class.on]="spin()" (click)="toggleSpin()" [title]="spin() ? 'Stop turning' : 'Turn slowly'">⟳</button>
+      <button [class.on]="big()" (click)="toggleBig()" [title]="big() ? 'Back to the usual size' : 'Make the preview as big as the inspector allows'" [attr.aria-label]="big() ? 'Smaller preview' : 'Bigger preview'">⤢</button>
     </div>
+    @if (fixtures().length) {
+      <select class="fx" aria-label="Zoom to" [value]="focusFix() ?? ''" (change)="zoom($event)" title="Zoom to one of the building's fixtures">
+        <option value="">whole building</option>
+        @for (f of fixtures(); track $index) {
+          <option [value]="$index">{{ f }}</option>
+        }
+      </select>
+    }
     @if (failed()) {
       <div class="fail dim small">3D preview unavailable (WebGL could not start).</div>
     }
@@ -61,6 +70,14 @@ import { PreviewRenderer, type PreviewTarget } from '../../three/element-preview
       opacity: 0.45;
       cursor: default;
     }
+    .fx {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      max-width: 55%;
+      font-size: 11px;
+      background: rgba(10, 16, 12, 0.75);
+    }
     .grip {
       height: 8px;
       cursor: ns-resize;
@@ -102,6 +119,33 @@ export class ElementPreview {
     } catch {
       return dflt;
     }
+  }
+
+  /** The fixtures of the building shown (a roof ladder, a chimney): the preview can zoom to each. */
+  protected readonly fixtures = computed(() => {
+    const t = this.target();
+    return t.kind === 'building' ? (t.b.fixtures ?? []).map((f) => f.name || f.kind.replace(/_/g, ' ')) : [];
+  });
+  protected readonly focusFix = signal<number | null>(null);
+  protected zoom(e: Event): void {
+    const v = (e.target as HTMLSelectElement).value;
+    this.focusFix.set(v === '' ? null : Number(v));
+    this.renderer?.zoomTo(this.focusFix());
+  }
+
+  /** As big as the inspector allows, and back to the size it had (dragged sizes are kept). */
+  protected readonly big = signal(false);
+  private smallH = 0;
+  protected toggleBig(): void {
+    if (this.big()) {
+      this.h.set(this.smallH || this.h());
+      this.big.set(false);
+      return;
+    }
+    const body = (this.host.nativeElement as HTMLElement).parentElement;
+    this.smallH = this.h();
+    this.h.set(Math.round(Math.max(this.h(), (body?.clientHeight ?? 600) * 0.75)));
+    this.big.set(true);
   }
 
   protected gripDown(e: PointerEvent): void {
@@ -208,6 +252,7 @@ export class ElementPreview {
     clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       try {
+        if (reframe) this.focusFix.set(null);
         this.renderer?.show(this.shown(), reframe);
         this.lastKey = this.key();
       } catch {

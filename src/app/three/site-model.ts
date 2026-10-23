@@ -6,6 +6,7 @@ import { BASEMENT_WALL, tunnelAxis, volumeSolids } from '../core/underground';
 import { NO_SLABS, ROOFLESS, roofCells, roofRuns, ruinRandom, wallPieces, wallTop } from '../core/ruin';
 import * as THREE from 'three';
 import { mergeUnit } from './merge';
+import { satelliteTexture } from './satellite-ground';
 import { type BuildingSpec, type LevelSpec, type RoadSpec, type SiteSpec, type SurfaceSpec, type TreeSpec, type UndergroundSpec, createRandom, fixturesInSite } from '../core/site-spec';
 import { SiteCollider, type SolidBox, type TreeCylinder } from '../core/sim/collider';
 import { siteGround, type SiteGround } from '../core/site-ground';
@@ -31,7 +32,8 @@ export interface SiteModel {
   setGroundStyle(style: GroundStyle): void;
 }
 
-export type GroundStyle = 'natural' | 'height' | 'wire';
+/** How the terrain is drawn; `satellite` lays the satellite picture on it (a bando with a place and real ground only). */
+export type GroundStyle = 'natural' | 'height' | 'wire' | 'satellite';
 
 /** Instanced trees (trunks + crowns) with per-tree hide, used by the x-ray. */
 export class TreeField {
@@ -548,6 +550,10 @@ function terrainMesh(g: HeightGrid, color: string, rnd: () => number, surfaces: 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  // u east, v south from the grid's north-west corner: where a satellite picture of the area lands
+  const uv = new Float32Array(nx * nz * 2);
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) uv.set([i / Math.max(1, nx - 1), j / Math.max(1, nz - 1)], (j * nx + i) * 2);
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   geo.setIndex(new THREE.BufferAttribute(idx.subarray(0, n), 1));
   geo.computeVertexNormals();
   const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }));
@@ -966,11 +972,12 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean; merge?
   }
 
   // ---- towers and bridges, and the fixtures of buildings (a click on one selects its building)
-  const fixtures = spec.buildings.flatMap((b) => fixturesInSite(b).map((st) => ({ st, pick: { kind: 'building', id: b.id } })));
-  for (const { st, pick } of [...(spec.structures ?? []).map((st) => ({ st, pick: { kind: 'structure', id: st.id } })), ...fixtures]) {
+  const fixtures = spec.buildings.flatMap((b) => fixturesInSite(b).map((st, k) => ({ st, pick: { kind: 'building', id: b.id }, fixture: k as number | undefined })));
+  for (const { st, pick, fixture } of [...(spec.structures ?? []).map((st) => ({ st, pick: { kind: 'structure', id: st.id }, fixture: undefined })), ...fixtures]) {
     const built = buildStructure(st);
     const sy = ground.at(st.x, st.z);
     built.object.userData['pick'] = pick;
+    if (fixture !== undefined) built.object.userData['fixture'] = fixture; // which of its building's fixtures (the preview zooms to it)
     built.object.position.y += sy;
     group.add(built.object);
     units.push(built.object);
@@ -1043,7 +1050,21 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean; merge?
         for (let i = 0; i < pos.count; i++) col.setXYZ(i, ...heightColor(pos.getY(i), lo, hi));
       } else (col.array as Float32Array).set(natural);
       col.needsUpdate = true;
-      (terrain.material as THREE.MeshStandardMaterial).wireframe = style === 'wire';
+      const mat = terrain.material as THREE.MeshStandardMaterial;
+      mat.wireframe = style === 'wire';
+      const sat = style === 'satellite' && !spec.privacy && !opts.bare;
+      const t = terrain, grid = ground.grid;
+      const apply = (tex: THREE.Texture | null): void => {
+        const on = sat && !!tex && t.userData['style'] === 'satellite';
+        mat.map = on ? tex : null;
+        mat.vertexColors = !on;
+        mat.needsUpdate = true;
+      };
+      t.userData['style'] = style;
+      if (!sat) return apply(null);
+      // the picture is downloaded once per model, then reused
+      const p = (t.userData['sat'] ??= satelliteTexture(spec.origin, grid)) as Promise<THREE.Texture | null>;
+      void p.then(apply);
     },
   };
 }
