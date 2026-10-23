@@ -1,10 +1,12 @@
-import { FRAME_H, FRAME_W, shiftXY, type VideoSample } from '../core/sync/features';
+import { FRAME_H, FRAME_W, scanRate, shiftXY, type VideoSample } from '../core/sync/features';
 
 const PIXELS = FRAME_W * FRAME_H;
 const MIN_FRAME_GAP = 0.04;
+/** No new frame for this long: decoding stopped (a background tab, a codec the browser cannot keep up with). */
+const STALL_MS = 8000;
 
 /**
- * Play a video at 3x from `from` to `to` seconds and measure, between consecutive 64x36 grayscale frames: how fast the
+ * Play a video fast (3× up to 1080p, slower for 4K: `scanRate`) from `from` to `to` seconds and measure, between consecutive 64x36 grayscale frames: how fast the
  * picture pans, how much it changes and how much brighter the sky half is than the ground half. Browser only.
  */
 export async function scanVideo(video: HTMLVideoElement, from: number, to: number, onProgress: (t: number) => void): Promise<VideoSample[]> {
@@ -25,13 +27,21 @@ export async function scanVideo(video: HTMLVideoElement, from: number, to: numbe
     });
   }
 
+  let last = performance.now();
+  let watch: ReturnType<typeof setInterval> | undefined;
   await new Promise<void>((resolve, reject) => {
+    watch = setInterval(() => {
+      if (performance.now() - last < STALL_MS) return;
+      video.pause();
+      reject(new Error(document.hidden ? 'the video stops decoding while this tab is in the background: keep it in front during auto-sync' : 'the video stopped decoding (try a 1080p H.264 proxy)'));
+    }, 1000);
     const schedule = (cb: (now: number, meta: { mediaTime: number }) => void): void => {
       if (typeof video.requestVideoFrameCallback === 'function') video.requestVideoFrameCallback(cb);
       else requestAnimationFrame(() => cb(0, { mediaTime: video.currentTime }));
     };
     const onFrame = (_now: number, meta: { mediaTime: number }): void => {
       const t = meta.mediaTime;
+      last = performance.now();
       if (t - lastT >= MIN_FRAME_GAP) {
         lastT = t;
         g.drawImage(video, 0, 0, FRAME_W, FRAME_H);
@@ -62,8 +72,8 @@ export async function scanVideo(video: HTMLVideoElement, from: number, to: numbe
       } else schedule(onFrame);
     };
     video.onerror = () => reject(new Error('decode error while scanning'));
-    video.playbackRate = 3;
+    video.playbackRate = scanRate(video.videoWidth, video.videoHeight);
     video.play().then(() => schedule(onFrame)).catch(reject);
-  });
+  }).finally(() => clearInterval(watch));
   return out;
 }

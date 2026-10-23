@@ -3,7 +3,7 @@ import { findFlips, findLiftoff } from '../core/flight/analysis';
 import { createFlight, flightStats, maxSpeed, prepareFlight } from '../core/flight/flight';
 import { activeGround, autoAlignFlights, setAutoAlign, takeoffSpot } from '../core/takeoff';
 import { alignShift } from '../core/share';
-import { parseLog } from '../core/flight/log-parser';
+import { parseLogFile } from './log-parse';
 import { Vec3 } from '../core/math3d';
 import type { Calibration, Flight, GeoSample, Telemetry } from '../core/models';
 import { CalibrationStore } from '../state/calibration.store';
@@ -20,7 +20,7 @@ export interface FrameRequest {
 
 /**
  * Owns the loaded flights (the heavy data), keeps them prepared for the current calibration and mirrors a light
- * summary into {@link FlightStore}. Parsing is delegated to the pure `parseLog`.
+ * summary into {@link FlightStore}. Parsing is the pure `parseLog`, run in a Web Worker (`parseLogFile`).
  */
 @Injectable({ providedIn: 'root' })
 export class FlightService {
@@ -55,7 +55,7 @@ export class FlightService {
   async loadFiles(files: Iterable<File>): Promise<void> {
     for (const file of files) {
       try {
-        const { pts, tel } = parseLog(await file.text());
+        const { pts, tel } = await parseLogFile(file);
         this.add(file.name, pts, tel, { frame: true });
       } catch (e) {
         this.toast.show(`${file.name}: ${(e as Error).message}`);
