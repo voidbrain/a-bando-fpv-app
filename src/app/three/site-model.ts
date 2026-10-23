@@ -753,8 +753,8 @@ function buildBasement(ctx: Ctx, b: BuildingSpec, target: THREE.Object3D, floorM
 
 /** Build the whole site from a {@link SiteSpec}. Deterministic: the same spec always produces the same scene. */
 /**
- * `bare`: only the buildings (previews). `merge`: one mesh per material per building / structure / roof (the flight
- * view: far fewer draw calls; the 3D editor keeps separate meshes, it picks columns and walls one by one).
+ * `bare`: only the buildings (previews). `merge`: one mesh per material per building / structure / roof (far fewer
+ * draw calls); meshes with their own pick (columns, partitions) stay apart, so the 3D editor can still click them.
  */
 export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean; merge?: boolean } = {}): SiteModel {
   const group = new THREE.Group();

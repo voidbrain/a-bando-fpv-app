@@ -7,7 +7,7 @@
  * It also publishes the example bandos: every `library/bandos/*.json` is copied to `public/library/bandos/` and listed
  * in `public/library/bandos.json` (name, place, size and its `about` line), which the Bandos panel offers as examples.
  */
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -50,5 +50,7 @@ for (const f of readdirSync(bdir).filter((n) => n.endsWith('.json')).sort()) {
   writeFileSync(join(out, f), JSON.stringify(b) + '\n');
   bandos.push({ file: `bandos/${f}`, name: b.name, about: typeof b.about === 'string' ? b.about : '', origin: b.origin, buildings: b.buildings.length, ...(b.privacy ? { privacy: b.privacy } : {}) });
 }
+// an example removed from library/bandos must not stay published
+for (const f of readdirSync(out).filter((n) => n.endsWith('.json'))) if (!bandos.some((b) => b.file === `bandos/${f}`)) rmSync(join(out, f));
 writeFileSync(join(root, 'public', 'library', 'bandos.json'), JSON.stringify({ schema: 1, bandos }) + '\n');
 console.log(`bandos.json: ${bandos.length} example bandos`);

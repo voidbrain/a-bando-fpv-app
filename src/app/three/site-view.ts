@@ -147,7 +147,7 @@ export class SiteViewRenderer {
       dispose(this.model.group);
     }
     this.spec = spec;
-    this.model = buildSiteFromSpec(spec);
+    this.model = buildSiteFromSpec(spec, { merge: true });
     this.model.setRoofHidden?.(roofHidden);
     this.model.setGroundStyle(this.groundStyle);
     if (focus) this.focusFloor(spec, focus);

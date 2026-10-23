@@ -4,7 +4,6 @@ import { sanitizeSpec } from '../core/site-spec';
 import type { PanelId } from '../ui/panel-defs';
 import { LayoutStore } from '../state/layout.store';
 import { AiService } from './ai.service';
-import { DownloadService } from './download.service';
 import { FlightService } from './flight.service';
 import { PlaybackService } from './playback.service';
 import { SiteService } from './site.service';
@@ -33,13 +32,13 @@ export interface TourState {
   paused: boolean;
   /** Back has somewhere to go. */
   canBack: boolean;
-  /** Recording the screen for a clip. */
-  recording: boolean;
 }
 
-/** The copy of the Villetta example the tour edits (replaced on every run, so the pilot's own copies stay untouched). */
-const TOUR_BANDO = { id: 'tour-villetta', name: 'Bando Villetta (tour)', file: 'library/bandos/villetta.json' };
-/** A short cut of a real flight at Villetta (log thinned to ~100 Hz, video 480p): published with the app for the guide. */
+/** The copy of the Chiari e Forti example the tour builds and edits (replaced on every run: the pilot's own copies stay untouched). */
+const TOUR_BANDO = { id: 'tour-chiari', name: 'Chiari e Forti (tour)', file: 'library/bandos/chiari-e-forti.json' };
+/** Where the demo flight is replayed: a copy of the example without its place (the flight starts on its take-off pad). */
+const FLIGHT_BANDO = { id: 'tour-flight', name: 'Villetta (tour)', file: 'library/bandos/villetta-no-place.json' };
+/** A short cut of a real flight (log thinned to ~100 Hz, its GPS moved to 0, 0; video 480p): published with the app for the guide. */
 const DEMO = { log: 'guide-demo/flight.csv', video: 'guide-demo/flight.mp4' };
 const SETTINGS = 'abando-guide';
 
@@ -48,8 +47,8 @@ class Stopped extends Error {}
 /**
  * Plays the guided tour on the real interface: a drawn cursor glides to each target, clicks, types and drags with
  * synthetic events, and a caption says what happens. Slow or online work (generating from map data, the AI model) is
- * replaced by the real result of a ready example. Esc or Stop ends it at once; a snippet can also be recorded to a
- * video clip for the docs.
+ * replaced by the real result of a ready example. Esc or Stop ends it at once. The docs' clips are recorded from the
+ * same steps by `npm run clips`.
  */
 @Service()
 export class TourService {
@@ -61,7 +60,6 @@ export class TourService {
   private readonly video = inject(VideoService);
   private readonly playback = inject(PlaybackService);
   private readonly toast = inject(ToastService);
-  private readonly downloads = inject(DownloadService);
   private readonly storage = inject(StorageService);
 
   readonly state = signal<TourState | null>(null);
@@ -93,27 +91,7 @@ export class TourService {
     return this.run(s.title, [s]);
   }
 
-  /** Play a snippet while recording this tab, then save the clip (WebM). The browser asks which tab to share. */
-  async record(s: Snippet): Promise<void> {
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false, preferCurrentTab: true } as DisplayMediaStreamOptions);
-    } catch {
-      this.toast.show('Recording needs permission to capture this tab.');
-      return;
-    }
-    const chunks: Blob[] = [];
-    const rec = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm' });
-    rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
-    const done = new Promise<void>((ok) => (rec.onstop = () => ok()));
-    rec.start(250);
-    await this.sleep(600).catch(() => undefined);
-    await this.run(s.title, [s], true);
-    rec.stop();
-    stream.getTracks().forEach((t) => t.stop());
-    await done;
-    this.downloads.save(`${s.id}.webm`, new Blob(chunks, { type: 'video/webm' }), 'video/webm');
-  }
+
 
   end(): void {
     this.stop = true;
@@ -138,7 +116,7 @@ export class TourService {
   }
   private firsts: boolean[] = [];
 
-  private async run(title: string, snippets: readonly Snippet[], recording = false): Promise<void> {
+  private async run(title: string, snippets: readonly Snippet[]): Promise<void> {
     const beats: { beat: Beat; snippet: Snippet; first: boolean }[] = snippets.flatMap((s) => s.beats.map((beat, k) => ({ beat, snippet: s, first: k === 0 })));
     if (this.state()) this.end();
     while (this.state()) await new Promise((r) => setTimeout(r, 50));
@@ -152,7 +130,7 @@ export class TourService {
     try {
       for (let i = 0; i < beats.length; i++) {
         const { beat: b, snippet, first } = beats[i]!;
-        this.state.set({ title, index: i + 1, total: beats.length, say: b.say ?? this.state()?.say ?? '', paused: this.paused, canBack: i > 0, recording });
+        this.state.set({ title, index: i + 1, total: beats.length, say: b.say ?? this.state()?.say ?? '', paused: this.paused, canBack: i > 0 });
         this.skip = false;
         if (first) await this.prepare(snippet.needs ?? []);
         for (const a of b.actions) {
@@ -205,6 +183,7 @@ export class TourService {
       document.querySelector<HTMLButtonElement>('app-float-box[data-tour~="inspector"].closed header button')?.click();
       await this.sleep(200);
     }
+    if (needs.includes('site') || needs.includes('log')) await this.flightSite();
     if (needs.includes('log') && !this.flights.all.length) await this.hook('demoLog');
     if (needs.includes('video') && !this.video.loaded()) {
       await this.open('video');
@@ -239,6 +218,7 @@ export class TourService {
         if (a.do === 'point') return;
         await this.tap(p.x, p.y);
         if (a.do === 'click') this.clickAt(el, p.x, p.y);
+        this.focus.set(null); // what was clicked may be gone at once (a panel that changes): no outline left behind
         return;
       }
       case 'type': {
@@ -446,25 +426,45 @@ export class TourService {
     }
   }
 
-  /** Stand-in for generating from map data: the ready Villetta example, opened in the editor like a fresh model. */
-  private async fakeGenerate(): Promise<void> {
-    this.site.generating.set(true);
+  /** A fresh copy of an example under the tour's own id (it becomes the active bando); false when it could not be downloaded. */
+  private async copyExample(b: { id: string; name: string; file: string }, wait = 0): Promise<boolean> {
     try {
-      const res = await fetch(new URL(TOUR_BANDO.file, document.baseURI).toString());
+      const res = await fetch(new URL(b.file, document.baseURI).toString());
       const spec = sanitizeSpec(await res.json());
-      await this.sleep(1600);
+      await this.sleep(wait);
       if (!spec) throw new Error('example');
-      if (this.site.peek(TOUR_BANDO.id)) this.site.remove(TOUR_BANDO.id);
-      spec.id = TOUR_BANDO.id;
-      spec.name = TOUR_BANDO.name;
+      if (this.site.peek(b.id)) this.site.remove(b.id);
+      spec.id = b.id;
+      spec.name = b.name;
       spec.createdAt = Date.now();
       this.site.importJson(JSON.stringify(spec));
-    } catch {
+      return true;
+    } catch (e) {
+      if (e instanceof Stopped) throw e;
       this.toast.show('The example could not be downloaded; the tour goes on without it.');
-      return;
+      return false;
+    }
+  }
+
+  /** The bando the demo flight is replayed on, open in the main view (its flights start on the take-off pad). */
+  private async flightSite(): Promise<void> {
+    if (this.site.active().id === FLIGHT_BANDO.id) return;
+    this.flights.clear();
+    if (this.site.peek(FLIGHT_BANDO.id)) this.studio.open(FLIGHT_BANDO.id);
+    else await this.copyExample(FLIGHT_BANDO);
+    await this.sleep(600);
+  }
+
+  /** Stand-in for generating from map data: the ready Chiari e Forti example, opened in the editor like a fresh model. */
+  private async fakeGenerate(): Promise<void> {
+    this.site.generating.set(true);
+    let ok = false;
+    try {
+      ok = await this.copyExample(TOUR_BANDO, 1600);
     } finally {
       this.site.generating.set(false);
     }
+    if (!ok) return;
     this.studio.edit(TOUR_BANDO.id);
     await this.sleep(700);
     this.editor?.model();

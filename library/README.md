@@ -49,6 +49,7 @@ bando, so a block they need belongs in `blocks/` too.
 To add a place: generate it in the app, save its spec (before editing) as `tools/examples/data/<name>.osm.json`, add a
 section to the script, and run `npm run examples`.
 
-An example can be shared without its place: export it from the app with "place hidden" (its ground travels inside,
-map names are dropped), add `about`, and save it here (`villetta-no-place.json`). The list shows "place hidden" for
-it, and its copies keep no map and no map data.
+An example can be shared without its place: export it from the app hidden (its ground travels inside, map names are
+dropped), add `about`, and save it here (`villetta-no-place.json`). The list shows "place hidden" for it, and its
+copies keep no map and no map data. Such an example is not built by the script: its sources (map data, survey points)
+would give the place away, so they stay out of the repository. Change it in the app and export it again.

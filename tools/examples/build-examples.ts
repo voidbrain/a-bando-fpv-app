@@ -1,26 +1,24 @@
 /**
  * Build the example bandos in `library/bandos/` from map data and on-site survey: `npm run examples`.
  *
- * Inputs (`tools/examples/data/`): what the app's own generator made from OpenStreetMap for each place (`*.osm.json`,
- * the spec as generated, before any edit) and two Overpass answers for waterways OSM has only as centre lines. The
+ * Inputs (`tools/examples/data/`): what the app's own generator made from OpenStreetMap (`*.osm.json`, the spec as
+ * generated, before any edit) and an Overpass answer for waterways OSM has only as centre lines. The
  * refinements below come from the pilot's photos and survey points (lat / lon of corners, a ladder, passages); each is
  * commented with what it is. Blocks come from the published catalogue (`public/library/catalog.json`).
  *
- * Outputs: `villetta.json`, `chiari-e-forti.json` and `villetta-no-place.json` (Villetta shared without its place, made
- * with the app's own `shareCopy`; its real ground is taken from the previous file, since only the app can download
- * it). Generated ids are renumbered the same way on every run, so rebuilding does not churn the files. Then run
- * `node tools/build-catalog.mjs` (the npm script does) to publish them.
+ * Output: `chiari-e-forti.json`. Generated ids are renumbered the same way on every run, so rebuilding does not churn
+ * the file. Then run `node tools/build-catalog.mjs` (the npm script does) to publish it.
+ *
+ * `villetta-no-place.json` is not built here: that place is kept private, so its sources (map data, survey points)
+ * are not in the repository. The file is the app's own export with the place hidden; change it in the app and export
+ * it again (Bandos → Export, a bando whose place is hidden stays hidden).
  *
  * Map data © OpenStreetMap contributors (ODbL).
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { stripOutline, unionOutline } from '../../src/app/core/layers';
-import { baseKey } from '../../src/app/core/elevation';
-import { applyStore } from '../../src/app/core/modules';
 import { placeBlock, sanitizeBlock, type BlockSpec } from '../../src/app/core/blocks';
 import { toLocalAt } from '../../src/app/core/geo';
-import { decodeHeights, shareCopy } from '../../src/app/core/share';
-import { emptyGrid } from '../../src/app/core/terrain';
 import { sanitizeSpec, type BuildingSpec, type SiteSpec, type Vec2, type LevelSpec } from '../../src/app/core/site-spec';
 
 const ROOT = process.cwd(); // run from the repository root (npm run examples)
@@ -107,201 +105,6 @@ function passage(bd: BuildingSpec, a: Vec2, b: Vec2, w: number, h: number): numb
     n++;
   }
   return n;
-}
-const localOf = (spec: SiteSpec, lat: number, lon: number): Vec2 => { const [x, z] = toLocalAt(spec.origin, lat, lon, { rot: 0, dx: 0, dz: 0 }); return { x, z }; };
-/** A polyline cut to a rectangle: the pieces inside it. */
-function clipLine(pts: readonly Vec2[], r: { x0: number; x1: number; z0: number; z1: number }): Vec2[][] {
-  const inside = (p: Vec2): boolean => p.x >= r.x0 && p.x <= r.x1 && p.z >= r.z0 && p.z <= r.z1;
-  const out: Vec2[][] = [];
-  let cur: Vec2[] = [];
-  const cross = (a: Vec2, b: Vec2): Vec2 => {
-    let t = 1;
-    for (const [v, lo, hi, d] of [[a.x, r.x0, r.x1, b.x - a.x], [a.z, r.z0, r.z1, b.z - a.z]] as const) {
-      if (d > 0 && v + d * t > hi) t = Math.min(t, (hi - v) / d);
-      if (d < 0 && v + d * t < lo) t = Math.min(t, (lo - v) / d);
-    }
-    return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
-  };
-  pts.forEach((p, i) => {
-    const prev = pts[i - 1];
-    if (inside(p)) {
-      if (prev && !inside(prev)) cur.push(cross(p, prev));
-      cur.push(p);
-    } else if (prev && inside(prev)) {
-      cur.push(cross(prev, p));
-      out.push(cur);
-      cur = [];
-    }
-  });
-  if (cur.length) out.push(cur);
-  return out.filter((l) => l.length >= 2);
-}
-function treeLine(spec: SiteSpec, a: Vec2, b: Vec2, step: number, seed: number, kind: 'd' | 'c' = 'd'): void {
-  const n = Math.max(1, Math.round(Math.hypot(b.x - a.x, b.z - a.z) / step));
-  for (let i = 0; i <= n; i++) {
-    const r = Math.abs(Math.sin(seed * 97 + i * 13.7));
-    spec.trees.push({ x: a.x + ((b.x - a.x) * i) / n + (r - 0.5) * 2, z: a.z + ((b.z - a.z) * i) / n + (r - 0.5) * 2, h: 9 + r * 6, r: 2.6 + r * 1.6, kind });
-  }
-}
-
-let villetta!: SiteSpec; // the place-hidden copy below is made from it
-// ---------- Bando Villetta ----------
-{
-  const s = JSON.parse(readFileSync(DATA + '/villetta.osm.json', 'utf8')) as SiteSpec;
-  const B = (n: number) => s.buildings.find((b) => b.name === 'Building ' + n)!;
-  // surveyed on site: the main store's four corners (its place, size and turn), the greenhouse's SW and NE corners
-  const sSW = localOf(s, 45.52775013857078, 12.134013408697143), sNE = localOf(s, 45.52904004167317, 12.134938334231775);
-  const sSE = localOf(s, 45.52770317763605, 12.134707829580833), sNW = localOf(s, 45.529099225191516, 12.134225258899455);
-  const gSW = localOf(s, 45.52916763814051, 12.13336506941329), gNE = localOf(s, 45.529296941523256, 12.134036837649042);
-  const mid = (a: Vec2, b: Vec2): Vec2 => ({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });
-  const south = mid(sSW, sSE), north = mid(sNW, sNE), west = mid(sSW, sNW), east = mid(sSE, sNE);
-  const shedRot = ((((Math.atan2(north.z - south.z, north.x - south.x) * 180) / Math.PI) % 360) + 360) % 360; // its length runs north
-  const shedAt = mid(south, north);
-  // everything below is laid out in the store's own frame: x along it to the north, z across to the east
-  const at = (x: number, z: number): Vec2 => rot({ x, z }, shedAt, shedRot);
-  const inFrame = (p: Vec2): Vec2 => { const a = (shedRot * Math.PI) / 180, dx = p.x - shedAt.x, dz = p.z - shedAt.z; return { x: dx * Math.cos(a) + dz * Math.sin(a), z: -dx * Math.sin(a) + dz * Math.cos(a) }; };
-  const C = { x: 0, z: 0 }, HL = Math.hypot(north.x - south.x, north.z - south.z) / 2, HW = Math.hypot(east.x - west.x, east.z - west.z) / 2; // half sizes, from the survey
-  const across = (shedRot + 90) % 360; // a building whose length runs east - west
-  s.buildings = s.buildings.filter((b) => ![1, 2, 3, 4].includes(+b.name.replace('Building ', '')));
-  // the main store: four barrel halls, the store shell (long walls 2 windows + 1 door, all windows north) with the
-  // window module raised as on site, and four rows of square columns under the roof valleys, one every third pier
-  const hall = (2 * HW) / 4;
-  placeBlock(s, block('abando/vault-shed'), { len: 2 * HL, hall, h: 6 }, at(C.x, C.z), shedRot);
-  const store = s.buildings.at(-1)!;
-  store.name = 'Main store';
-  // windows half and half: a solid lower half, glass from mid-height up to the eaves (the same everywhere)
-  applyStore(store, 0, { doorEnd: 'min', panel: 3, lintel: 0.3 });
-  // the south end: under each barrel a big door between two windows
-  store.levels[0]!.doors['w'] = Array.from({ length: 4 }, (_, k) => [
-    { kind: 'window' as const, c: hall * k + hall * 0.2, w: 3.2, h: 2.7, sill: 3 },
-    { kind: 'door' as const, c: hall * k + hall * 0.5, w: 3.6, h: 5.4 },
-    { kind: 'window' as const, c: hall * k + hall * 0.8, w: 3.2, h: 2.7, sill: 3 },
-  ]).flat();
-  // the caged ladder up to the roof, at its surveyed place: part of the store (a fixture in its frame), so it shows in
-  // the store's inspector and moves with it
-  placeBlock(s, block('abando/cage-ladder'), { h: 7.8 }, { x: 0, z: 0 }, 0);
-  const ladder = s.structures!.pop()!, lp = inFrame(localOf(s, 45.52792659907344, 12.134393408710572));
-  store.fixtures = [{ ...ladder, x: lp.x, z: lp.z, rotDeg: 0 }];
-  // the small electrical cabin against its east wall (42 m from the north end), as tall as the top of the store's roof
-  const storeTop = 6 + (hall / 2) * 0.58;
-  s.buildings.push({ id: 'b-cabin', name: 'Electrical cabin', pos: at(HL - 41.9, HW + 2.45), rotDeg: shedRot, length: 4.4, width: 4, color: '#cfc8b8', levels: [lv(0, storeTop, 'flat', { roofRise: 0.5, roofColor: '#8f8d86', doors: { e: [door(2)] } })] });
-  // the greenhouse frame, from its surveyed corners
-  const g0 = inFrame(gSW), g1 = inFrame(gNE);
-  const ghC = { x: (g0.x + g1.x) / 2, z: (g0.z + g1.z) / 2 }, ghDepth = Math.abs(g1.x - g0.x), ghLen = Math.abs(g1.z - g0.z);
-  s.buildings.push({ id: 'b-greenhouse', name: 'Greenhouse frame', pos: at(ghC.x, ghC.z), rotDeg: across, length: ghLen, width: ghDepth, frame: 'greenhouse', glass: false, levels: [lv(0, 3.5, 'gable', { roofRise: 2 })] });
-  // the annex between them, touching the store's north wall and the greenhouse's east end: a barrel roof (closed at both
-  // ends) over an upper storey with small windows under the eaves and a door-size opening in the east end, standing on
-  // a ground-floor colonnade on the north side and both ends. Behind the columns, set back, walls with big doors (one
-  // every two bays) on the north and two door-size openings on the east; the west end, toward the greenhouse, is open
-  // in line with the greenhouse (the same north and south walls)
-  const aw = ghC.z + ghLen / 2, aLen = 52.3, aDepth = ghDepth, aC = { x: ghC.x, z: aw + aLen / 2 }, back = 2.5;
-  const free = Math.max(0, -HW - aw); // the stretch of its south side west of the store, open to the air
-  const bays = Math.round((aLen - back) / 5.2), pitch = (aLen - back) / bays;
-  // small windows under the eaves, in pairs
-  const clerestory = Array.from({ length: bays }, (_, k) => [-0.75, 0.75].map((o) => ({ kind: 'window' as const, c: pitch * (k + 0.5) + o, w: 1.0, h: 0.6, sill: 2.6 }))).flat();
-  const eastCols = Math.max(2, Math.round(aDepth / 5));
-  const southCols = Math.max(1, Math.round(free / 5.2));
-  s.buildings.push({
-    id: 'b-annex', name: 'Annex', pos: at(aC.x, aC.z), rotDeg: across, length: aLen, width: aDepth, color: '#d7d3c8',
-    levels: [
-      {
-        ...lv(0, 3, 'none'),
-        sides: { n: false, s: false, e: false, w: false },
-        doors: {},
-        columns: [
-          ...Array.from({ length: bays + 1 }, (_, k) => ({ x: Math.max(0.3, pitch * k), z: 0.3, size: 0.5 })),
-          ...Array.from({ length: eastCols }, (_, k) => ({ x: aLen - 0.3, z: 0.3 + ((aDepth - 0.6) * (k + 1)) / eastCols, size: 0.5 })),
-          ...Array.from({ length: eastCols }, (_, k) => ({ x: 0.3, z: 0.3 + ((aDepth - 0.6) * (k + 1)) / eastCols, size: 0.5 })),
-          ...Array.from({ length: southCols }, (_, k) => ({ x: (free * (k + 1)) / southCols, z: aDepth - 0.3, size: 0.5 })),
-        ],
-      },
-      { ...lv(3, 3.6, 'vault', { roofTurn: true, roofCount: 1, vaultK: 0.35, roofRise: 2, roofColor: '#b0563d' }), doors: { n: clerestory, s: clerestory, e: [{ kind: 'door', c: aDepth / 2, w: 1.2, h: 2.2 }] } },
-    ],
-  });
-  const aRot = (p: Vec2): Vec2 => rot({ x: p.x - aLen / 2, z: p.z - aDepth / 2 }, at(aC.x, aC.z), across);
-  const setBack = (a: Vec2, b: Vec2): void => void (s.walls ??= []).push({ a: aRot(a), b: aRot(b), height: 3, thick: 0.3, material: 'masonry' });
-  // north: two bays of wall, then a big door (a gap), repeated
-  for (let k = 0; k < bays; k++) if (k % 3 !== 2) setBack({ x: pitch * k, z: back }, { x: pitch * (k + 1), z: back });
-  // south, west of the store: a wall with one opening in the middle, closed against the store's corner
-  if (free > 3) {
-    const zs = aDepth - back, mid2 = free / 2;
-    setBack({ x: 0, z: zs }, { x: mid2 - 1.2, z: zs });
-    setBack({ x: mid2 + 1.2, z: zs }, { x: free, z: zs });
-    setBack({ x: free, z: zs }, { x: free, z: aDepth });
-  }
-  // east: a wall with two door-size openings
-  const ez = (aDepth - back) / 3;
-  setBack({ x: aLen - back, z: back }, { x: aLen - back, z: back + ez - 0.7 });
-  setBack({ x: aLen - back, z: back + ez + 0.7 }, { x: aLen - back, z: back + 2 * ez - 0.7 });
-  setBack({ x: aLen - back, z: back + 2 * ez + 0.7 }, { x: aLen - back, z: aDepth });
-  // the houses south of the road
-  const houses: [number, string][] = [[5, '#e3d6bd'], [6, '#d8c3a0'], [7, '#e7e1d2']];
-  for (const [n, c] of houses) {
-    const lv2 = floors(2, 3, 'gable', { roofRise: 2.2, roofColor: '#9a4f3a' });
-    lv2[0]!.doors = { s: [door(3)] };
-    Object.assign(B(n), { name: 'House', color: c, levels: lv2 });
-  }
-  // concrete aprons west, east and south of the store
-  const apron = (x0: number, x1: number, z0: number, z1: number) => ({ kind: 'concrete' as const, pts: [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }].map((p) => at(p.x, p.z)) });
-  s.surfaces = [apron(-HL + 0.75, 19.7, C.z - HW - 37, C.z - HW), apron(-HL - 4, -2.8, C.z + HW + 8.9, C.z + HW + 48.3), apron(-HL - 26.5, -HL, C.z - HW - 17.7, C.z + HW + 29)];
-  // the take-off pad on the west apron
-  s.droneStart = at(-27, C.z - HW - 18);
-  // the area: wide enough for the Scolo Ruviego channel north of the greenhouse and its two footbridges; the terrain
-  // grows with it (the app downloads the missing ground the first time the bando opens)
-  const area = { x0: -150, x1: 245, z0: -180, z1: 130 };
-  s.terrain!.half = { e: 250, n: 180 };
-  s.terrain!.base!.key = baseKey(s.origin, s.terrain!);
-  s.zone = { ...s.zone!, halfE: 250, halfN: 180 };
-  // roads cut to the area; OSM's footpath along the channel is the channel itself (water, below)
-  s.roads = (s.roads ?? []).filter((r) => r.kind !== 'path').flatMap((r) => clipLine(r.pts, area).map((pts) => ({ ...r, pts }))).filter((r) => r.pts.length >= 2);
-  // the Scolo Ruviego: a 4 m channel along its OSM centre line, west and north of the site
-  const DV = JSON.parse(readFileSync(DATA + '/villetta.drain.overpass.json', 'utf8')) as { elements: { geometry?: { lat: number; lon: number }[] }[] };
-  const drainLine = (DV.elements[0]!.geometry ?? []).map((g) => localOf(s, g.lat, g.lon));
-  const inArea = clipLine(drainLine, area);
-  s.waters = inArea.map((pts) => ({ pts: stripOutline(pts, 4), depth: 1.2 }));
-  // two footbridges over it (seen from above: north-west, and north-east past the field), across the channel
-  const bridgeAt = (p: Vec2): void => {
-    const all = inArea.flat();
-    let k = 0;
-    all.forEach((q, i) => { if (Math.hypot(q.x - p.x, q.z - p.z) < Math.hypot(all[k]!.x - p.x, all[k]!.z - p.z)) k = i; });
-    const a = all[Math.max(0, k - 1)]!, b = all[Math.min(all.length - 1, k + 1)]!;
-    const deg = (Math.atan2(b.z - a.z, b.x - a.x) * 180) / Math.PI + 90; // across the channel
-    placeBlock(s, block('abando/bridge'), { l: 10, w: 3, h: 2, style: 'beam' }, all[k]!, ((deg % 360) + 360) % 360);
-    s.structures!.at(-1)!.name = 'Footbridge';
-  };
-  bridgeAt(at(166.9, -94.7));
-  bridgeAt(at(139, 158.8));
-  // trees on the site's side of the channel: a dense row along the water, then sparser ones further in
-  s.trees = [];
-  const toward = at(0, 0);
-  for (const line of inArea)
-    line.slice(1).forEach((b, k) => {
-      const a = line[k]!, len = Math.hypot(b.x - a.x, b.z - a.z);
-      if (len < 1) return;
-      let nx = -(b.z - a.z) / len, nz = (b.x - a.x) / len;
-      if (nx * (toward.x - a.x) + nz * (toward.z - a.z) < 0) ((nx = -nx), (nz = -nz)); // the site's side
-      const row = (off: number, step: number, seed: number): void => treeLine(s, { x: a.x + nx * off, z: a.z + nz * off }, { x: b.x + nx * off, z: b.z + nz * off }, step, seed);
-      row(5, 6, 10 + k);
-      row(13, 14, 40 + k);
-      row(24, 26, 70 + k);
-    });
-  treeLine(s, { x: -60, z: 92 }, { x: 100, z: 120 }, 14, 2);
-  villetta = finish(s, 'example-villetta', 'Bando Villetta', ROOT + '/library/bandos/villetta.json', 'The famous main store: four barrel-vault halls with the store shell and columns inside, its annex and old greenhouse frame, concrete aprons, in the fields near Treviso.');
-}
-
-// ---------- Villetta without its place ----------
-{
-  // the app's own place-hidden export of the example above; its real ground comes from the previous file (only the app
-  // can download it), so the terrain must keep its size
-  const file = ROOT + '/library/bandos/villetta-no-place.json';
-  const old = existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as SiteSpec) : null;
-  const heights = old?.terrain?.base?.data && villetta.terrain ? decodeHeights(old.terrain.base.data, emptyGrid(villetta.terrain).h.length) : null;
-  if (!heights) console.warn('villetta-no-place: no usable ground in the previous file; export it from the app instead (Bandos → Export, place hidden)');
-  else {
-    const hidden = shareCopy(villetta, 'hidden', heights);
-    hidden.terrain!.base!.key = 'embedded:example-villetta-no-place';
-    finish(hidden, 'example-villetta-no-place', 'Villetta (place hidden)', file, 'The Villetta main store shared without its place: no map and no map data, its real ground travels inside. Open a copy, edit it, load your flights: they start on the take-off pad, and pins and the compass fit them.');
-  }
 }
 
 // ---------- Chiari e Forti ----------

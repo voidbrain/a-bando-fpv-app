@@ -7,7 +7,7 @@ import { backTarget, captionPlace, AI_SCRIPTS, SNIPPETS, TOURS, checkGuide, play
 describe('guided tour', () => {
   it('every tour uses known snippets, every snippet has captions and known hooks', () => {
     expect(checkGuide()).toEqual([]);
-    expect(checkGuide([{ id: 'x', section: 'start', title: 'X', beats: [{ actions: [{ do: 'hook', hook: 'nope' as never }] }] }], [{ id: 't', title: 'T', about: '', snippets: ['x', 'y'] }])).toEqual([
+    expect(checkGuide([{ id: 'x', section: 'bandos', title: 'X', beats: [{ actions: [{ do: 'hook', hook: 'nope' as never }] }] }], [{ id: 't', title: 'T', about: '', snippets: ['x', 'y'] }])).toEqual([
       'x: needs at least one beat with a caption',
       'x: unknown hook nope',
       't: unknown snippet y',
