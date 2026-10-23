@@ -1,0 +1,523 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 4px;
+}
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.seg button {
+  background: none;
+  border: 0;
+  padding: 3px 9px;
+  cursor: pointer;
+  color: var(--dim);
+}
+.seg button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+.sp {
+  flex: 1;
+}
+/* the palette and its options share one stacking order with the float boxes (ui/stacking.ts): last clicked on top */
+.palette {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  background: var(--panel-solid);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.pg {
+  position: relative;
+}
+/* the corner mark that says "more tools here" */
+.tri {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 10px;
+  height: 10px;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  background: var(--dim);
+}
+.tri:hover {
+  background: var(--text);
+}
+.fly {
+  position: absolute;
+  left: calc(100% + 6px);
+  top: 0;
+  z-index: 1260;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+  padding: 4px;
+  background: var(--panel-solid);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+.fbtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  white-space: nowrap;
+  color: var(--text, #e8efe9);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.fbtn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.fbtn.on {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: var(--tc);
+}
+.ctx {
+  position: absolute;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  min-width: 170px;
+  padding: 4px;
+  background: var(--panel-solid);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+.ctx button {
+  text-align: left;
+  padding: 5px 10px;
+  color: var(--text, #e8efe9);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ctx button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.ctx button.danger {
+  color: #ff8a8a;
+}
+.ctx .head {
+  padding: 3px 10px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.pbtn {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text, #e8efe9);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.pbtn::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tc);
+}
+.pbtn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.pbtn.on {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: var(--tc);
+}
+/* the handle that moves a toolbar */
+.tgrip {
+  display: grid;
+  place-items: center;
+  height: 14px;
+  color: var(--dim);
+  cursor: grab;
+  touch-action: none;
+  font-size: 11px;
+  line-height: 1;
+}
+.tgrip:hover {
+  color: var(--text);
+}
+.opts .tgrip {
+  height: auto;
+  padding: 0 2px;
+}
+.psep {
+  display: block;
+  height: 1px;
+  margin: 3px 2px;
+  background: var(--line);
+}
+.opts {
+  /* left / right / top are bound: beside the active tool, or where it was dragged */
+  position: absolute;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--panel-solid);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.grp {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+input.mini {
+  width: 54px;
+}
+.ov.cap.placing .hit {
+  pointer-events: none;
+}
+.ov.indoor .out {
+  opacity: 0.22;
+  pointer-events: none;
+}
+.lay {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+}
+.lay input[type='range'] {
+  width: 56px;
+}
+.wrap {
+  position: relative;
+  /* dragging on the plan must never select the labels under the pointer */
+  user-select: none;
+  -webkit-user-select: none;
+  flex: 1 1 auto;
+  min-height: 240px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #0a0f0c;
+  outline: none;
+}
+.map {
+  position: absolute;
+  inset: 0;
+}
+.wrap.v3 .map {
+  visibility: hidden;
+}
+.ov {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 700;
+  pointer-events: none;
+  touch-action: none;
+}
+.ov.cap {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+.ov.cap.sel {
+  cursor: default;
+}
+.ov .hit {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.ov .rotk {
+  cursor: grab;
+}
+.section {
+  flex: 1 1 100%;
+  width: 100%;
+  height: auto;
+  background: #0a0f0c;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+/* surfaces and water are picked by their edge only: a click inside them still pans the map or selects what is on them */
+.ov .hit.edge {
+  pointer-events: visibleStroke;
+  stroke-linejoin: round;
+}
+.frame {
+  position: absolute;
+  z-index: 700;
+  pointer-events: none;
+  border: 2px dashed var(--accent);
+  box-shadow: 0 0 0 9999px rgba(8, 14, 10, 0.5);
+}
+.h {
+  position: absolute;
+  pointer-events: auto;
+  touch-action: none;
+}
+.h.n, .h.s { left: 12px; right: 12px; height: 14px; cursor: ns-resize; }
+.h.e, .h.w { top: 12px; bottom: 12px; width: 14px; cursor: ew-resize; }
+.h.n { top: -8px; } .h.s { bottom: -8px; }
+.h.e { right: -8px; } .h.w { left: -8px; }
+.h.nw, .h.ne, .h.sw, .h.se { width: 18px; height: 18px; background: var(--accent); border-radius: 3px; border: 2px solid #12200b; }
+.h.nw { top: -10px; left: -10px; cursor: nwse-resize; }
+.h.se { bottom: -10px; right: -10px; cursor: nwse-resize; }
+.h.ne { top: -10px; right: -10px; cursor: nesw-resize; }
+.h.sw { bottom: -10px; left: -10px; cursor: nesw-resize; }
+.rotk {
+  position: absolute;
+  left: 50%;
+  top: -30px;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  border-radius: 50%;
+  background: #ffd166;
+  border: 2px solid #12200b;
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+}
+.search {
+  position: absolute;
+  z-index: 1100;
+  top: 8px;
+  left: 8px;
+  right: 56px;
+  display: flex;
+  gap: 6px;
+}
+.search input {
+  flex: 1;
+}
+.hits {
+  position: absolute;
+  z-index: 1100;
+  top: 40px;
+  left: 8px;
+  right: 56px;
+  max-height: 40%;
+  overflow: auto;
+  background: var(--panel-solid);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.hits button {
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  padding: 5px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hits button:hover {
+  background: #31443a;
+}
+.compass {
+  position: absolute;
+  z-index: 1100;
+  right: 8px;
+  top: 8px;
+  width: 46px;
+  height: 46px;
+  pointer-events: none;
+}
+.spin {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--dim);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  vertical-align: -1px;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.read {
+  position: absolute;
+  z-index: 1100;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  background: rgba(10, 16, 12, 0.85);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 2px 10px;
+  font: 600 12px var(--mono);
+  pointer-events: none;
+}
+.read.warn {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.notice {
+  position: absolute;
+  z-index: 1100;
+  left: 12px;
+  right: 12px;
+  top: 12px;
+  background: var(--panel-solid);
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.foot {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 4px 1px 8px;
+  border: 1px dashed #ffd166;
+  border-radius: 9px;
+  font-size: 11px;
+}
+.chip .x {
+  background: none;
+  border: 0;
+  color: var(--dim);
+  cursor: pointer;
+  padding: 0 2px;
+}
+.chip .x:hover {
+  color: var(--text);
+}
+.f {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+}
+.f > label {
+  min-width: 0;
+}
+.f input[type='text'] {
+  min-width: 0;
+  flex: 1;
+}
+.f label {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.f input[type='number'] {
+  width: 64px;
+}
+.mods {
+  padding-top: 6px;
+}
+.mods summary {
+  cursor: pointer;
+}
+/* inspector sections: a caption, then fields two to a row */
+.sec {
+  flex: 1 1 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+  align-items: end;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+.sec > .st {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.sec .span2,
+.sec .row {
+  grid-column: 1 / -1;
+}
+.sec .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  align-items: center;
+}
+.walls {
+  display: flex;
+  gap: 3px;
+  input {
+    width: 36px;
+  }
+}
+.fld {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--dim);
+  min-width: 0;
+}
+.fld input,
+.fld select {
+  width: 100%;
+  box-sizing: border-box;
+}
+.chk {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.sec.acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+details.sec.mods {
+  display: block;
+}
+.btn.cur:not(.on) {
+  border-color: var(--accent);
+}

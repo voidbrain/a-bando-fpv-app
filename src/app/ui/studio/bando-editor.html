@@ -1,0 +1,816 @@
+<div class="bar">
+  <ng-content />
+  <div class="seg">
+    <button [class.on]="mode() === 'area'" [disabled]="placeHidden()" (click)="setMode('area')" [title]="placeHidden() ? 'This bando was shared without its place: there is no map area to edit' : ''">1 · Area</button>
+    <button [class.on]="mode() === 'model'" [disabled]="!hasModel()" (click)="setMode('model')" data-tour="tab-model" [title]="hasModel() ? '' : 'Generate the model first'">2 · Model</button>
+  </div>
+  @if (mode() === 'model') {
+    <div class="seg" title="2D edits the plan; 3D just looks around the whole bando">
+      <button [class.on]="!view3d()" (click)="view3d.set(false)" data-tour="view-2d">2D</button>
+      <button [class.on]="view3d()" (click)="setView3d()" data-tour="view-3d">3D</button>
+    </div>
+    @if (view3d()) {
+      <label class="lay" title="Show the roofs in the 3D view"><input type="checkbox" [checked]="roofs3d()" (change)="roofs3d.set(checked($event))" /> roofs</label>
+    }
+    @if (ed.draft().terrain) {
+      <label class="lay" title="How the ground is drawn: its own colours, coloured by height (also under the 2D plan), or as a wireframe (3D)">ground
+        <select [value]="terrain.groundStyle()" (change)="terrain.groundStyle.set(terrain.asGroundStyle($event))">
+          <option value="natural" [selected]="terrain.groundStyle() === 'natural'">natural</option>
+          <option value="height" [selected]="terrain.groundStyle() === 'height'">height map</option>
+          <option value="wire" [selected]="terrain.groundStyle() === 'wire'">wireframe</option>
+        </select>
+      </label>
+    }
+    @if (!view3d()) {
+      <button class="btn" [class.on]="indoor()" [disabled]="!b() || !!b()!.frame" (click)="toggleIndoor()" title="Take the roof off and edit one floor of the selected building: walls, doors, windows, voids, columns, stairs">{{ indoor() ? '✓ Indoors' : 'Indoors' }}</button>
+      @if (indoor() && b(); as ib) {
+        <span class="grp">
+          @for (l of ib.levels; track $index) {
+            <button class="btn" [class.on]="$index === level()" (click)="pickLevel($index)" title="Edit this floor · click again to see the whole building">{{ levelName($index) }}</button>
+          }
+          <button class="btn" (click)="addLevel()" title="Add a floor on top (a copy of the last one; the roof moves up)">＋</button>
+          <button class="btn" [disabled]="ib.levels.length < 2" (click)="removeFloor()" title="Remove the selected floor">－</button>
+        </span>
+      }
+    }
+  }
+  <span class="sp"></span>
+  @if (mode() === 'model') {
+    <button class="btn" [disabled]="!ed.canUndo()" (click)="undo()" title="Undo (Ctrl+Z)">↶</button>
+    <button class="btn" [disabled]="!ed.canRedo()" (click)="redo()" title="Redo">↷</button>
+    <button class="btn" [class.on]="blocksOpen()" (click)="blocksOpen.set(!blocksOpen())" data-tour="library" title="Library: ready-made objects, buildings and patterns, yours and from the online catalogue">▦ Library</button>
+    <button class="btn" [class.on]="elementsOpen()" (click)="elementsOpen.set(!elementsOpen())" title="Elements: list of all buildings, structures, walls and trees (grouped by area), with thumbnails and links">☰ Elements</button>
+    <button class="btn" [class.on]="ai.open()" (click)="ai.open.set(!ai.open())" data-tour="ai" title="Chat with the AI assistant to edit buildings and interiors">💬 AI @if (ai.busy()) { <i class="spin"></i> }</button>
+    <button class="btn primary" (click)="save()">Save</button>
+  }
+  @if (placeHidden()) {
+    <span class="dim small" title="This bando was shared without its place: no map, no map data, no Area step. Flights start on its take-off pad; pin start / end and the compass fine-tune them.">no map · place hidden</span>
+  } @else {
+    <label class="lay" title="Map under the model">🗺
+      <select [value]="studio.basemap()" (change)="setBase($event)">
+        <option value="street">Street</option>
+        <option value="sat">Satellite</option>
+        <option value="off">Hidden</option>
+      </select>
+    </label>
+    <label class="lay" title="Map opacity"><input type="range" min="0.2" max="1" step="0.05" [value]="studio.mapOpacity()" (input)="setOpacity($event)" /></label>
+  }
+</div>
+<div class="wrap" #wrap tabindex="0" data-tour="map" [class.v3]="view3d() && overlayOn()" (keydown)="key($event)" (pointerdown)="closeMenus()" (contextmenu)="onContext($event)">
+  <div class="map" #el></div>
+
+  @if (overlayOn() && !view3d()) {
+    <svg
+      #svg
+      class="ov"
+      [class.cap]="captures()"
+      [class.sel]="tool() === 'select'"
+      [class.placing]="placing()"
+      [class.indoor]="indoor()"
+      [attr.viewBox]="vb()"
+      preserveAspectRatio="none"
+      (pointerdown)="bgDown($event)"
+      (pointermove)="move($event)"
+      (pointerup)="up($event)"
+      (pointercancel)="up($event)"
+      (pointerleave)="hover.set(null)"
+      (wheel)="wheel($event)"
+    >
+      @for (p of ed.draft().pads; track $index) {
+        <rect [attr.x]="p.x - p.w / 2" [attr.y]="p.z - p.d / 2" [attr.width]="p.w" [attr.height]="p.d" [attr.transform]="'rotate(' + (p.rotDeg ?? 0) + ' ' + p.x + ' ' + p.z + ')'" [attr.fill]="p.color ?? '#888'" opacity="0.55" />
+      }
+      @if (terrain.heightImage(); as hi) {
+        <image [attr.href]="hi.href" [attr.x]="hi.x" [attr.y]="hi.z" [attr.width]="hi.w" [attr.height]="hi.d" preserveAspectRatio="none" style="image-rendering: pixelated" pointer-events="none" />
+      }
+      @if (terrain.contours(); as ct) {
+        <path [attr.d]="ct.minor" fill="none" stroke="#3a2a14" stroke-opacity="0.35" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none" />
+        <path [attr.d]="ct.major" fill="none" stroke="#3a2a14" stroke-opacity="0.7" stroke-width="1.6" vector-effect="non-scaling-stroke" pointer-events="none" />
+      }
+      @for (sf of ed.draft().surfaces ?? []; track $index) {
+        <polygon class="hit edge" [class.out]="indoor()" [attr.points]="polyPts(sf.pts)" [attr.fill]="layers.surfColor(sf.kind)" fill-opacity="0.45" [attr.stroke]="layers.isPicked('surface', $index) ? '#ffd166' : layers.surfColor(sf.kind)" [attr.stroke-width]="layers.isPicked('surface', $index) ? 3 : 1.5" vector-effect="non-scaling-stroke" [attr.data-pk]="'surface:' + $index" (pointerdown)="layers.down($event, 'surface', $index)" />
+      }
+      @for (w of ed.draft().waters ?? []; track $index) {
+        <polygon class="hit edge" [class.out]="indoor()" [attr.points]="polyPts(w.pts)" [attr.fill]="layers.waterColor" fill-opacity="0.6" [attr.stroke]="layers.isPicked('water', $index) ? '#ffd166' : '#1f4f73'" [attr.stroke-width]="layers.isPicked('water', $index) ? 3 : 1.5" vector-effect="non-scaling-stroke" [attr.data-pk]="'water:' + $index" (pointerdown)="layers.down($event, 'water', $index)" />
+      }
+      @if (under.cutCells(); as cc) {
+        <path [attr.d]="cc" fill="#101410" fill-opacity="0.75" pointer-events="none" />
+      }
+      @for (u of ed.draft().underground ?? []; track u.id) {
+        <polygon class="hit edge" [class.out]="indoor()" [attr.points]="polyPts(u.outline)" fill="none" [attr.stroke]="under.sel() === u ? '#ffd166' : tc('tunnel')" [attr.stroke-width]="under.sel() === u ? 3 : 2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" [attr.data-pk]="'under:' + $index" (pointerdown)="under.down($event, $index)" />
+      }
+      @if (under.preview(); as up) {
+        <polygon [attr.points]="up" [attr.fill]="tc('tunnel')" fill-opacity="0.2" [attr.stroke]="tc('tunnel')" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+      }
+      @for (r of ed.draft().roads ?? []; track $index) {
+        @if (layers.isPicked('road', $index)) {
+          <polyline [attr.points]="polyPts(r.pts)" fill="none" stroke="#ffd166" [attr.stroke-width]="r.width + 2 / ppm()" stroke-linecap="round" stroke-linejoin="round" pointer-events="none" />
+        }
+        <polyline class="hit" [class.out]="indoor()" [attr.points]="polyPts(r.pts)" fill="none" [attr.stroke]="layers.roadColor(r)" [attr.stroke-width]="r.width" [attr.stroke-dasharray]="r.kind === 'rail' ? r.width * 0.6 + ' ' + r.width * 0.3 : null" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" [attr.data-pk]="'road:' + $index" (pointerdown)="layers.down($event, 'road', $index)" />
+      }
+      @if (layers.preview(); as lp) {
+        @if (tool() === 'road') {
+          <polyline [attr.points]="lp" fill="none" [attr.stroke]="tc('road')" stroke-opacity="0.7" [attr.stroke-width]="layers.roadWidth()" stroke-linecap="round" stroke-linejoin="round" pointer-events="none" />
+        } @else {
+          <polygon [attr.points]="lp" [attr.fill]="tc(tool())" fill-opacity="0.25" [attr.stroke]="tc(tool())" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+        }
+      }
+      @for (f of pathView(); track f.id) {
+        @for (sg of f.segs; track $index) {
+          <polyline [attr.points]="sg.pts" fill="none" [attr.stroke]="sg.color" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" pointer-events="none" />
+        }
+        @if (f.start; as s0) {
+          <circle [attr.cx]="s0.x" [attr.cy]="s0.z" [attr.r]="7 / ppm()" fill="#3ddc84" stroke="#0b2a17" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none" />
+          <text [attr.x]="s0.x" [attr.y]="s0.z" text-anchor="middle" dominant-baseline="central" [attr.font-size]="9 / ppm()" font-weight="700" fill="#0b2a17" pointer-events="none">S</text>
+        }
+        @if (f.end; as e0) {
+          <circle [attr.cx]="e0.x" [attr.cy]="e0.z" [attr.r]="7 / ppm()" fill="#ff6b6b" stroke="#3a0b0b" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none" />
+          <text [attr.x]="e0.x" [attr.y]="e0.z" text-anchor="middle" dominant-baseline="central" [attr.font-size]="9 / ppm()" font-weight="700" fill="#3a0b0b" pointer-events="none">E</text>
+        }
+      }
+      @if (zoneRect(); as zr) {
+        <rect [attr.transform]="'rotate(' + zr.rot + ' ' + (zr.x + zr.w / 2) + ' ' + (zr.z + zr.d / 2) + ')'" [attr.x]="zr.x" [attr.y]="zr.z" [attr.width]="zr.w" [attr.height]="zr.d" fill="none" stroke="#ffd166" stroke-width="2" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" />
+      }
+      @for (st of ed.draft().structures ?? []; track st.id) {
+        <g class="hit" [class.out]="indoor() && st.kind !== 'stairs' && st.kind !== 'ramp'" [attr.transform]="'translate(' + st.x + ' ' + st.z + ') rotate(' + st.rotDeg + ')'" [attr.data-pk]="'structure:' + $index" (pointerdown)="structDown($event, $index)">
+          @switch (st.kind) {
+            @case ('bridge') {
+              <rect [attr.x]="-(st.length ?? 30) / 2" [attr.y]="-st.size / 2" [attr.width]="st.length ?? 30" [attr.height]="st.size" fill="#8d8d86" fill-opacity="0.85" [attr.stroke]="structI() === $index ? '#ffd166' : '#3a3a36'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
+              <line [attr.x1]="-(st.length ?? 30) / 2" y1="0" [attr.x2]="(st.length ?? 30) / 2" y2="0" stroke="#f2e9b8" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" pointer-events="none" />
+            }
+            @case ('lattice_tower') {
+              <rect [attr.x]="-st.size" [attr.y]="-st.size" [attr.width]="st.size * 2" [attr.height]="st.size * 2" fill="#c9ced2" fill-opacity="0.6" [attr.stroke]="structI() === $index ? '#ffd166' : '#4c5359'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
+              <line [attr.x1]="-st.size" [attr.y1]="-st.size" [attr.x2]="st.size" [attr.y2]="st.size" stroke="#4c5359" vector-effect="non-scaling-stroke" pointer-events="none" />
+              <line [attr.x1]="st.size" [attr.y1]="-st.size" [attr.x2]="-st.size" [attr.y2]="st.size" stroke="#4c5359" vector-effect="non-scaling-stroke" pointer-events="none" />
+            }
+            @case ('shapes') {
+              @if (shapesBox(st); as fb) {
+                <rect [attr.x]="fb.x0" [attr.y]="fb.z0" [attr.width]="fb.x1 - fb.x0" [attr.height]="fb.z1 - fb.z0" fill="#c9c5b8" fill-opacity="0.75" [attr.stroke]="structI() === $index ? '#ffd166' : '#3a3a36'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" stroke-dasharray="4 2" vector-effect="non-scaling-stroke" />
+              }
+            }
+            @case ('tower_crane') {
+              <line [attr.x1]="-(st.length ?? 45) * 0.25" y1="0" [attr.x2]="st.length ?? 45" y2="0" stroke="#e0b020" stroke-width="5" vector-effect="non-scaling-stroke" />
+              <rect [attr.x]="-st.size" [attr.y]="-st.size" [attr.width]="st.size * 2" [attr.height]="st.size * 2" fill="#e0b020" [attr.stroke]="structI() === $index ? '#ffd166' : '#4c4220'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
+            }
+            @default {
+              @if (isRect(st.kind)) {
+                <rect [attr.x]="-(st.length ?? 6) / 2" [attr.y]="-st.size / 2" [attr.width]="st.length ?? 6" [attr.height]="st.size" [attr.fill]="rectFill(st.kind)" fill-opacity="0.85" [attr.stroke]="structI() === $index ? '#ffd166' : '#2b2b28'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
+                <line [attr.x1]="-(st.length ?? 6) * 0.32" y1="0" [attr.x2]="(st.length ?? 6) * 0.32" y2="0" stroke="#1d1d1b" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none" />
+                <polygon [attr.points]="arrowHead(st.length ?? 6, st.size)" fill="#1d1d1b" pointer-events="none" />
+              } @else {
+                <circle [attr.r]="st.size" [attr.fill]="st.kind === 'chimney' ? '#a86b52' : '#c4c8c6'" fill-opacity="0.85" [attr.stroke]="structI() === $index ? '#ffd166' : '#3a3a36'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
+                <circle [attr.r]="st.size * 0.55" fill="none" stroke="#3a3a36" vector-effect="non-scaling-stroke" pointer-events="none" />
+              }
+            }
+          }
+        </g>
+        <text [attr.x]="st.x" [attr.y]="st.z + (isRect(st.kind) ? 0 : st.size + 4)" text-anchor="middle" [attr.font-size]="Math.max(2, 11 / ppm())" fill="#1b231e" stroke="#fff" stroke-width="0.35" paint-order="stroke" pointer-events="none">{{ st.name }}</text>
+        @if (structI() === $index && (isRect(st.kind) || st.kind === 'lattice_tower' || st.kind === 'tower_crane')) {
+          <g [attr.transform]="'translate(' + st.x + ' ' + st.z + ') rotate(' + st.rotDeg + ')'">
+            <line x1="0" [attr.y1]="-(isRect(st.kind) ? st.size / 2 : st.size)" x2="0" [attr.y2]="-(isRect(st.kind) ? st.size / 2 : st.size) - 30 / ppm()" stroke="#b7ed83" vector-effect="non-scaling-stroke" pointer-events="none" />
+            <g class="hit rotk" [attr.transform]="'translate(0 ' + (-(isRect(st.kind) ? st.size / 2 : st.size) - 30 / ppm()) + ') scale(' + 1 / ppm() + ')'" (pointerdown)="structRotDown($event, $index)">
+              <title>Drag to rotate · Shift: 15° steps</title>
+              <circle r="10" fill="#ffd166" stroke="#12200b" stroke-width="1.5" />
+              <path d="M -4.5 2.5 A 5 5 0 1 1 1.5 4.8" fill="none" stroke="#12200b" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M 1.5 4.8 L -0.5 1.6 M 1.5 4.8 L 4.6 3.6" fill="none" stroke="#12200b" stroke-width="1.8" stroke-linecap="round" />
+            </g>
+          </g>
+        }
+      }
+      @for (w of ed.draft().walls ?? []; track $index) {
+        <line class="hit" [class.out]="indoor()" [attr.x1]="w.a.x" [attr.y1]="w.a.z" [attr.x2]="w.b.x" [attr.y2]="w.b.z" [attr.stroke]="fenceI() === $index ? '#ffd166' : (w.color ?? fenceColor(w.material))" [attr.stroke-dasharray]="w.material === 'chainlink' ? '2 2' : null" stroke-width="6" stroke-linecap="round" vector-effect="non-scaling-stroke" [attr.data-pk]="'fence:' + $index" (pointerdown)="fenceDown($event, $index)" />
+        @if (fenceI() === $index) {
+          <circle class="hit" [attr.cx]="w.a.x" [attr.cy]="w.a.z" [attr.r]="hr()" fill="#fff" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="fenceEndDown($event, $index, 0)" />
+          <circle class="hit" [attr.cx]="w.b.x" [attr.cy]="w.b.z" [attr.r]="hr()" fill="#fff" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="fenceEndDown($event, $index, 1)" />
+        }
+      }
+      @for (t of ed.draft().trees; track $index) {
+        <circle class="hit" [class.out]="indoor()" [attr.cx]="t.x" [attr.cy]="t.z" [attr.r]="t.r" [attr.fill]="t.kind === 'c' ? '#2f6b3c' : '#4f9a4a'" fill-opacity="0.85" [attr.stroke]="isTreeSel($index) ? '#ffd166' : '#1d3d22'" stroke-width="1.5" vector-effect="non-scaling-stroke" [attr.data-pk]="'tree:' + $index" (pointerdown)="treeDown($event, $index)" />
+      }
+      @for (bd of ed.draft().buildings; track bd.id) {
+        <g [attr.transform]="tf(bd)" [attr.opacity]="indoor() && bd.id !== ed.selectedId() ? 0.35 : 1">
+          @if (bd.frame) {
+            @for (x of ribs(bd); track x) {
+              <line [attr.x1]="x" [attr.y1]="-bd.width / 2" [attr.x2]="x" [attr.y2]="bd.width / 2" stroke="#56655f" vector-effect="non-scaling-stroke" pointer-events="none" />
+            }
+          }
+          <polygon class="hit" [attr.points]="outline(bd)" [attr.fill]="bd.color ?? '#d7d0bd'" [attr.fill-opacity]="indoor() && bd.id === ed.selectedId() ? 0.2 : 0.8" [attr.stroke]="bd.id === ed.selectedId() ? (magnetHit() ? '#38d6ff' : '#b7ed83') : '#2d3a33'" [attr.stroke-width]="bd.id === ed.selectedId() ? 3 : 1.5" vector-effect="non-scaling-stroke" [attr.data-pk]="'building:' + bd.id" (pointerdown)="bldDown($event, bd)" />
+        </g>
+        <text [attr.x]="bd.pos.x" [attr.y]="bd.pos.z" text-anchor="middle" dominant-baseline="middle" [attr.font-size]="labelSize(bd)" fill="#1b231e" stroke="#fff" stroke-width="0.35" paint-order="stroke" pointer-events="none">{{ bd.name }}</text>
+      }
+      @if (b(); as bd) {
+        <g [attr.transform]="tf(bd)">
+          @if (!indoor()) {
+            @for (pt of lvl()?.partitions ?? []; track $index) {
+              <line [attr.x1]="pt[0].x - bd.length / 2" [attr.y1]="pt[0].z - bd.width / 2" [attr.x2]="pt[1].x - bd.length / 2" [attr.y2]="pt[1].z - bd.width / 2" stroke="#3a463f" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke" pointer-events="none" />
+            }
+          }
+          @if (indoor()) {
+            @for (pt of lvl()?.partitions ?? []; track $index) {
+              <line class="hit" [attr.x1]="pt[0].x - bd.length / 2" [attr.y1]="pt[0].z - bd.width / 2" [attr.x2]="pt[1].x - bd.length / 2" [attr.y2]="pt[1].z - bd.width / 2" [attr.stroke]="wallI() === $index ? '#ffd166' : '#f1f4f2'" stroke-width="5" stroke-linecap="round" vector-effect="non-scaling-stroke" [attr.data-pk]="'wall:' + $index" (pointerdown)="wallDown($event, $index)" />
+            }
+            @if (drag()?.t === 'wallDraw') {
+              <line [attr.x1]="wd().a.x - bd.length / 2" [attr.y1]="wd().a.z - bd.width / 2" [attr.x2]="wd().b.x - bd.length / 2" [attr.y2]="wd().b.z - bd.width / 2" [attr.stroke]="tc('wall')" stroke-width="4" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+            }
+          }
+          @if (indoor() && placing()) {
+            <path [attr.d]="gridPath(bd, 1)" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1" fill="none" vector-effect="non-scaling-stroke" pointer-events="none" />
+            <path [attr.d]="gridPath(bd, 5)" stroke="#ffffff" stroke-opacity="0.28" stroke-width="1" fill="none" vector-effect="non-scaling-stroke" pointer-events="none" />
+          }
+          @if (indoor()) {
+            @for (v of lvl()?.voids ?? []; track $index) {
+              <rect class="hit" [attr.x]="v.x0 - bd.length / 2" [attr.y]="v.z0 - bd.width / 2" [attr.width]="v.x1 - v.x0" [attr.height]="v.z1 - v.z0" [attr.fill]="v.water ? '#3d86b6' : '#0b0e0c'" fill-opacity="0.65" [attr.stroke]="voidI() === $index ? '#ffd166' : '#8fb7d1'" stroke-width="2" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" [attr.data-pk]="'void:' + $index" (pointerdown)="voidDown($event, $index)" />
+            }
+            @for (c of lvl()?.columns ?? []; track $index) {
+              @if (c.round) {
+                <circle class="hit" [attr.cx]="c.x - bd.length / 2" [attr.cy]="c.z - bd.width / 2" [attr.r]="c.size / 2" fill="#c9c5b8" [attr.stroke]="isColSel($index) ? '#ffd166' : '#222'" [attr.stroke-width]="isColSel($index) ? 3 : 2" vector-effect="non-scaling-stroke" [attr.data-pk]="'col:' + $index" (pointerdown)="colDown($event, $index)" (dblclick)="selectColumns('x')" />
+              } @else {
+                <rect class="hit" [attr.x]="c.x - bd.length / 2 - c.size / 2" [attr.y]="c.z - bd.width / 2 - c.size / 2" [attr.width]="c.size" [attr.height]="c.size" fill="#c9c5b8" [attr.stroke]="isColSel($index) ? '#ffd166' : '#222'" [attr.stroke-width]="isColSel($index) ? 3 : 2" vector-effect="non-scaling-stroke" [attr.data-pk]="'col:' + $index" (pointerdown)="colDown($event, $index)" (dblclick)="selectColumns('x')" />
+              }
+            }
+            @if (pv(); as g) {
+              @for (gl of g.guides; track $index) {
+                <line [attr.x1]="gl.x0 - bd.length / 2" [attr.y1]="gl.z0 - bd.width / 2" [attr.x2]="gl.x1 - bd.length / 2" [attr.y2]="gl.z1 - bd.width / 2" [attr.stroke]="gl.kind === 'equal' ? '#7dff9a' : '#7fd0ff'" stroke-width="1.5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+              }
+              @for (lb of g.labels; track $index) {
+                <text [attr.x]="lb.x - bd.length / 2" [attr.y]="lb.z - bd.width / 2" text-anchor="middle" dominant-baseline="middle" [attr.font-size]="Math.max(0.5, (lb.kind === 'wall' ? 10 : 12) / ppm())" [attr.fill]="lb.kind === 'equal' ? '#7dff9a' : lb.kind === 'wall' ? '#c9d3cc' : '#bfe7ff'" [attr.fill-opacity]="lb.kind === 'wall' ? 0.75 : 1" stroke="#101612" stroke-width="0.25" paint-order="stroke" pointer-events="none">{{ lb.text }}</text>
+              }
+              @if (g.seg; as sg) {
+                <line [attr.x1]="sg.x0 - bd.length / 2" [attr.y1]="sg.z0 - bd.width / 2" [attr.x2]="sg.x1 - bd.length / 2" [attr.y2]="sg.z1 - bd.width / 2" [attr.stroke]="sg.kind === 'door' ? '#ff9a2e' : '#4fc3f7'" stroke-width="9" stroke-opacity="0.75" vector-effect="non-scaling-stroke" pointer-events="none" />
+              }
+              @if (ghostKind() === 'column') {
+                @if (colShape() === 'round') {
+                  <circle [attr.cx]="g.x - bd.length / 2" [attr.cy]="g.z - bd.width / 2" [attr.r]="colSize() / 2" [attr.fill]="g.valid ? '#b7ed83' : '#ff6b6b'" fill-opacity="0.55" [attr.stroke]="g.valid ? '#b7ed83' : '#ff6b6b'" vector-effect="non-scaling-stroke" pointer-events="none" />
+                } @else {
+                  <rect [attr.x]="g.x - bd.length / 2 - colSize() / 2" [attr.y]="g.z - bd.width / 2 - colSize() / 2" [attr.width]="colSize()" [attr.height]="colSize()" [attr.fill]="g.valid ? '#b7ed83' : '#ff6b6b'" fill-opacity="0.55" [attr.stroke]="g.valid ? '#b7ed83' : '#ff6b6b'" vector-effect="non-scaling-stroke" pointer-events="none" />
+                }
+              } @else if (ghostKind() === 'stairs') {
+                <rect [attr.x]="g.x - bd.length / 2 - stairsGhost().w / 2" [attr.y]="g.z - bd.width / 2 - stairsGhost().d / 2" [attr.width]="stairsGhost().w" [attr.height]="stairsGhost().d" [attr.fill]="g.valid ? '#b7ed83' : '#ff6b6b'" fill-opacity="0.4" [attr.stroke]="g.valid ? '#b7ed83' : '#ff6b6b'" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" pointer-events="none" />
+              }
+            }
+            @if (drag()?.t === 'voidDraw') {
+              <rect [attr.x]="vd().x - bd.length / 2" [attr.y]="vd().z - bd.width / 2" [attr.width]="vd().w" [attr.height]="vd().d" [attr.fill]="tc('void')" fill-opacity="0.4" [attr.stroke]="tc('void')" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+            }
+          }
+          @for (o of openings(); track o.id) {
+            <line class="hit" [attr.x1]="seg(o).x1" [attr.y1]="seg(o).y1" [attr.x2]="seg(o).x2" [attr.y2]="seg(o).y2" [attr.stroke]="o.kind === 'door' ? '#ff9a2e' : '#4fc3f7'" [attr.stroke-width]="openId() === o.id ? 10 : 7" vector-effect="non-scaling-stroke" [attr.data-pk]="'opening:' + o.id" (pointerdown)="openDown($event, o.id)" />
+            @if (openId() === o.id) {
+              <circle class="hit" [attr.cx]="seg(o).x1" [attr.cy]="seg(o).y1" [attr.r]="hr()" fill="#fff" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="openEndDown($event, o.id, 0)" />
+              <circle class="hit" [attr.cx]="seg(o).x2" [attr.cy]="seg(o).y2" [attr.r]="hr()" fill="#fff" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="openEndDown($event, o.id, 1)" />
+            }
+          }
+          @if (tool() === 'select' && !indoor()) {
+            @if (!bd.footprint) {
+              @for (c of corners; track $index) {
+                <rect class="hit" [attr.x]="c[0] * bd.length / 2 - hr()" [attr.y]="c[1] * bd.width / 2 - hr()" [attr.width]="hr() * 2" [attr.height]="hr() * 2" fill="#b7ed83" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="cornerDown($event, c[0], c[1])" />
+              }
+            } @else {
+              @for (e of edgesOf(bd.footprint); track e.i) {
+                <rect class="hit" [attr.x]="(e.axis === 'x' ? (e.from + e.to) / 2 : e.at) - hr()" [attr.y]="(e.axis === 'x' ? e.at : (e.from + e.to) / 2) - hr()" [attr.width]="hr() * 2" [attr.height]="hr() * 2" fill="#b7ed83" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="edgeDown($event, e.i)" />
+              }
+            }
+            <line [attr.x1]="0" [attr.y1]="-bd.width / 2" [attr.x2]="0" [attr.y2]="-bd.width / 2 - 30 / ppm()" stroke="#b7ed83" vector-effect="non-scaling-stroke" pointer-events="none" />
+            <g class="hit rotk" [attr.transform]="'translate(0 ' + (-bd.width / 2 - 30 / ppm()) + ') scale(' + 1 / ppm() + ')'" (pointerdown)="rotDown($event)">
+              <title>Drag to rotate · magnet lines it up with neighbours · Shift: 15° steps · Alt: free</title>
+              <circle r="10" fill="#ffd166" stroke="#12200b" stroke-width="1.5" />
+              <path d="M -4.5 2.5 A 5 5 0 1 1 1.5 4.8" fill="none" stroke="#12200b" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M 1.5 4.8 L -0.5 1.6 M 1.5 4.8 L 4.6 3.6" fill="none" stroke="#12200b" stroke-width="1.8" stroke-linecap="round" />
+            </g>
+          }
+          @if (drag()?.t === 'shape') {
+            <rect [attr.x]="sh().x" [attr.y]="sh().z" [attr.width]="sh().w" [attr.height]="sh().d" [attr.fill]="sh().op === 'cut' ? tc('cut') : tc('wing')" fill-opacity="0.35" [attr.stroke]="sh().op === 'cut' ? tc('cut') : tc('wing')" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+          }
+        </g>
+      }
+      @if (drag()?.t === 'bridgeDraw') {
+        <line [attr.x1]="bdw().a.x" [attr.y1]="bdw().a.z" [attr.x2]="bdw().b.x" [attr.y2]="bdw().b.z" [attr.stroke]="tc('structure')" [attr.stroke-width]="7" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" pointer-events="none" />
+      }
+      @for (z of zonePolys(); track $index) {
+        <polygon [attr.points]="z" [attr.fill]="tc('scatter')" fill-opacity="0.08" [attr.stroke]="tc('scatter')" stroke-width="1.5" stroke-dasharray="5 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+      }
+      @if (zoneHi(); as zh) {
+        <polygon [attr.points]="zh" [attr.fill]="tc('scatter')" fill-opacity="0.22" [attr.stroke]="tc('scatter')" stroke-width="3" vector-effect="non-scaling-stroke" pointer-events="none" />
+      }
+      @if (scatterPreview(); as sp) {
+        <polygon [attr.points]="sp" [attr.fill]="tc('scatter')" fill-opacity="0.2" [attr.stroke]="tc('scatter')" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+      }
+      @if (drag()?.t === 'fenceDraw') {
+        <line [attr.x1]="fd().a.x" [attr.y1]="fd().a.z" [attr.x2]="fd().b.x" [attr.y2]="fd().b.z" [attr.stroke]="tc('fence')" stroke-width="5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+      }
+      @if (drag()?.t === 'draw') {
+        <rect [attr.x]="dr().x" [attr.y]="dr().z" [attr.width]="dr().w" [attr.height]="dr().d" fill="#b7ed83" fill-opacity="0.25" stroke="#b7ed83" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+      }
+      @for (m of measure.chain().segs; track $index) {
+        <line [attr.x1]="m.a.x" [attr.y1]="m.a.z" [attr.x2]="m.b.x" [attr.y2]="m.b.z" [attr.stroke]="measure.sel() === $index ? '#fff' : tc('measure')" [attr.stroke-width]="measure.sel() === $index ? 3 : 2" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" pointer-events="none" />
+        <line class="mhit" [attr.data-pk]="'meas:' + $index" [attr.x1]="m.a.x" [attr.y1]="m.a.z" [attr.x2]="m.b.x" [attr.y2]="m.b.z" stroke="transparent" stroke-width="14" vector-effect="non-scaling-stroke" [attr.pointer-events]="measure.hit()" (pointerdown)="measure.lineDown($event, $index)"><title>Click to select · drag to move · Delete removes it</title></line>
+        <circle [attr.cx]="m.a.x" [attr.cy]="m.a.z" [attr.r]="4 / ppm()" [attr.fill]="tc('measure')" pointer-events="none" />
+        <circle [attr.cx]="m.b.x" [attr.cy]="m.b.z" [attr.r]="4 / ppm()" [attr.fill]="tc('measure')" pointer-events="none" />
+        <text [attr.x]="(m.a.x + m.b.x) / 2" [attr.y]="(m.a.z + m.b.z) / 2" text-anchor="middle" [attr.font-size]="13 / ppm()" fill="#c8f4ff" stroke="#222" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ measure.fmt(m) }}</text>
+      }
+      @for (an of measure.arcs(); track $index) {
+        <path [attr.d]="an.path" fill="#ffb3f0" fill-opacity="0.18" stroke="#ffb3f0" stroke-width="1.5" vector-effect="non-scaling-stroke" pointer-events="none" />
+        <text [attr.x]="an.label.x" [attr.y]="an.label.z" text-anchor="middle" dominant-baseline="central" [attr.font-size]="11 / ppm()" fill="#ffd9f7" stroke="#222" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ an.deg.toFixed(1) }}°</text>
+      }
+      @if (measure.selSeg(); as ms) {
+        <circle class="mhit" [attr.cx]="ms.a.x" [attr.cy]="ms.a.z" [attr.r]="6 / ppm()" fill="#fff" stroke="#0b3a47" stroke-width="1.5" vector-effect="non-scaling-stroke" [attr.pointer-events]="measure.hit() === 'stroke' ? 'all' : 'none'" (pointerdown)="measure.endDown($event, 0)" />
+        <circle class="mhit" [attr.cx]="ms.b.x" [attr.cy]="ms.b.z" [attr.r]="6 / ppm()" fill="#fff" stroke="#0b3a47" stroke-width="1.5" vector-effect="non-scaling-stroke" [attr.pointer-events]="measure.hit() === 'stroke' ? 'all' : 'none'" (pointerdown)="measure.endDown($event, 1)" />
+      }
+      @if (measure.chain().a; as ma) {
+        <circle [attr.cx]="ma.x" [attr.cy]="ma.z" [attr.r]="5 / ppm()" [attr.fill]="tc('measure')" stroke="#fff" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none" />
+        @if (measure.hover(); as mh) {
+          <line [attr.x1]="ma.x" [attr.y1]="ma.z" [attr.x2]="mh.x" [attr.y2]="mh.z" [attr.stroke]="tc('measure')" stroke-width="2" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" pointer-events="none" />
+          <text [attr.x]="(ma.x + mh.x) / 2" [attr.y]="(ma.z + mh.z) / 2" text-anchor="middle" [attr.font-size]="13 / ppm()" fill="#c8f4ff" stroke="#222" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ measure.fmt({ a: ma, b: mh }) }}</text>
+        }
+      }
+      @if (measure.hover(); as mh) {
+        @if (measure.snap()) {
+          <circle [attr.cx]="mh.x" [attr.cy]="mh.z" [attr.r]="8 / ppm()" fill="none" stroke="#ffe066" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none" />
+          <text [attr.x]="mh.x + 11 / ppm()" [attr.y]="mh.z + 14 / ppm()" [attr.font-size]="11 / ppm()" fill="#ffe066" stroke="#222" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ measure.snap() }}</text>
+        }
+      }
+      @if (tool() === 'terrain') {
+        @if (terrain.preview(); as tp) {
+          <path [attr.d]="tp" fill="none" [attr.stroke]="tc('terrain')" stroke-opacity="0.35" [attr.stroke-width]="terrain.op() === 'ramp' ? terrain.radius() : terrain.radius() * 2" stroke-linecap="round" stroke-linejoin="round" pointer-events="none" />
+        }
+        @if (hover(); as hv) {
+          <circle [attr.cx]="hv.x" [attr.cy]="hv.z" [attr.r]="terrain.ring()" fill="none" [attr.stroke]="tc('terrain')" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+        }
+      }
+      @if (armed(); as am) {
+        @if (hover(); as hv) {
+          <circle [attr.cx]="hv.x" [attr.cy]="hv.z" [attr.r]="10 / ppm()" fill="none" stroke="#b7ed83" stroke-width="2" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" pointer-events="none" />
+          <text [attr.x]="hv.x + 12 / ppm()" [attr.y]="hv.z - 8 / ppm()" [attr.font-size]="11 / ppm()" fill="#eef4ed" stroke="#101410" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ am.block.name }}</text>
+        }
+      }
+      @if (selOutline(); as so) {
+        <polygon [attr.points]="so" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" pointer-events="none" />
+      }
+      <circle [attr.cx]="ed.draft().droneStart.x" [attr.cy]="ed.draft().droneStart.z" [attr.r]="2" fill="#ff6b6b" pointer-events="none" />
+    </svg>
+  }
+
+  @if (overlayOn() && view3d()) {
+    <app-site-view
+      [spec]="ed.draft()"
+      [roofHidden]="!roofs3d()"
+      [frameKey]="ed.draft().id"
+      [mode]="tool() === 'select' ? 'select' : 'draw'"
+      [selection]="sel3d()"
+      [focus]="focus3d()"
+      [flights]="flightList()"
+      [speedMax]="flights.speedMax"
+      (picked)="onPick3d($event)"
+      (ground)="onGround3d($event)"
+      [groundStyle]="terrain.groundStyle()"
+      [cursor]="terrain.cursor3d()"
+    />
+  }
+  @if (!(overlayOn() && view3d())) {
+    <svg class="compass" viewBox="-30 -30 60 60" aria-label="North is up">
+      <circle r="27" fill="rgba(10,16,12,0.75)" stroke="#6f8577" />
+      <polygon points="0,-23 5,-3 -5,-3" fill="#ff5a4d" />
+      <polygon points="0,23 5,3 -5,3" fill="#8a948d" />
+      <text y="-14" x="0" text-anchor="middle" dominant-baseline="middle" font-size="9" font-weight="700" fill="#fff" stroke="#000" stroke-width="2" paint-order="stroke">N</text>
+      @if (mode() === 'model' && b(); as cb) {
+        <line x1="0" y1="0" [attr.x2]="axisEnd(cb)[0]" [attr.y2]="axisEnd(cb)[1]" stroke="#b7ed83" stroke-width="2.5" stroke-linecap="round" />
+      }
+    </svg>
+  }
+  @if (mode() === 'model' && overlayOn()) {
+    <div #pal class="palette" role="toolbar" aria-label="Tools" aria-orientation="vertical" [style.left.px]="palXY().x" [style.top.px]="palXY().y" [style.z-index]="palZ()" (pointerdown)="$event.stopPropagation(); palZ.set(raiseZ(palOwner))">
+      <div class="tgrip" title="Drag to move the tools · double-click to put them back" (pointerdown)="tbDown($event, 'pal')" (pointermove)="tbMove($event)" (pointerup)="tbUp($event)" (pointercancel)="tbUp($event)" (dblclick)="tbReset('pal')" aria-hidden="true">⠿</div>
+      @for (g of groups(); track g.id) {
+        @if (g.sep) {
+          <i class="psep"></i>
+        }
+        <div class="pg">
+          <button class="pbtn" [attr.data-tour]="toolMarks(g.items)" [class.on]="g.on" [style.--tc]="g.shown.color" (pointerdown)="pbDown(g.id, g.items.length)" (pointerup)="pbUp()" (pointerleave)="pbUp()" (click)="pbClick(g.shown)" (contextmenu)="g.items.length > 1 ? toggleFly(g.id, $event) : $event.preventDefault()" [title]="g.shown.name + ' · ' + g.shown.hint + (g.items.length > 1 ? ' · hold or click the corner for the other tools' : '')">
+            <app-tool-icon [name]="g.shown.icon" />
+            @if (g.items.length > 1) {
+              <span class="tri" (pointerdown)="$event.stopPropagation()" (click)="toggleFly(g.id, $event)"></span>
+            }
+          </button>
+          @if (fly() === g.id) {
+            <div class="fly" (pointerdown)="$event.stopPropagation()">
+              @for (it of g.items; track it.key) {
+                <button class="fbtn" [class.on]="entryActive(it)" [style.--tc]="it.color" (click)="pickEntry(it)" [title]="it.hint"><app-tool-icon [name]="it.icon" /> {{ it.name }}</button>
+              }
+            </div>
+          }
+        </div>
+      }
+      @if (!indoor() && hasPath() && !view3d()) {
+        <i class="psep"></i>
+        <div class="pg"><button class="pbtn" [class.on]="pinMode() === 's'" style="--tc: #ff6b6b" (click)="armPin('s')" title="Pin start · click where the loaded flight started"><app-tool-icon name="pinStart" /></button></div>
+        <div class="pg"><button class="pbtn" [class.on]="pinMode() === 'e'" style="--tc: #ff6b6b" (click)="armPin('e')" title="Pin end · click where the loaded flight ended"><app-tool-icon name="pinEnd" /></button></div>
+      }
+    </div>
+    @if (!view3d() || tool() !== 'select') {
+      <div class="opts" role="toolbar" [attr.aria-label]="toolName() + ' options'" [style.left.px]="optsXY().left" [style.right.px]="optsXY().right" [style.top.px]="optsXY().top" [style.max-width.px]="optsXY().max" [style.z-index]="optsZ()" (pointerdown)="$event.stopPropagation(); optsZ.set(raiseZ(optsOwner))">
+        <span class="tgrip" title="Drag to move the options · double-click to put them back beside the tool" (pointerdown)="tbDown($event, 'opts')" (pointermove)="tbMove($event)" (pointerup)="tbUp($event)" (pointercancel)="tbUp($event)" (dblclick)="tbReset('opts')" aria-hidden="true">⠿</span>
+        <b [style.color]="toolColor()">{{ toolName() }}</b>
+            @switch (tool()) {
+              @case ('select') {
+                <span class="seg" title="How a drag on empty ground selects (outdoors: hold Shift; indoors: columns of the floor)">
+                  <button [class.on]="selShape() === 'box'" [attr.aria-pressed]="selShape() === 'box'" (click)="selShape.set('box')">▭ Box</button>
+                  <button [class.on]="selShape() === 'lasso'" [attr.aria-pressed]="selShape() === 'lasso'" (click)="selShape.set('lasso')">◌ Lasso</button>
+                </span>
+                <span class="dim small">{{ indoor() ? 'drag on the floor · Shift adds' : 'Shift + drag · Shift + click adds' }}</span>
+                @if (!indoor()) {
+                  <label class="lay" title="While moving or rotating a building: snap flush to close neighbours and line up with their angles and the map axes. Hold Alt to drag freely."><input type="checkbox" [checked]="magnet()" (change)="magnet.set(checked($event))" /> magnet</label>
+                }
+              }
+              @case ('structure') {
+                <app-pick-menu label="What to place" [options]="structOptions" [value]="structKind()" (valueChange)="structKind.set(asStruct($event))" />
+              }
+              @case ('measure') {
+                <button class="btn" [disabled]="measure.sel() === null" (click)="measure.delete()" title="Delete the selected measure (Delete key)">Delete</button>
+                <button class="btn" [disabled]="!measure.chain().segs.length" (click)="measure.clear()" title="Remove all measures">Clear all</button>
+              }
+              @case ('scatter') {
+                <app-pick-menu label="Brush shape" [options]="scatterOptions" [value]="scatterMode()" (valueChange)="scatterMode.set(asScatter($event))" />
+                <app-pick-menu label="Trees" [options]="treeMixOptions" [value]="treeMix()" (valueChange)="treeMix.set(asMix($event))" />
+                <label class="lay" title="Average distance between trees">every <input class="mini" type="number" min="2" max="30" step="0.5" [value]="scatterSpacing()" (change)="scatterSpacing.set(num($event))" /> m</label>
+                @if (scatterMode() === 'pen') {
+                  <label class="lay" title="Width of the pen stroke">width <input class="mini" type="number" min="2" max="60" step="1" [value]="scatterWidth()" (change)="scatterWidth.set(num($event))" /> m</label>
+                }
+              }
+              @case ('tunnel') {
+                <app-pick-menu label="What" [options]="under.kindOptions" [value]="under.kind()" (valueChange)="under.kind.set($event === 'room' ? 'room' : 'tunnel')" />
+                @if (under.kind() === 'tunnel') {
+                  <app-pick-menu label="Section" [compact]="true" [options]="under.shapeOptions" [value]="under.shape()" (valueChange)="under.shape.set(under.asShape($event))" />
+                  <label class="lay" title="Inside width, metres">width <input class="mini" type="number" min="0.8" max="30" step="0.5" [value]="under.width()" (change)="under.width.set(Math.max(0.8, num($event)))" /> m</label>
+                }
+                <label class="lay" title="Inside height, metres">height <input class="mini" type="number" min="0.8" max="30" step="0.5" [value]="under.height()" (change)="under.height.set(Math.max(0.8, num($event)))" /> m</label>
+                <label class="lay" title="How far the floor is below the ground where you start dragging (a room: its ceiling)">depth <input class="mini" type="number" min="0" max="60" step="0.5" [value]="under.depth()" (change)="under.depth.set(Math.max(0, num($event)))" /> m</label>
+              }
+              @case ('road') {
+                <app-pick-menu label="Kind" [options]="layers.roadOptions" [value]="layers.roadKind()" (valueChange)="layers.setRoadKind(layers.asRoad($event))" />
+                <label class="lay" title="Width, metres">width <input class="mini" type="number" min="0.5" max="40" step="0.5" [value]="layers.roadWidth()" (change)="layers.roadWidth.set(Math.max(0.5, num($event)))" /> m</label>
+              }
+              @case ('surface') {
+                <app-pick-menu label="Ground" [options]="layers.surfaceOptions" [value]="layers.surfaceKind()" (valueChange)="layers.surfaceKind.set(layers.asSurface($event))" />
+              }
+              @case ('water') {
+                <span class="seg" title="Draw the outline by hand (a pond, a basin), or along a centre line (a canal, a ditch)">
+                  <button [class.on]="layers.waterMode() === 'outline'" [attr.aria-pressed]="layers.waterMode() === 'outline'" (click)="layers.waterMode.set('outline')">◌ Outline</button>
+                  <button [class.on]="layers.waterMode() === 'line'" [attr.aria-pressed]="layers.waterMode() === 'line'" (click)="layers.waterMode.set('line')">∿ Line</button>
+                </span>
+                @if (layers.waterMode() === 'line') {
+                  <label class="lay" title="Width of the canal, metres">width <input class="mini" type="number" min="1" max="60" step="0.5" [value]="layers.waterWidth()" (change)="layers.waterWidth.set(Math.max(1, num($event)))" /> m</label>
+                }
+                <label class="lay" title="Depth of the basin below the water, metres">depth <input class="mini" type="number" min="0.2" max="20" step="0.5" [value]="layers.waterDepth()" (change)="layers.waterDepth.set(Math.max(0.2, num($event)))" /> m</label>
+              }
+              @case ('terrain') {
+                <app-pick-menu label="Shape the ground" [options]="terrain.opOptions" [value]="terrain.op()" (valueChange)="terrain.op.set(terrain.asOp($event))" />
+                <label class="lay" title="Brush radius (ramp: its width)">⌀ <input class="mini" type="number" min="1" max="100" step="1" [value]="terrain.radius()" (change)="terrain.radius.set(Math.max(1, num($event)))" /> m</label>
+                @if (terrain.op() !== 'flatten') {
+                  <label class="lay" [title]="terrain.op() === 'smooth' ? 'How much to soften (percent)' : 'Metres'">{{ terrain.strengthLabel() }} <input class="mini" type="number" [min]="terrain.op() === 'smooth' ? 5 : 0.1" [max]="terrain.op() === 'smooth' ? 100 : 60" step="0.5" [value]="terrain.strength()" (change)="terrain.strength.set(Math.max(0.1, num($event)))" />{{ terrain.op() === 'smooth' ? '' : ' m' }}</label>
+                }
+                @if (terrain.op() !== 'ramp') {
+                  <app-pick-menu label="Edge" [compact]="true" [options]="terrain.falloffOptions" [value]="terrain.falloff()" (valueChange)="terrain.falloff.set(terrain.asFalloff($event))" />
+                }
+                <button class="btn" [disabled]="!ed.draft().terrain?.strokes?.length" (click)="terrain.clear()" title="Remove every terrain stroke (back to the real ground, or flat)">Reset</button>
+                <button class="btn" [disabled]="terrain.loadingGround()" (click)="terrain.realGround()" [title]="ed.draft().terrain?.base ? 'Download the real ground again (your strokes stay)' : 'Download the real ground heights for this bando (your strokes stay)'">@if (terrain.loadingGround()) {<i class="spin"></i> } {{ ed.draft().terrain?.base ? 'Re-load real ground' : 'Real ground' }}</button>
+              }
+              @case ('tree') {
+                <app-pick-menu label="Tree" [options]="treeMixOptions" [value]="treeMix()" (valueChange)="treeMix.set(asMix($event))" />
+              }
+              @case ('fence') {
+                <app-pick-menu label="Material" [options]="fenceOptions" [value]="fenceMat()" (valueChange)="fenceMat.set(asFence($event))" />
+              }
+              @case ('building') {
+                <label class="lay" title="Snap the new building flush against close neighbours (closes small gaps, straightens small angles)"><input type="checkbox" [checked]="autoAlign()" (change)="autoAlign.set(checked($event))" /> auto-align</label>
+                <app-pick-menu label="What to draw" [options]="buildOptions" [value]="buildKind()" (valueChange)="buildKind.set($event === 'greenhouse' ? 'greenhouse' : 'building')" />
+              }
+              @case ('column') {
+                <app-pick-menu label="Shape of new columns" [options]="colOptions" [value]="colShape()" (valueChange)="colShape.set($event === 'round' ? 'round' : 'square')" />
+                <label class="lay" title="Column size (side or diameter), metres">⌀ <input type="number" class="mini" min="0.15" step="0.05" [value]="colSize()" (change)="colSize.set(Math.max(0.15, num($event)))" /> m</label>
+              }
+              @case ('stairs') {
+                <app-pick-menu label="Stairs or a ramp" [options]="stairsOptions" [value]="stairsKind()" (valueChange)="stairsKind.set($event === 'ramp' ? 'ramp' : 'stairs')" />
+                @if (level() < (b()?.levels.length ?? 1) - 1) {
+                  <label class="lay" title="Cut a hole in the floor above where the stairs arrive"><input type="checkbox" [checked]="stairwell()" (change)="stairwell.set(checked($event))" /> open floor above</label>
+                }
+              }
+            }
+
+      </div>
+    }
+  }
+  @if (mode() === 'area') {
+    <div class="frame" [style.left.px]="fb().l" [style.top.px]="fb().t" [style.width.px]="fb().w" [style.height.px]="fb().h" [style.transform]="'rotate(' + rot() + 'deg)'">
+      <div class="rotk" (pointerdown)="frameRotDown($event)" (pointermove)="move($event)" (pointerup)="up($event)" (pointercancel)="up($event)" title="Drag to turn the frame (shift = steps of 15°). Only what is inside the turned frame is used."></div>
+      @for (h of handles; track h) {
+        <div [class]="'h ' + h" (pointerdown)="frameDown($event, h)" (pointermove)="move($event)" (pointerup)="up($event)" (pointercancel)="up($event)"></div>
+      }
+    </div>
+    <div class="search">
+      <input type="text" [(ngModel)]="query" placeholder="Search a place or lat,lon" (keydown.enter)="search()" aria-label="Search a place" data-tour="search" />
+      <button class="btn" (click)="search()" [disabled]="searching()" data-tour="search-go">Go</button>
+    </div>
+    @if (hits().length) {
+      <div class="hits">
+        @for (h of hits(); track h.lat + ',' + h.lon) {
+          <button (click)="pick2(h)" [title]="h.label">{{ h.label }}</button>
+        }
+      </div>
+    }
+    <div class="read" [class.warn]="atMax()">{{ round(half().e * 2) }} × {{ round(half().n * 2) }} m{{ rot() ? ' · ' + round(rot()) + '°' : '' }}{{ atMax() ? ' (maximum)' : '' }} <button class="btn mini" [disabled]="!rot()" (click)="rot.set(0)" title="Turn the frame back to north-up">↺</button></div>
+  } @else if (!overlayOn()) {
+    <div class="notice">This bando was built with the old rotated layout and can't be drawn over the map. Go to <b>1 · Area</b> and press <b>Regenerate</b> to rebuild it aligned to the map.</div>
+  }
+
+  @if (terrain.groundUnder() !== null) {
+    <div class="read" aria-live="off">ground {{ terrain.groundUnder()!.toFixed(1) }} m</div>
+  }
+  @if (ctx(); as c) {
+    <div class="ctx" [style.left.px]="c.x" [style.top.px]="c.y" (pointerdown)="$event.stopPropagation()" (contextmenu)="$event.preventDefault(); $event.stopPropagation()">
+      @for (it of c.items; track $index) {
+        @if (it.sep) {
+          <i class="psep"></i>
+        } @else if (it.head) {
+          <div class="head">{{ it.label }}</div>
+        } @else {
+          <button [class.danger]="it.danger" (click)="runCtx(it)">{{ it.label }}</button>
+        }
+      }
+    </div>
+  }
+
+  @if (mode() === 'model' && overlayOn() && ai.open()) {
+    <app-assistant-box />
+  }
+  @if (mode() === 'model' && overlayOn() && blocksOpen()) {
+    <app-blocks-box [building]="b()" [structure]="structSel()" (arm)="armBlock($event)" (apply)="applyBlockPattern($event)" />
+  }
+  @if (mode() === 'model' && overlayOn() && elementsOpen()) {
+    <app-elements-box [spec]="ed.draft()" [selectedId]="ed.selectedId()" (go)="goTo($event)" (hover)="zoneHover.set($event)" (zones)="zonesOn.set($event)" />
+  }
+
+  @if (mode() === 'model' && overlayOn()) {
+    <app-float-box fid="inspector-v4" data-tour="inspector" title="Inspector" [x]="8" [y]="58" [w]="300" [h]="340" [right]="true" [cols]="true">
+      @if (previewTarget(); as pt) {
+        <app-element-preview [target]="pt" [key]="previewKey()" [caption]="previewCaption()" (picked)="onPreviewPick($event)" />
+      }
+      @switch (pick()?.t) {
+        @case ('opening') {
+          @if (op(); as o) {
+            <div class="f"><label>type <select (change)="setOpening({ kind: kindOf($event) })"><option value="door" [selected]="o.kind === 'door'">door</option><option value="window" [selected]="o.kind === 'window'">window</option></select></label></div>
+            <div class="f"><label>width <input type="number" min="0.4" step="0.1" [value]="o.w.toFixed(2)" (change)="setOpening({ w: num($event) })" /></label>
+            <label>height <input type="number" min="0.3" step="0.1" [value]="o.h.toFixed(2)" (change)="setOpening({ h: num($event) })" /></label></div>
+            @if (o.kind === 'window') {
+              <div class="f"><label>sill (bottom) <input type="number" min="0" step="0.1" [value]="o.sill.toFixed(2)" (change)="setOpening({ sill: num($event) })" /></label></div>
+            }
+            <div class="f"><label>position on wall <input type="number" step="0.1" [value]="(o.c - o.from).toFixed(2)" (change)="setOpening({ c: o.from + num($event) })" /></label></div>
+            <div class="f"><label><input type="checkbox" [checked]="o.closed" (change)="setOpening({ closed: checked($event) })" /> closed ({{ o.kind === 'door' ? 'a door leaf' : 'a pane' }}; open = just the hole)</label></div>
+            <div class="f"><span class="dim">repeat along the wall</span><label>× <input type="number" min="2" max="40" step="1" [value]="repN()" (change)="repN.set(num($event))" /></label>
+            <label>every <input type="number" min="0.5" step="0.5" [value]="repS()" (change)="repS.set(num($event))" /> m</label>
+            <button class="btn" (click)="repeatSel()">Repeat</button></div>
+            <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
+          }
+        }
+        @case ('tree') {
+          @if (tree(); as t) {
+            @if (treeIdxs().length > 1) {
+              <div class="f"><span class="dim">{{ treeIdxs().length }} trees selected · changes apply to all</span></div>
+            }
+            <div class="f"><label>height <input type="number" min="1" step="0.5" [value]="t.h" (change)="setTree({ h: num($event) })" /></label>
+            <label>radius <input type="number" min="0.5" step="0.25" [value]="t.r" (change)="setTree({ r: num($event) })" /></label></div>
+            <div class="f"><app-pick-menu label="Kind" [options]="treeKindOptions" [value]="t.kind" (valueChange)="setTree({ kind: $event === 'c' ? 'c' : 'd' })" />
+            <button class="btn danger" (click)="deleteSel()">Delete</button></div>
+          }
+        }
+        @case ('structure') {
+          @if (structSel(); as st) {
+            <div class="f"><label class="grow">name <input type="text" class="grow" [value]="st.name" (change)="setStruct({ name: text($event) })" /></label></div>
+            <div class="f"><span class="dim">{{ structLabel(st.kind) }}</span></div>
+            @if (st.kind === 'shapes') {
+              <div class="f"><span class="dim">{{ (st.shapes ?? []).length }} shapes · {{ st.height.toFixed(1) }} m tall · its form comes from its block</span></div>
+            } @else {
+              <div class="f"><label>{{ heightLabel(st.kind) }} <input type="number" min="0.3" step="0.5" [value]="st.height" (change)="setStruct({ height: num($event) })" /></label>
+              <label>{{ sizeLabel(st.kind) }} <input type="number" min="0.3" step="0.1" [value]="st.size" (change)="setStruct({ size: num($event) })" /></label></div>
+            }
+            @if (hasLength(st.kind)) {
+              <div class="f"><label>{{ st.kind === 'tower_crane' ? 'jib length' : 'length' }} <input type="number" min="1" step="0.5" [value]="(st.length ?? 6).toFixed(1)" (change)="setStruct({ length: num($event) })" /></label>
+              @if (st.kind === 'bridge') {
+                <label>style <select (change)="setStruct({ style: styleOf($event) })"><option value="beam" [selected]="(st.style ?? 'beam') === 'beam'">beam on piers</option><option value="arch" [selected]="st.style === 'arch'">arch</option></select></label>
+              }</div>
+            }
+            <div class="f"><label>raised by <input type="number" min="0" step="0.5" [value]="st.y ?? 0" (change)="setStruct({ y: num($event) })" /> m</label>
+            @if (st.kind !== 'chimney' && st.kind !== 'silo' && st.kind !== 'tank' && st.kind !== 'water_tower') {
+              <label>rotation° <input type="number" step="5" [value]="st.rotDeg.toFixed(0)" (change)="setStruct({ rotDeg: num($event) })" /></label>
+            }</div>
+            @if (selBlock(); as sb) {
+              <div class="f"><span class="dim">From block “{{ sb.name }}” v{{ sb.ref.v }}</span>
+              @if (sb.latest) {<button class="btn" (click)="updateSelBlock()">Update to v{{ sb.latest }}</button>}
+              <button class="btn" (click)="detachSelBlock()" title="Keep it, forget the block">Detach</button>
+              <button class="btn danger" (click)="removeSelBlock()" title="Remove everything this placement made">Remove placement</button></div>
+            }
+            <div class="f"><button class="btn" (click)="duplicateStruct()">⧉ Duplicate</button> <button class="btn danger" (click)="deleteSel()">Delete</button></div>
+          }
+        }
+        @case ('under') {
+          @if (under.sel(); as u) {
+            <div class="f"><label class="grow">name <input type="text" class="grow" [value]="u.name" (change)="under.set({ name: text($event) })" /></label></div>
+            <div class="f"><label>floor <input type="number" step="0.5" [value]="u.floor" (change)="under.set({ floor: num($event) })" /> m</label>
+            <label>ceiling <input type="number" step="0.5" [value]="u.ceiling" (change)="under.set({ ceiling: num($event) })" /> m</label></div>
+            <div class="f"><app-pick-menu label="Section" [options]="under.shapeOptions" [value]="u.shape" (valueChange)="under.set({ shape: under.asShape($event) })" />
+            <label>walls <input type="number" min="0.1" max="3" step="0.1" [value]="u.wall" (change)="under.set({ wall: Math.max(0.1, num($event)) })" /> m</label></div>
+            <div class="f"><label>water in it <input type="number" min="0" step="0.1" [value]="u.water ?? 0" (change)="under.set({ water: Math.max(0, num($event)) || undefined })" /> m</label></div>
+            @if (under.section(); as sec) {
+              <svg class="section" viewBox="0 0 260 96" role="img" [attr.aria-label]="'Side view along ' + u.name + ': ground, ceiling and floor'">
+                <rect [attr.x]="sec.x0" [attr.y]="sec.ceil" [attr.width]="sec.x1 - sec.x0" [attr.height]="sec.floor - sec.ceil" fill="#101410" fill-opacity="0.85" stroke="#9b5de5" stroke-width="1.5" />
+                <path [attr.d]="sec.groundFill" fill="#7d6a4f" fill-opacity="0.55" />
+                <path [attr.d]="sec.ground" fill="none" stroke="#c49a6c" stroke-width="1.5" />
+                <text x="4" y="10" font-size="9" fill="#aab9af">{{ sec.top.toFixed(1) }} m</text>
+                <text x="4" y="92" font-size="9" fill="#aab9af">{{ sec.bottom.toFixed(1) }} m</text>
+                <text x="256" y="92" font-size="9" fill="#aab9af" text-anchor="end">{{ sec.len.toFixed(0) }} m</text>
+              </svg>
+            }
+            <div class="f"><span class="dim">Heights are metres from the bando's zero. It opens where the ground is between floor and ceiling: dashed = covered, dark = open.</span></div>
+            <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
+          }
+        }
+        @case ('road') {
+          @if (layers.roadSel(); as r) {
+            <div class="f"><span class="dim">{{ layers.roadLen(r).toFixed(0) }} m long</span></div>
+            <div class="f"><app-pick-menu label="Kind" [options]="layers.roadOptions" [value]="r.kind" (valueChange)="layers.set({ kind: layers.asRoad($event) })" />
+            <label>width <input type="number" min="0.5" max="40" step="0.5" [value]="r.width" (change)="layers.set({ width: Math.max(0.5, num($event)) })" /> m</label></div>
+            <div class="f"><app-pick-menu label="Surface" [options]="layers.roadSurfaceOptions" [value]="r.surface ?? ''" (valueChange)="layers.set({ surface: $event ? layers.asSurface($event) : undefined })" /></div>
+            <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
+          }
+        }
+        @case ('surface') {
+          @if (layers.surfaceSel(); as sf) {
+            <div class="f"><app-pick-menu label="Ground" [options]="layers.surfaceOptions" [value]="sf.kind" (valueChange)="layers.set({ kind: layers.asSurface($event) })" /></div>
+            <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
+          }
+        }
+        @case ('water') {
+          @if (layers.waterSel(); as w) {
+            <div class="f"><span class="dim">Water · its surface sits just below the lowest bank</span></div>
+            <div class="f"><label>depth <input type="number" min="0.2" max="20" step="0.5" [value]="w.depth" (change)="layers.set({ depth: Math.max(0.2, num($event)) })" /> m</label>
+            <label>level <input type="number" min="-10" max="5" step="0.1" [value]="w.level ?? -0.3" (change)="layers.set({ level: num($event) })" /> m</label></div>
+            <div class="f"><button class="btn" (click)="layers.mergeWater()" title="Join it with every water it overlaps or touches into one outline">Merge overlapping</button>
+            <button class="btn danger" (click)="deleteSel()">Delete</button></div>
+          }
+        }
+        @case ('fence') {
+          @if (fence(); as w) {
+            <div class="f"><span class="dim">{{ fenceLabel(w.material) }} · {{ fenceLen(w).toFixed(1) }} m</span></div>
+            <div class="f"><app-pick-menu label="Material" [options]="fenceOptions" [value]="w.material ?? 'masonry'" (valueChange)="setFenceMat(asFence($event))" /></div>
+            <div class="f"><label>height <input type="number" min="0.3" step="0.1" [value]="w.height" (change)="setFence({ height: num($event) })" /></label>
+            <label>thickness <input type="number" min="0.1" step="0.05" [value]="w.thick" (change)="setFence({ thick: num($event) })" /></label></div>
+            <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
+          }
+        }
+        @case ('void') {
+          @if (voidSel(); as v) {
+            <div class="f"><span class="dim">Void · {{ (v.x1 - v.x0).toFixed(1) }} × {{ (v.z1 - v.z0).toFixed(1) }} m · floor {{ levelName(level()) }}</span></div>
+            @if (level() === 0) {
+              <div class="f"><label><input type="checkbox" [checked]="!!v.water" (change)="setVoid({ water: checked($event) })" /> water (basin)</label></div>
+            }
+            <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
+          }
+        }
+        @case ('column') {
+          @if (colSel(); as c) {
+            @if (colIdxs().length > 1) {
+              <div class="f"><span class="dim">{{ colIdxs().length }} columns selected</span></div>
+            }
+            <div class="f"><span class="dim">select</span>
+            <button class="btn" (click)="selectColumns('x')" title="Every column in the same east–west row (double-click a column does the same)">Row</button>
+            <button class="btn" (click)="selectColumns('z')" title="Every column in the same north–south line">Line</button>
+            <button class="btn" (click)="selectColumns('grid')" title="Every column of the same size and shape on this floor">All alike</button></div>
+            <div class="f"><label>size <input type="number" min="0.15" step="0.05" [value]="c.size" (change)="setColumn({ size: num($event) })" /></label>
+            <label><input type="checkbox" [checked]="!!c.round" (change)="setColumn({ round: checked($event) })" /> round</label></div>
+            <div class="f"><label>from west wall <input type="number" step="0.1" [value]="c.x.toFixed(2)" (change)="setColumn({ x: num($event) })" /></label>
+            <label>from north wall <input type="number" step="0.1" [value]="c.z.toFixed(2)" (change)="setColumn({ z: num($event) })" /></label></div>
+            <div class="f"><span class="dim">repeat</span><label>× <input type="number" min="2" max="60" step="1" [value]="colN()" (change)="colN.set(num($event))" /></label>
+            <label>every <input type="number" min="0.8" step="0.5" [value]="colS()" (change)="colS.set(num($event))" /> m</label>
+            <select (change)="colAxis.set(axisOf($event))"><option value="x" [selected]="colAxis() === 'x'">along x (east)</option><option value="z" [selected]="colAxis() === 'z'">along z (south)</option></select></div>
+            <div class="f"><button class="btn" (click)="colDup()" title="One copy, spacing away along the chosen direction">⧉ Duplicate</button>
+            <button class="btn" (click)="colRowAdd()">Make a row</button>
+            <button class="btn" (click)="colFill()" title="Fill the whole floor with columns like this one on a grid of the spacing above (not inside voids)">Fill floor</button></div>
+            <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
+          }
+        }
+        @case ('wall') {
+          <div class="f"><span class="dim">Interior wall</span> <button class="btn danger" (click)="deleteSel()">Delete wall</button></div>
+        }
+        @default {
+          @if (b(); as bd) {
+            <div class="sec">
+              <label class="fld span2">name <input type="text" [value]="bd.name" (change)="mutate(setName, text($event))" /></label>
+              @if (!bd.footprint) {
+                <label class="fld">length m <input type="number" min="2" step="0.5" [value]="bd.length.toFixed(1)" (change)="mutate(setLength, num($event))" /></label>
+                <label class="fld">width m <input type="number" min="2" step="0.5" [value]="bd.width.toFixed(1)" (change)="mutate(setWidth, num($event))" /></label>
+              } @else {
+                <div class="span2 dim">Shaped · {{ bd.length.toFixed(1) }} × {{ bd.width.toFixed(1) }} m · {{ bd.footprint.length }} corners
+                <button class="btn" (click)="mutate(toRectangle, 0)" title="Back to a plain rectangle over the bounding box">Reset shape</button></div>
+              }
+              <label class="fld">rotation° <input type="number" step="5" [value]="bd.rotDeg.toFixed(0)" (change)="mutate(setRot, num($event))" /></label>
+              @if (bd.frame) {
+                <label class="fld">arch height <input type="number" min="0.3" max="1.3" step="0.05" [value]="bd.levels[0]?.vaultK ?? 0.7" (change)="editLevel(setArch, num($event))" /></label>
+                <label class="fld" title="Off: only the steel skeleton is left (and it can be flown through)">glass <input type="checkbox" [checked]="bd.glass !== false" (change)="mutate(setGlass, checked($event))" /></label>
+              } @else if (lvl(); as l) {
+                <label class="fld">wall height m <input type="number" min="1" step="0.5" [value]="l.height" (change)="editLevel(setHeight, num($event))" data-tour="wall-height" /></label>
+              }
+            </div>
+            @if (!bd.frame) {
+              <div class="sec">
+                <div class="st">Floors</div>
+                <div class="row">
+                  @for (l of bd.levels; track $index) {
+                    <button class="btn" [class.on]="$index === level() && floorFocus()" [class.cur]="$index === level()" (click)="pickLevel($index)" title="Show only this floor solid, the rest of the building ghosted (click again for the whole building)">{{ levelName($index) }}</button>
+                  }
+                  <button class="btn" (click)="addLevel()" data-tour="add-floor" title="Add a floor on top (a copy of the last one; the roof moves up)">＋</button>
+                  <button class="btn" [disabled]="bd.levels.length < 2" (click)="removeFloor()" title="Remove the selected floor">－</button>
+                </div>
+                <label class="fld" title="0 = intact. A ruin first has holes in the roof; from 60 % the roof is gone and the walls lose their upper part along a broken line; from 75 % the upper floors are gone too">ruined % <input type="range" min="0" max="100" step="5" [value]="(bd.ruin ?? 0) * 100" (change)="mutate(setRuin, num($event))" /></label>
+                <label class="fld" title="An open shell: the roof and the upper floors are gone, the walls stand as the ruin level says">open shell <input type="checkbox" [checked]="!!bd.roofless" (change)="mutate(setFlag('roofless'), checked($event))" /></label>
+                <label class="fld" title="Battlements along the top of the walls (on a flat roof or an open shell)">battlements <input type="checkbox" [checked]="!!bd.crenels" (change)="mutate(setFlag('crenels'), checked($event))" /></label>
+                @if (!bd.footprint) {
+                  <label class="fld" title="One wall more ruined than the rest (or less): percent, empty = as the building">ruin by wall
+                    <span class="walls">
+                      @for (sd of wallSides; track sd.k) {
+                        <input class="mini" type="number" min="0" max="100" step="5" [attr.aria-label]="'Ruin of the ' + sd.label + ' wall, percent'" [title]="sd.label + ' wall'" [placeholder]="sd.short" [value]="bd.ruinWalls?.[sd.k] !== undefined ? bd.ruinWalls![sd.k]! * 100 : ''" (change)="mutate(setWallRuin(sd.k), rawNum($event))" />
+                      }
+                    </span>
+                  </label>
+                }
+                <label class="fld" title="A basement under the ground floor: the ground is cut under the building; reach it through a void in the ground floor">basement m <input type="number" min="0" max="12" step="0.5" [value]="bd.basement?.height ?? 0" (change)="mutate(setBasement, num($event))" /></label>
+              </div>
+              @if (topLevel(); as tl) {
+                <div class="sec">
+                  <div class="st">Roof</div>
+                  @if (!bd.footprint) {
+                    <label class="fld">shape <select (change)="editTop(setRoof, roofOf($event))"><option value="gable" [selected]="tl.roof === 'gable'">gable</option><option value="vault" [selected]="tl.roof === 'vault'">vault</option><option value="flat" [selected]="tl.roof === 'flat'">flat</option></select></label>
+                    <label class="fld">repeat × <input type="number" min="1" max="12" step="1" [value]="tl.roofCount ?? tl.vaultCount ?? 1" (change)="editTop(setCount, num($event))" /></label>
+                    <label class="chk span2"><input type="checkbox" [checked]="!!tl.roofTurn" (change)="editTop(setTurn, checked($event))" /> turn 90°</label>
+                  } @else {
+                    <span class="dim span2">flat (shaped building)</span>
+                  }
+                </div>
+              }
+              <details class="sec mods">
+                <summary>Modules · repeatable blocks <span class="dim small">(floor {{ levelName(level()) }})</span></summary>
+                @for (pb of patternBlocks(); track pb.id) {
+                  <div class="row">
+                    <b [title]="pb.description ?? ''">{{ pb.name }}</b>
+                    @for (p of pb.params; track p.key) {
+                      @if (p.type === 'choice') {
+                        <select (change)="setModValue(pb.id, p.key, selValue($event))" [title]="p.label" [attr.aria-label]="p.label">
+                          @for (o of p.options ?? []; track o) {
+                            <option [value]="o" [selected]="modValue(pb, p.key) === o">{{ sideLabel(o) }}</option>
+                          }
+                        </select>
+                      } @else if (p.type !== 'bool') {
+                        <label [title]="p.label">{{ p.label.toLowerCase() }} <input type="number" [min]="p.min ?? null" [max]="p.max ?? null" [step]="p.step ?? (p.type === 'int' ? 1 : 0.5)" [value]="modValue(pb, p.key)" (change)="setModValue(pb.id, p.key, num($event))" /></label>
+                      }
+                    }
+                    <button class="btn" (click)="applyBlockPattern({ block: pb, params: modValues()[pb.id] ?? {}, rot: 0 })" [disabled]="!!bd.footprint && needsRect(pb)" [title]="(pb.description ?? '') + ' Replaces what was there; still editable one by one.'">Apply</button>
+                  </div>
+                } @empty {
+                  <div class="dim small">No pattern blocks yet: open ▦ Library to fetch the catalogue.</div>
+                }
+              </details>
+            }
+            @if (selBlock(); as sb) {
+              <div class="sec acts">
+                <span class="dim small">From block “{{ sb.name }}” v{{ sb.ref.v }}</span>
+                @if (sb.latest) {<button class="btn" (click)="updateSelBlock()">Update to v{{ sb.latest }}</button>}
+                <button class="btn" (click)="detachSelBlock()" title="Keep it, forget the block">Detach</button>
+                <button class="btn danger" (click)="removeSelBlock()" title="Remove everything this placement made">Remove placement</button>
+              </div>
+            }
+            <div class="sec acts">
+              <button class="btn" (click)="convertTo(bd.frame ? 'building' : 'greenhouse')" title="Rebuilds it as the other kind: the interior, openings and outline are lost">{{ bd.frame ? '→ Building' : '→ Greenhouse' }}</button>
+              <button class="btn" (click)="duplicate()">⧉ Duplicate</button>
+              <button class="btn danger" (click)="deleteSel()">Delete</button>
+            </div>
+          } @else {
+            <div class="dim">Click a building, tree, door or window on the map. Use the tools above to add or reshape.</div>
+          }
+        }
+      }
+    </app-float-box>
+  }
+</div>
+
+<div class="foot">
+  <span class="dim small grow">{{ hint() }}</span>
+  @if (mode() === 'area') {
+    <span class="grp areas" role="group" aria-label="Areas">
+      <button class="btn" (click)="studio.addArea()" title="Keep this framed area and frame another one: they are generated together">＋ Add area</button>
+      @for (a of studio.areas(); track $index) {
+        <span class="chip">Area {{ $index + 1 }} <button class="x" (click)="studio.removeArea($index)" [attr.aria-label]="'Remove area ' + ($index + 1)" title="Remove this area">✕</button></span>
+      }
+      @if (studio.areas().length) {
+        <label class="lay" title="On: one bando covering the areas and the ground between them. Off: only what is inside each area."><input type="checkbox" [checked]="studio.fillGaps()" (change)="studio.fillGaps.set(checked($event))" /> fill the gaps</label>
+      }
+    </span>
+    <button class="btn" (click)="setServer()" title="Use your own OpenStreetMap data server (e.g. the PHP proxy) instead of the public ones">Data server…</button>
+    <button class="btn primary" (click)="generate()" [disabled]="studio.busy()" data-tour="generate">{{ studio.busy() ? 'Building…' : studio.isNew() ? 'Generate 3D' : 'Regenerate 3D' }}</button>
+  }
+</div>

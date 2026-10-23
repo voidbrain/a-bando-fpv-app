@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { siteGround, siteOutline } from './site-ground';
 import { emptySpec, sanitizeSpec, type BuildingSpec } from './site-spec';
-import { applyStroke, buildHeights, contourPaths, heightColor, heightRange, defaultTerrain, emptyGrid, flattenPad, heightAt, rayGround, sanitizeTerrain, setTerrainBase, type TerrainSpec } from './terrain';
+import { applyStroke, brushStroke, buildHeights, contourPaths, heightColor, heightPixels, heightRange, defaultTerrain, emptyGrid, flattenPad, heightAt, rayGround, sanitizeTerrain, setTerrainBase, type TerrainSpec } from './terrain';
 
 const flat = (half = 50): TerrainSpec => ({ cell: 1, half: { e: half, n: half }, strokes: [] });
 const bld = (x: number, z: number, l: number, w: number, rot = 0): BuildingSpec => ({ id: `b${x}`, name: 'b', pos: { x, z }, rotDeg: rot, length: l, width: w, levels: [] });
@@ -168,5 +168,29 @@ describe('height map colours', () => {
     g.h[5] = 4;
     g.h[6] = -2;
     expect(heightRange(g)).toEqual({ lo: -2, hi: 4 });
+  });
+});
+
+describe('brush strokes from a drag', () => {
+  const o = { radius: 8, strength: 2, falloff: 'smooth' as const };
+  const drag = [{ x: 0, z: 0 }, { x: 5, z: 0 }, { x: 10, z: 0 }];
+  it('stamps hills at the first point, sweeps brushes along the drag', () => {
+    expect(brushStroke('hill', drag, 0, { ...o, strength: -3 })).toEqual({ op: 'hill', pts: [{ x: 0, z: 0 }], radius: 8, strength: 3, falloff: 'smooth' });
+    expect(brushStroke('raise', drag, 0, o)!.pts).toHaveLength(3);
+    expect(brushStroke('smooth', drag, 0, { ...o, strength: 50 })!.strength).toBe(0.5);
+    expect(brushStroke('flatten', drag, 1.234, o)!.height).toBe(1.2);
+  });
+  it('a ramp runs first to last point at half the radius, and needs 2 m', () => {
+    expect(brushStroke('ramp', drag, 0, o)).toEqual({ op: 'ramp', pts: [drag[0], drag[2]], radius: 4, strength: 2 });
+    expect(brushStroke('ramp', [{ x: 0, z: 0 }, { x: 1, z: 0 }], 0, o)).toBeNull();
+  });
+  it('a height map has one pixel per step cells', () => {
+    const g = emptyGrid({ cell: 2, half: { e: 10, n: 6 } });
+    g.h[0] = 5;
+    const px = heightPixels(g, 2);
+    expect(px.w).toBe(Math.ceil(g.nx / 2));
+    expect(px.data.length).toBe(px.w * px.h * 4);
+    expect(px.data[3]).toBe(170);
+    expect(px.data.slice(0, 3)).not.toEqual(px.data.slice(4, 7)); // the high corner has another colour
   });
 });

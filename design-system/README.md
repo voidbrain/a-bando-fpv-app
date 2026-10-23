@@ -2,7 +2,7 @@
 
 How the app looks and talks. Read this before changing UI (templates, component styles, `src/styles.scss`, user-facing
 text). The values live in code: CSS custom properties in `src/styles.scss` (`:root`) and the tool colours in `tools` in
-`src/app/ui/studio/bando-editor.ts`. `tokens.json` names every value (including the literal hex values the component styles
+`src/app/ui/studio/bando-editor.scss`. `tokens.json` names every value (including the literal hex values the component styles
 still use) with where it is used; `components/*.md` are the guidelines per component, each naming its source file.
 
 Published copy (for browsing, may lag behind this folder): https://claude.ai/artifact/MH32oVjF7EmKTFnSmP7YoC

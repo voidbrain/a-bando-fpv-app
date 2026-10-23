@@ -293,3 +293,20 @@ export function mergeWaters(waters: readonly WaterSpec[], i: number): { waters: 
   const out = waters.filter((_, k) => !gone.has(k)).map((o) => (o === w ? merged : o));
   return { waters: out, index: out.indexOf(merged) };
 }
+
+/** Length of a line (metres). */
+export function pathLength(pts: readonly Vec2[]): number {
+  return pts.slice(1).reduce((a, q, i) => a + Math.hypot(q.x - pts[i]!.x, q.z - pts[i]!.z), 0);
+}
+
+/**
+ * The shape a finished layer drag makes, simplified (`tol` metres): a road's centre line (`line`), an outline drawn by
+ * hand (`outline`), or a canal `width` wide along the drag (`strip`). A string says why the drag was refused.
+ */
+export function layerShape(raw: readonly Vec2[], kind: 'line' | 'outline' | 'strip', o: { tol: number; width?: number }): Vec2[] | string {
+  const pts = simplifyPath(raw, o.tol);
+  const along = pts.length >= 2 && Math.hypot(pts[pts.length - 1]!.x - pts[0]!.x, pts[pts.length - 1]!.z - pts[0]!.z) >= 2;
+  if (kind === 'line') return along ? pts : 'Drag along the way to draw a road.';
+  if (kind === 'strip') return along ? stripOutline(pts, o.width ?? 8) : 'Drag along the course of the canal.';
+  return pts.length >= 3 ? pts : 'Draw a loop: the outline of the area.';
+}

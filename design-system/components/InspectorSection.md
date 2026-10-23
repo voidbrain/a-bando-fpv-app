@@ -13,4 +13,4 @@ InspectorSection groups the selected element's properties: an uppercase caption,
 
 The caption, the fields and their bindings. Keep each section to one concern (Size, Floors, Openings, Modules).
 
-Source: `src/app/ui/studio/bando-editor.ts (.sec, .st, .fld)`.
+Source: `src/app/ui/studio/bando-editor.scss (.sec, .st, .fld)`.

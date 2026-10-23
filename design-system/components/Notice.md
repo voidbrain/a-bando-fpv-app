@@ -12,4 +12,4 @@ Notice is a boxed message on top of the map for something the pilot must read (n
 
 The message and, if any, one action button.
 
-Source: `src/app/ui/studio/bando-editor.ts (.notice), assistant-box.ts (.err, .ok)`.
+Source: `src/app/ui/studio/bando-editor.scss (.notice), assistant-box.ts (.err, .ok)`.

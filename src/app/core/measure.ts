@@ -109,3 +109,37 @@ export function groundProfile(s: Seg, heightAt: (x: number, z: number) => number
   }
   return { dh: prev - heightAt(s.a.x, s.a.z), along, flat };
 }
+
+/** The measures on the plan: finished segments, the open end of the one being drawn (`a`) and where the chain began (`start`). */
+export interface MeasureChain {
+  segs: Seg[];
+  a: Pt | null;
+  start: Pt | null;
+}
+
+/**
+ * A click while measuring: every point continues the chain (B of one is A of the next). The same point twice, or a
+ * loop closed on the chain's start, ends it (`ended`).
+ */
+export function chainClick(m: MeasureChain, q: Pt, tol = 0.05): { chain: MeasureChain; ended: boolean } {
+  if (!m.a) return { chain: { segs: m.segs, a: q, start: q }, ended: false };
+  if (Math.hypot(q.x - m.a.x, q.z - m.a.z) <= tol) return { chain: { ...m, a: null, start: null }, ended: true };
+  const segs = [...m.segs, { a: m.a, b: q }];
+  const closed = !!m.start && segs.length > 1 && Math.hypot(q.x - m.start.x, q.z - m.start.z) <= tol;
+  return { chain: { segs, a: closed ? null : q, start: closed ? null : m.start }, ended: closed };
+}
+
+/** Move every measure end that sits on one of `pts` by (dx, dz): measures chained through a point stay joined. */
+export function shiftEnds(segs: readonly Seg[], pts: readonly Pt[], dx: number, dz: number, tol = 0.05): Seg[] {
+  const mv = (q: Pt): Pt => (pts.some((o) => Math.hypot(o.x - q.x, o.z - q.z) < tol) ? { x: q.x + dx, z: q.z + dz } : q);
+  return segs.map((g) => ({ a: mv(g.a), b: mv(g.b) }));
+}
+
+/** A measure's label: its plan length, and on a terrain (`heightAt` given) the height difference and the length along the ground. */
+export function measureLabel(m: Seg, heightAt: ((x: number, z: number) => number) | null): string {
+  const flat = lengthOf(m);
+  if (!heightAt) return fmtLength(flat);
+  const p = groundProfile(m, heightAt);
+  if (Math.abs(p.dh) < 0.05 && p.along - flat < 0.05) return fmtLength(flat);
+  return `${fmtLength(flat)} · ${p.dh >= 0 ? '↑' : '↓'}${Math.abs(p.dh).toFixed(1)} m · ${fmtLength(p.along)} on the ground`;
+}

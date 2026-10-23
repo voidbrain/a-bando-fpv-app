@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { sanitizeLayers } from './layers';
 import type { UndergroundSpec } from './site-spec';
-import { buildHeights, heightAt } from './terrain';
-import { basementVolume, cutMask, floorUnder, newTunnel, sectionProfile, tunnelAxis, tunnelOutline, volumeSolids } from './underground';
+import { buildHeights, emptyGrid, heightAt } from './terrain';
+import { basementVolume, cutCellsPath, cutMask, floorUnder, newRoom, newTunnel, sectionDrawing, sectionProfile, tunnelAxis, tunnelOutline, volumeSolids } from './underground';
 
 const hill = () => buildHeights({ cell: 1, half: { e: 80, n: 80 }, strokes: [{ op: 'hill', pts: [{ x: 0, z: 0 }], radius: 35, strength: 10 }] }).grid;
 const tunnel = (): UndergroundSpec => ({ id: 't', name: 'T', outline: tunnelOutline({ x: -45, z: 0 }, { x: 45, z: 0 }, 4), floor: -0.5, ceiling: 3, shape: 'box', wall: 0.4 });
@@ -70,5 +70,27 @@ describe('side view and basements', () => {
     const v = basementVolume(b, [{ x: -5, z: -3 }, { x: 5, z: -3 }, { x: 5, z: 3 }, { x: -5, z: 3 }], 2)!;
     expect([v.floor, v.ceiling]).toEqual([-1, 2]);
     expect(basementVolume({ ...b, basement: undefined }, [], 0)).toBeNull();
+  });
+});
+
+describe('editor drawings of underground volumes', () => {
+  it('a room sits its depth under the lower corner', () => {
+    const r = newRoom({ x: 0, z: 0 }, { x: 10, z: 6 }, (x) => (x > 5 ? 2 : 1), { height: 3, depth: 1, id: 'r', name: 'Room 1' });
+    expect(r.floor).toBe(-3);
+    expect(r.ceiling).toBe(0);
+    expect(r.outline).toHaveLength(4);
+  });
+  it('the section drawing fits its box and the cut cells make one path', () => {
+    const t = newTunnel(null, { x: 0, z: 0 }, { x: 30, z: 0 }, { width: 4, height: 3, depth: 1, shape: 'box', id: 't', name: 'T' });
+    const d = sectionDrawing(t, () => 0);
+    expect(d.ground.startsWith('M4.0,')).toBe(true);
+    expect(d.x0).toBeGreaterThan(4);
+    expect(d.x1).toBeLessThan(256);
+    expect(d.floor).toBeGreaterThan(d.ceil);
+    const g = emptyGrid({ cell: 2, half: { e: 6, n: 6 } });
+    const cut = new Uint8Array(g.nx * g.nz);
+    cut[1] = 1;
+    expect(cutCellsPath(g, cut)).toBe(`M${g.x0 + g.cell - g.cell / 2} ${g.z0 - g.cell / 2}h${g.cell}v${g.cell}h${-g.cell}Z`);
+    expect(cutCellsPath(g, null)).toBe('');
   });
 });

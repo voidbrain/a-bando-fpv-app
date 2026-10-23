@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { digWater, levelRoad, padsToRoads, sanitizeLayers, simplifyPath, waterLevel } from './layers';
+import { digWater, layerShape, levelRoad, padsToRoads, pathLength, sanitizeLayers, simplifyPath, waterLevel } from './layers';
 import { siteGround } from './site-ground';
 import { emptySpec, sanitizeSpec } from './site-spec';
 import { applyStroke, emptyGrid, heightAt } from './terrain';
@@ -70,5 +70,20 @@ describe('layers on the ground', () => {
     expect(simplifyPath(wobble)).toHaveLength(2);
     const corner = [{ x: 0, z: 0 }, { x: 5, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 5 }, { x: 10, z: 10 }];
     expect(simplifyPath(corner)).toEqual([{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 10 }]);
+  });
+});
+
+describe('layer shapes from a drag', () => {
+  const line = [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 20, z: 0.1 }];
+  it('roads and canals need a drag of 2 m, outlines three points', () => {
+    expect(layerShape([{ x: 0, z: 0 }, { x: 1, z: 0 }], 'line', { tol: 0.5 })).toBe('Drag along the way to draw a road.');
+    expect(layerShape(line, 'line', { tol: 0.5 })).toEqual([{ x: 0, z: 0 }, { x: 20, z: 0.1 }]);
+    expect(layerShape(line, 'outline', { tol: 0.5 })).toBe('Draw a loop: the outline of the area.');
+    const strip = layerShape(line, 'strip', { tol: 0.5, width: 6 });
+    expect(Array.isArray(strip) && strip.length).toBe(4);
+  });
+  it('measures a line', () => {
+    expect(pathLength([{ x: 0, z: 0 }, { x: 3, z: 4 }, { x: 3, z: 10 }])).toBe(11);
+    expect(pathLength([])).toBe(0);
   });
 });
