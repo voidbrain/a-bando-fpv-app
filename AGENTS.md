@@ -157,7 +157,7 @@ npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
 - Toasts render in `app-toast-host`, last in the app root: a toast inside `position: fixed` stage was trapped under the panels.
 - Several map areas (`StudioService.areas`, "Add area"): one Overpass request for `boundingZone`, then `keepInsideAreas` unless "fill the gaps". Stored as `SiteSpec.areas` / `fillGaps`. Pinned outlines need their own Leaflet renderer created at init (a lazily created one clipped the first outline away).
 
-## Terrain (docs/terrain-and-library.md, Part 1)
+## Terrain
 - `core/terrain.ts`: the height grid (`TerrainSpec`: cell, half, base, strokes). The base heights are NOT in the spec (it is JSON-cloned on every edit): `setTerrainBase(key, heights)` registers them; `ElevationService` downloads (AWS terrarium tiles), caches them in IndexedDB and re-registers them when a saved bando opens.
 - `core/site-ground.ts` `siteGround(spec)` is the one place the ground is built, in order: base + strokes (edges feathered to 0 only when there is no real ground; real ground keeps its heights, and `heightAt` continues the nearest edge outside the grid, drawn by `skirtMesh`) → water basins dug → roads levelled across → building / take-off pads levelled → underground cut mask. It is memoised on its inputs; everything (3D model, collider, editor contours, height readout, flight paths through `activeGround`) reads it. A spec without `terrain` is flat at y = 0 and must build exactly as before.
 - OSM ways can come back with null points where they cross the query box: `areaData` drops them first.
@@ -165,7 +165,7 @@ npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
 - A new element that stands on the ground lifts its mesh AND its collider boxes by `ground.at(...)` (see `liftSolids`, `liftCylinder`).
 - Editor: Terrain group (7 brushes + Tunnel), Layers group (Road, Surface, Water). One drag = one undo step; layers and tunnels create a flat terrain when the bando has none.
 
-## Blocks and the library (docs/terrain-and-library.md, Parts 2–3)
+## Blocks and the library
 - `core/blocks.ts`: `BlockSpec` (params, content with `{ "$": key, mul, add }` references), `sanitizeBlock` (every block from a file, the catalogue or the AI goes through it), `placeBlock` (writes ordinary elements tagged `block: BlockRef`), `applyPattern`, `updateInstance` / `detachInstance` / `removeInstance`, `blockFrom` (selection → block). `core/shapes.ts`: primitives for the `shapes` structure kind, capped, with colliders.
 - The catalogue lives in `library/blocks/*.json` (see `library/README.md`); `tools/build-catalog.mjs` writes `public/library/catalog.json`, and `core/catalog.spec.ts` imports it and checks every block. Add a block = a file + a version bump when changing one.
 - `LibraryStore` (IndexedDB, localStorage fallback in tests) is loaded by an app initializer before anything reads it. `SiteLibraryService` and `BlockLibraryService` read it synchronously from memory. The pilot's own blocks are `local/…` and are never touched by a sync.
@@ -198,3 +198,7 @@ npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
 ## Water and ground layers
 - The Water tool draws an outline by hand or, in "Line" mode, a canal along a centre line (`stripOutline`, `waterWidth`). "Merge overlapping" in the inspector joins the selected water with every water it overlaps or touches (`mergeWaters` → `unionOutline`, a grid trace, in `core/layers.ts`).
 - Water, roads and surfaces are listed in ☰ Elements ("Water, roads, ground"); a row selects the element (`goTo`, kinds `water` / `road` / `surface`). On the plan they are still picked by their edge, so a click inside them pans the map.
+
+## Not done yet (future)
+- National elevation data: the terrain uses the free worldwide AWS terrarium tiles; per-country high-resolution DEMs could replace them where available (an `ElevationService` source).
+- Multi-user authoring: the catalogue is published only by the maintainer (`library/` in this repo, read-only in the app). Letting any pilot publish blocks or bandos needs accounts, per-user rights and moderation (a server such as Supabase), plus queued offline edits that never overwrite another pilot's work.

@@ -18,7 +18,7 @@ const { SECTIONS, SNIPPETS, TOURS, playTime, tourBeats } = await import(pathToFi
 rmSync(out);
 
 const dir = join(root, 'docs', 'guide');
-mkdirSync(join(dir, 'clips'), { recursive: true });
+mkdirSync(dir, { recursive: true }); // clips/ appears when the first clip is saved there
 const page = (s) => `${String(SECTIONS.findIndex((x) => x.id === s.id) + 1).padStart(2, '0')}-${s.id}.md`;
 const clip = (sn) => {
   for (const ext of ['gif', 'webm', 'mp4']) if (existsSync(join(dir, 'clips', `${sn.id}.${ext}`))) return `clips/${sn.id}.${ext}`;
