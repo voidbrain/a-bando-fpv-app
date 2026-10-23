@@ -53,11 +53,13 @@ describe('sharing a bando', () => {
     expect(shareCopy(s, 'exact', null).buildings[0]!.name).toBe('Ospedale di Asolo'); // the exact copy keeps them
   });
 
-  it('a rounded copy keeps the place to ~1 km; an exact copy keeps everything; the original is untouched', () => {
+  it('a hidden bando stays hidden; an exact copy keeps everything; the original is untouched', () => {
     const s = bando();
-    const r = shareCopy(s, 'rounded', null);
-    expect(r.origin).toEqual({ lat: 45.67, lon: 12.24 });
-    expect(r.terrain!.base).toBeUndefined(); // nothing registered to carry
+    const h = shareCopy(s, 'hidden', null);
+    expect(h.terrain!.base).toBeUndefined(); // nothing registered to carry
+    const again = shareCopy(h, 'exact', null); // asking for its exact place cannot give it one
+    expect(again.privacy).toBe('hidden');
+    expect(again.origin).toEqual({ lat: 0, lon: 0 });
     const e = shareCopy(s, 'exact', null);
     expect(e.origin.lat).toBe(45.66694);
     expect(e.calibration).toEqual({ rot: 3, dx: 1, dz: 2 });

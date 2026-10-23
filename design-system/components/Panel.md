@@ -8,6 +8,8 @@ Panel is the app's floating window: a translucent `panel` box with a draggable t
 - Fill `panel` over `backdrop-filter: blur(6px)`, border `line`, `radius`, `shadow-panel`; body padding `space-8`.
 - Collapsed (`.min`): only the title bar shows. Ghost: background and border go; only content marked `.keep` stays.
 - Resizable panels add a bottom-left grip of two `dim` diagonal hairlines.
+- Panels that open at the same first place step 26 px aside (down, and right for right-anchored ones) for each one already there.
+- Show / hide toggles in lists use the eye icons (`eye`, `eyeOff`, `eyeHalf` for a mixed section) from `tool-icon.ts`, `accent` when shown.
 
 ## Consumer provides
 

@@ -29,8 +29,8 @@ stay in the browser (IndexedDB); videos and logs are read from your disk and nev
 - **Ruins**: any building can be ruined (holes in the roof, then walls broken along their top), an open shell, or carry
   battlements; one wall at a time if needed.
 - **Examples**: ready bandos to open as a copy (Bando Villetta, Chiari e Forti, and Villetta without its place).
-- **Sharing**: export a bando with its exact place, rounded to ~1 km, or hidden (no coordinates, no map names; its real
-  ground travels inside the file). Flights on a bando without its place start on its take-off pad; pins fit them.
+- **Sharing**: export a bando with its exact place or hidden (no coordinates, no map names; its real
+  ground travels inside the file); a bando whose place is hidden stays hidden. Flights on a bando without its place start on its take-off pad; pins fit them.
 - **Video**: load the flight's video, sync it with the log automatically, replay both together, render an MP4.
 - **AI assistant** (optional): a chat that turns sentences like "3 rooms with doors, close the north windows, add a crane"
   into editor commands. See *AI assistant* below.

@@ -1,6 +1,6 @@
 import { Component, ElementRef, computed, inject, input } from '@angular/core';
 import { LayoutStore } from '../../state/layout.store';
-import { PANEL_BY_ID, type PanelId } from '../panel-defs';
+import { CASCADE_STEP, PANEL_BY_ID, cascadeIndex, type PanelId } from '../panel-defs';
 
 /**
  * A floating window: drag it by the title bar, collapse it (▾), make it transparent (◐, keeps only the content marked
@@ -17,10 +17,10 @@ import { PANEL_BY_ID, type PanelId } from '../panel-defs';
     '[class.resizable]': 'def().resizable',
     '[hidden]': '!state().visible',
     '[style.z-index]': 'state().z',
-    '[style.left.px]': 'state().x ?? def().anchor.left ?? null',
-    '[style.top.px]': 'state().y ?? def().anchor.top ?? null',
-    '[style.right.px]': 'state().x === null ? (def().anchor.right ?? null) : null',
-    '[style.bottom.px]': 'state().y === null ? (def().anchor.bottom ?? null) : null',
+    '[style.left.px]': 'state().x ?? at(def().anchor.left)',
+    '[style.top.px]': 'state().y ?? at(def().anchor.top)',
+    '[style.right.px]': 'state().x === null ? at(def().anchor.right, -1) : null',
+    '[style.bottom.px]': 'state().y === null ? at(def().anchor.bottom) : null',
     '[style.width.px]': 'panelWidth()',
     // collapsed: drop the remembered height so the box hugs the title bar instead of staying big over the page;
     // expanded (or ghost-collapsed): exactly the remembered / default height — never the transient content height.
@@ -145,6 +145,12 @@ export class Panel {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly def = computed(() => PANEL_BY_ID[this.id()]);
   readonly state = computed(() => this.layout.panels()[this.id()]);
+  /** Panels opened at the same first place step aside, so the new one never covers the last exactly. */
+  private readonly cascade = computed(() => cascadeIndex(this.id(), this.layout.panels()) * CASCADE_STEP);
+  /** An anchor distance stepped by the cascade (null when not anchored on that side); a right anchor steps towards the edge, so the panel stays on screen. */
+  protected at(v: number | undefined, sign = 1): number | null {
+    return v === undefined ? null : Math.max(0, v + sign * this.cascade());
+  }
   private drag: { dx: number; dy: number } | null = null;
   /** True while the user drags the header (move) — suppresses the re-open size guard. */
 

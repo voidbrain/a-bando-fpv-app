@@ -1,12 +1,13 @@
 /**
- * Sharing a bando. A shared copy can keep its exact place, round it (to ~1 km) or hide it. Hidden or rounded, the
- * things that give the place away go (the map area, the GPS landmarks, the pilot's alignment, the height above sea
+ * Sharing a bando. A shared copy keeps its exact place or hides it; a bando whose place is already hidden is always
+ * shared hidden (its origin is 0, 0: an "exact" copy would claim a place that is not its own). Hidden, the things that
+ * give the place away go (the map area, the GPS landmarks, the pilot's alignment, the height above sea
  * level), and the real ground, which could otherwise be downloaded again only from the coordinates, travels inside the
  * file. A flight loaded into such a bando starts on its take-off pad. Pure.
  */
 import { cloneSpec, uid, type SiteSpec, type StructureKind, type Vec2 } from './site-spec';
 
-export type Privacy = 'exact' | 'rounded' | 'hidden';
+export type Privacy = 'exact' | 'hidden';
 
 /** Heights in decimetres as little-endian Int16, base64: 600 × 600 m at 1 m ≈ 1 MB of text. */
 export function encodeHeights(h: Float32Array): string {
@@ -41,32 +42,30 @@ const GENERIC_NAME: Partial<Record<StructureKind, string>> = {
 };
 
 /**
- * The copy to put in a file. `heights` = the real ground registered for this bando (if any): a hidden / rounded copy
- * carries it, an exact copy does not need to (the receiver downloads it from the coordinates).
+ * The copy to put in a file. `heights` = the real ground registered for this bando (if any): a hidden copy carries it,
+ * an exact copy does not need to (the receiver downloads it from the coordinates).
  */
 export function shareCopy(spec: SiteSpec, privacy: Privacy, heights: Float32Array | null): SiteSpec {
   const s = cloneSpec(spec);
-  if (privacy === 'exact') {
+  if (privacy === 'exact' && spec.privacy !== 'hidden') {
     delete s.privacy;
     return s;
   }
-  s.privacy = privacy;
-  s.origin = privacy === 'hidden' ? { lat: 0, lon: 0 } : { lat: Math.round(s.origin.lat * 100) / 100, lon: Math.round(s.origin.lon * 100) / 100 };
+  s.privacy = 'hidden';
+  s.origin = { lat: 0, lon: 0 };
   delete s.zone;
   delete s.areas;
   delete s.geoCorners;
   delete s.calibration;
-  if (privacy === 'hidden') {
-    // names from the map data give the place away (a street, a shop): back to plain names. Bridges and steps are named
-    // after the road they carry, so they always are (bandos made before the names were marked included).
-    s.buildings.forEach((b, i) => {
-      if (b.nameFromMap) b.name = b.frame ? 'Greenhouse' : `Building ${i + 1}`;
-      delete b.nameFromMap;
-    });
-    for (const st of s.structures ?? []) {
-      if (st.nameFromMap || st.kind === 'bridge' || st.kind === 'stairs') st.name = GENERIC_NAME[st.kind] ?? 'Structure';
-      delete st.nameFromMap;
-    }
+  // names from the map data give the place away (a street, a shop): back to plain names. Bridges and steps are named
+  // after the road they carry, so they always are (bandos made before the names were marked included).
+  s.buildings.forEach((b, i) => {
+    if (b.nameFromMap) b.name = b.frame ? 'Greenhouse' : `Building ${i + 1}`;
+    delete b.nameFromMap;
+  });
+  for (const st of s.structures ?? []) {
+    if (st.nameFromMap || st.kind === 'bridge' || st.kind === 'stairs') st.name = GENERIC_NAME[st.kind] ?? 'Structure';
+    delete st.nameFromMap;
   }
   if (s.terrain?.base) {
     if (heights) s.terrain.base = { source: 'embedded', key: `embedded:${uid('t')}`, fetchedAt: 0, datum: 0, data: encodeHeights(heights) };
