@@ -21,7 +21,7 @@ export const OPS = [
   'cut_notch', 'add_wing',
   'rename', 'rotate', 'move', 'resize',
   'add_structure', 'remove_structure', 'set_openings', 'add_columns', 'convert',
-  'set_facade', 'set_columns', 'industrial_store',
+  'set_facade', 'set_columns', 'industrial_store', 'set_ruin',
 ] as const;
 
 export const STRUCTURE_KINDS: readonly StructureKind[] = ['chimney', 'silo', 'tank', 'water_tower', 'lattice_tower', 'bridge', 'stairs', 'ramp', 'tower_crane', 'container', 'car', 'truck', 'excavator'];
@@ -51,6 +51,8 @@ export interface AiCommand {
   depth?: number;
   length?: number;
   value?: number;
+  /** set_ruin: how ruined, percent (0 = intact, 100 = a shell). */
+  ruin?: number;
   name?: string;
   roof?: 'gable' | 'flat' | 'vault';
   /** set_roof: turn the roof a quarter, and repeat the module `count` times (3 gables ...). */
@@ -130,7 +132,7 @@ export function normalizeCommands(raw: unknown): { cmds: AiCommand[]; errors: st
       const v = num(o[k]);
       if (v !== undefined) c[k] = clamp(v, 0, 1);
     }
-    for (const [k, lo, hi] of [['width', 0.4, 20], ['height', 0.3, 6], ['sill', 0, 5], ['size', 0.5, 200], ['depth', 0.5, 200], ['length', 2, 400], ['value', 1, 30], ['spacing', 0.8, 60], ['bay', 2, 20], ['rows', 1, 8], ['step', 2, 40], ['inset', 1, 30]] as const) {
+    for (const [k, lo, hi] of [['width', 0.4, 20], ['height', 0.3, 6], ['sill', 0, 5], ['size', 0.5, 200], ['depth', 0.5, 200], ['length', 2, 400], ['value', 1, 30], ['ruin', 0, 100], ['spacing', 0.8, 60], ['bay', 2, 20], ['rows', 1, 8], ['step', 2, 40], ['inset', 1, 30]] as const) {
       const v = num(o[k]);
       if (v !== undefined) c[k] = clamp(v, lo, hi);
     }
@@ -318,6 +320,20 @@ export function runCommands(spec: SiteSpec, cmds: AiCommand[], selectedId: strin
         addFloor(b);
         ok(`added floor ${b.levels.length} to ${label} (a copy of the floor below; the roof moved up)`);
         break;
+      case 'set_ruin': {
+        if (c.ruin === undefined) {
+          res.errors.push('set_ruin: needs ruin, a percentage (0 = intact)');
+          break;
+        }
+        if (b.frame) {
+          res.errors.push(`set_ruin: ${label} is a greenhouse frame`);
+          break;
+        }
+        if (c.ruin > 0) b.ruin = c.ruin / 100;
+        else delete b.ruin;
+        ok(c.ruin > 0 ? `${label} ruined ${c.ruin.toFixed(0)} %` : `${label} restored (intact)`);
+        break;
+      }
       case 'set_wall_height': {
         if (c.value === undefined) {
           res.errors.push('set_wall_height: needs a value in metres');

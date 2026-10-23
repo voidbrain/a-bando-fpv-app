@@ -306,7 +306,7 @@
    ]
   },
   {
-   "id": "b-mvkpodii-d4ue",
+   "id": "b-mvkrrip6-3ckv",
    "name": "Barrel-vault shed",
    "pos": {
     "x": 61.899,
@@ -392,7 +392,7 @@
    "block": {
     "id": "abando/vault-shed",
     "v": 1,
-    "inst": "blk-mvkpodii-1p",
+    "inst": "blk-mvkrrip6-1zjt",
     "params": {
      "len": 148.9,
      "hall": 13.475,
