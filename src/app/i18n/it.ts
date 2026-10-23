@@ -575,6 +575,8 @@ export const IT: Readonly<Record<string, string>> = {
   '{0} m · {1} m wide': '{0} m · larga {1} m',
   '{0} m²': '{0} m²',
   'open shell': 'guscio aperto',
+  'glass': 'vetri',
+  'Off: only the steel skeleton is left (and it can be flown through)': 'Spento: resta solo lo scheletro d’acciaio (e ci si può volare attraverso)',
   'An open shell: the roof and the upper floors are gone, the walls stand as the ruin level says': 'Un guscio aperto: il tetto e i piani superiori non ci sono più, i muri stanno in piedi come dice il livello di rovina',
   'battlements': 'merli',
   'Battlements along the top of the walls (on a flat roof or an open shell)': 'Merli lungo la cima dei muri (su un tetto piano o un guscio aperto)',

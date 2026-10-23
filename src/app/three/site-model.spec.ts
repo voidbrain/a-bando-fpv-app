@@ -359,3 +359,25 @@ describe('barrel vault ends', () => {
     expect(caps({ n: true, s: true, e: false, w: true })).toBe(3); // the east end is open
   });
 });
+
+describe('building fixtures', () => {
+  it('a fixture stands in the building frame, turns with it and selects the building', () => {
+    const s = spec();
+    s.structures = [];
+    const b0 = s.buildings[0]!;
+    s.buildings = [{ ...b0, pos: { x: 100, z: 0 }, rotDeg: 90, fixtures: [{ id: 'f', kind: 'silo', name: 'Ladder', x: 10, z: 0, rotDeg: 0, height: 8, size: 0.5 }] }];
+    const m = buildSiteFromSpec(s);
+    m.group.updateMatrixWorld(true);
+    // the fixture is a group of its own, tagged with the building (not with a structure)
+    const tagged: THREE.Vector3[] = [];
+    m.group.traverse((o) => {
+      const p = o.userData['pick'] as { kind: string; id: string } | undefined;
+      if (p?.kind === 'building' && p.id === b0.id && o.parent === m.group) tagged.push(o.getWorldPosition(new THREE.Vector3()));
+    });
+    const at = tagged.find((v) => Math.hypot(v.x - 100, v.z - 10) < 1) ?? null;
+    // turned a quarter: local +x (10 m) points to site +z
+    expect(at).not.toBeNull();
+    expect(at!.x).toBeCloseTo(100, 0);
+    expect(at!.z).toBeCloseTo(10, 0);
+  });
+});
