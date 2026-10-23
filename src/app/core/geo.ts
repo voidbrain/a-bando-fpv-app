@@ -87,3 +87,17 @@ export function toGeo(x: number, z: number, cal: Calibration): [number, number] 
   return toGeoAt(siteOrigin(), x, z, cal);
 }
 
+/**
+ * The calibration that turns everything it places by `deg` about `pivot` (model metres): the logged path pivots on a
+ * point that must not move (its pinned start) while its other end is aimed somewhere else.
+ */
+export function rotateCalibrationAbout(cal: Calibration, pivot: { x: number; z: number }, deg: number): Calibration {
+  const a = deg * RAD, c = Math.cos(a), s = Math.sin(a);
+  const ox = cal.dx - pivot.x, oz = cal.dz - pivot.z;
+  return { rot: cal.rot + deg, dx: pivot.x + ox * c - oz * s, dz: pivot.z + ox * s + oz * c };
+}
+
+/** The turn (degrees) that aims the line from `pivot` through `from` at `to`, about the vertical. */
+export function turnTowards(pivot: { x: number; z: number }, from: { x: number; z: number }, to: { x: number; z: number }): number {
+  return (Math.atan2(to.z - pivot.z, to.x - pivot.x) - Math.atan2(from.z - pivot.z, from.x - pivot.x)) * DEG;
+}

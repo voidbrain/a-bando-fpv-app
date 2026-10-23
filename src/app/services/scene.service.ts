@@ -1,6 +1,7 @@
 import { Injectable, effect, inject, signal, untracked, type WritableSignal } from '@angular/core';
 import * as THREE from 'three';
 import type { CameraView } from '../core/models';
+import { rotateCalibrationAbout, turnTowards } from '../core/geo';
 import { takeoffSpot } from '../core/takeoff';
 import type { SiteModel } from '../three/site-model';
 import { CalibrationStore } from '../state/calibration.store';
@@ -67,6 +68,11 @@ export class SceneService {
   };
   /** Armed ground pin: the next click on the ground moves the flight's start ('s') or end ('e') there. */
   readonly pin = signal<'s' | 'e' | null>(null);
+  /**
+   * The flight's start is fixed: pinned by the pilot, or a bando without its place (flights start on its take-off
+   * pad). Then pinning the end turns the path about its start instead of sliding the whole path.
+   */
+  readonly startFixed = signal(false);
   /**
    * Optional extra pick surface (the Map panel's model overlay). The stage registers itself here; when another
    * surface arms a pick mode it takes over the clicks, so a click inside the map panel selects / draws on the model
@@ -252,25 +258,33 @@ export class SceneService {
     const nx = ((clientX - rect.left) / rect.width) * 2 - 1;
     const ny = -((clientY - rect.top) / rect.height) * 2 + 1;
     const hit = this.host.groundPoint(camera, nx, ny);
-    const anchor = which === 's' ? f.loc[0] : f.loc[f.loc.length - 1];
-    if (hit && anchor) {
-      this.calibration.shift(hit.x - anchor.x, hit.z - anchor.z);
-      this.toast.show('Path placed. Use the compass to rotate it if needed.');
-    }
+    if (hit) this.pinTo(hit.x, hit.z);
     this.endPin();
   }
 
   /** Same as {@link placePin} but with a ground point already known in site metres (the map editor's own overlay). */
   placePinAt(x: number, z: number): void {
+    this.pinTo(x, z);
+    this.endPin();
+  }
+
+  /** The armed pin lands on (x, z): the start slides the path there; the end turns it about a fixed start, or slides it. */
+  private pinTo(x: number, z: number): void {
     const which = this.pin();
     const f = this.flights.active;
-    if (!which || !f) return;
-    const anchor = which === 's' ? f.loc[0] : f.loc[f.loc.length - 1];
-    if (anchor) {
-      this.calibration.shift(x - anchor.x, z - anchor.z);
+    const start = f?.loc[0], end = f?.loc[f.loc.length - 1];
+    if (!which || !start || !end) return;
+    if (which === 's') {
+      this.calibration.shift(x - start.x, z - start.z);
+      this.startFixed.set(true);
+      this.toast.show('Start placed. Pin the end to turn the path about it, or use the compass.');
+    } else if (this.startFixed() && Math.hypot(end.x - start.x, end.z - start.z) > 1) {
+      this.calibration.apply(rotateCalibrationAbout(this.calibration.calibration(), start, turnTowards(start, end, { x, z })));
+      this.toast.show('Path turned about its start toward the end you pinned.');
+    } else {
+      this.calibration.shift(x - end.x, z - end.z);
       this.toast.show('Path placed. Use the compass to rotate it if needed.');
     }
-    this.endPin();
   }
 
   // ---- per frame ----

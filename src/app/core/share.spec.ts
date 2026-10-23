@@ -38,6 +38,21 @@ describe('sharing a bando', () => {
     expect(back.terrain!.base!.data).toBe(c.terrain!.base!.data);
   });
 
+  it('a hidden copy drops names that came from the map, and always the road names of bridges and steps', () => {
+    const s = bando();
+    s.buildings = [{ ...s.buildings[0]!, name: 'Ospedale di Asolo', nameFromMap: true }, { ...s.buildings[0]!, id: 'b2', name: 'Main store' }];
+    s.structures = [
+      { id: 'a', kind: 'bridge', name: 'Via Leonardo da Vinci', x: 0, z: 0, rotDeg: 0, height: 5, size: 7, length: 17 }, // made before names were marked
+      { id: 'b', kind: 'silo', name: 'Silo Rossi', x: 0, z: 0, rotDeg: 0, height: 18, size: 3, nameFromMap: true },
+      { id: 'c', kind: 'water_tower', name: 'Cuore tower', x: 0, z: 0, rotDeg: 0, height: 26, size: 4 }, // the pilot's own name
+    ];
+    const c = shareCopy(s, 'hidden', null);
+    expect(c.buildings.map((b) => b.name)).toEqual(['Building 1', 'Main store']);
+    expect(c.structures!.map((x) => x.name)).toEqual(['Bridge', 'Silo', 'Cuore tower']);
+    expect(JSON.stringify(c)).not.toContain('nameFromMap');
+    expect(shareCopy(s, 'exact', null).buildings[0]!.name).toBe('Ospedale di Asolo'); // the exact copy keeps them
+  });
+
   it('a rounded copy keeps the place to ~1 km; an exact copy keeps everything; the original is untouched', () => {
     const s = bando();
     const r = shareCopy(s, 'rounded', null);

@@ -48,7 +48,7 @@ for (const f of readdirSync(bdir).filter((n) => n.endsWith('.json')).sort()) {
     process.exit(1);
   }
   writeFileSync(join(out, f), JSON.stringify(b) + '\n');
-  bandos.push({ file: `bandos/${f}`, name: b.name, about: typeof b.about === 'string' ? b.about : '', origin: b.origin, buildings: b.buildings.length });
+  bandos.push({ file: `bandos/${f}`, name: b.name, about: typeof b.about === 'string' ? b.about : '', origin: b.origin, buildings: b.buildings.length, ...(b.privacy ? { privacy: b.privacy } : {}) });
 }
 writeFileSync(join(root, 'public', 'library', 'bandos.json'), JSON.stringify({ schema: 1, bandos }) + '\n');
 console.log(`bandos.json: ${bandos.length} example bandos`);

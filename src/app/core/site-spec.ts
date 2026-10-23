@@ -91,6 +91,8 @@ export interface StructureSpec {
   shapes?: ShapeSpec[];
   /** Placed from a library block. */
   block?: BlockRef;
+  /** Its name came from the map data (a road, a business): a copy shared without its place drops it. */
+  nameFromMap?: true;
 }
 
 /** A free-standing wall or fence on the site (not part of a building). */
@@ -177,6 +179,8 @@ export interface BuildingSpec {
   basement?: { height: number };
   /** Placed from a library block. */
   block?: BlockRef;
+  /** Its name came from the map data (a shop, a hospital): a copy shared without its place drops it. */
+  nameFromMap?: true;
 }
 
 export interface TreeSpec {

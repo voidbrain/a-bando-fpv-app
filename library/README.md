@@ -42,3 +42,7 @@ Hand-made blocks are CC-BY-4.0 unless stated; blocks built from OpenStreetMap da
 The same build copies them to `public/library/bandos/` and writes the list `public/library/bandos.json`; the tests load
 every one. Make one by generating it in the app, refining it, exporting it with its exact place, and adding `about`.
 They use catalogue blocks like any bando, so a block they need belongs in `blocks/` too.
+
+An example can be shared without its place: export it from the app with "place hidden" (its ground travels inside,
+map names are dropped), add `about`, and save it here (`villetta-no-place.json`). The list shows "place hidden" for
+it, and its copies keep no map and no map data.

@@ -6,6 +6,8 @@ export interface ExampleBando {
   about: string;
   origin: { lat: number; lon: number };
   buildings: number;
+  /** Shared without its place (hidden) or with it rounded: the list does not show coordinates then. */
+  privacy?: 'hidden' | 'rounded';
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && isFinite(v);
@@ -25,6 +27,7 @@ export function sanitizeExamples(raw: unknown): ExampleBando[] {
       about: typeof o['about'] === 'string' ? o['about'].slice(0, 300) : '',
       origin: { lat: origin['lat'], lon: origin['lon'] },
       buildings: isNum(o['buildings']) ? Math.max(0, Math.round(o['buildings'])) : 0,
+      ...(o['privacy'] === 'hidden' || o['privacy'] === 'rounded' ? { privacy: o['privacy'] } : {}),
     });
   }
   return out;

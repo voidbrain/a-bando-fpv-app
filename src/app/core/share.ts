@@ -4,7 +4,7 @@
  * level), and the real ground, which could otherwise be downloaded again only from the coordinates, travels inside the
  * file. A flight loaded into such a bando starts on its take-off pad. Pure.
  */
-import { cloneSpec, uid, type SiteSpec, type Vec2 } from './site-spec';
+import { cloneSpec, uid, type SiteSpec, type StructureKind, type Vec2 } from './site-spec';
 
 export type Privacy = 'exact' | 'rounded' | 'hidden';
 
@@ -35,6 +35,11 @@ export function decodeHeights(text: string, n: number): Float32Array | null {
   return out;
 }
 
+/** The plain name of a structure kind, for a copy that must not carry names from the map. */
+const GENERIC_NAME: Partial<Record<StructureKind, string>> = {
+  bridge: 'Bridge', stairs: 'Steps', chimney: 'Chimney', silo: 'Silo', tank: 'Tank', water_tower: 'Water tower', lattice_tower: 'Lattice tower', ramp: 'Ramp', tower_crane: 'Tower crane',
+};
+
 /**
  * The copy to put in a file. `heights` = the real ground registered for this bando (if any): a hidden / rounded copy
  * carries it, an exact copy does not need to (the receiver downloads it from the coordinates).
@@ -51,6 +56,18 @@ export function shareCopy(spec: SiteSpec, privacy: Privacy, heights: Float32Arra
   delete s.areas;
   delete s.geoCorners;
   delete s.calibration;
+  if (privacy === 'hidden') {
+    // names from the map data give the place away (a street, a shop): back to plain names. Bridges and steps are named
+    // after the road they carry, so they always are (bandos made before the names were marked included).
+    s.buildings.forEach((b, i) => {
+      if (b.nameFromMap) b.name = b.frame ? 'Greenhouse' : `Building ${i + 1}`;
+      delete b.nameFromMap;
+    });
+    for (const st of s.structures ?? []) {
+      if (st.nameFromMap || st.kind === 'bridge' || st.kind === 'stairs') st.name = GENERIC_NAME[st.kind] ?? 'Structure';
+      delete st.nameFromMap;
+    }
+  }
   if (s.terrain?.base) {
     if (heights) s.terrain.base = { source: 'embedded', key: `embedded:${uid('t')}`, fetchedAt: 0, datum: 0, data: encodeHeights(heights) };
     else delete s.terrain.base; // nothing to carry: the shape of the strokes stays, on flat ground

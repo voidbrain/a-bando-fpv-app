@@ -161,14 +161,18 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
         <button class="btn" [class.on]="ai.open()" (click)="ai.open.set(!ai.open())" data-tour="ai" title="Chat with the AI assistant to edit buildings and interiors">💬 AI @if (ai.busy()) { <i class="spin"></i> }</button>
         <button class="btn primary" (click)="save()">Save</button>
       }
-      <label class="lay" title="Map under the model">🗺
-        <select [value]="studio.basemap()" (change)="setBase($event)">
-          <option value="street">Street</option>
-          <option value="sat">Satellite</option>
-          <option value="off">Hidden</option>
-        </select>
-      </label>
-      <label class="lay" title="Map opacity"><input type="range" min="0.2" max="1" step="0.05" [value]="studio.mapOpacity()" (input)="setOpacity($event)" /></label>
+      @if (placeHidden()) {
+        <span class="dim small" title="This bando was shared without its place: no map, no map data, no Area step. Flights start on its take-off pad; pin start / end and the compass fine-tune them.">no map · place hidden</span>
+      } @else {
+        <label class="lay" title="Map under the model">🗺
+          <select [value]="studio.basemap()" (change)="setBase($event)">
+            <option value="street">Street</option>
+            <option value="sat">Satellite</option>
+            <option value="off">Hidden</option>
+          </select>
+        </label>
+        <label class="lay" title="Map opacity"><input type="range" min="0.2" max="1" step="0.05" [value]="studio.mapOpacity()" (input)="setOpacity($event)" /></label>
+      }
     </div>
     <div class="wrap" #wrap tabindex="0" data-tour="map" [class.v3]="view3d() && overlayOn()" (keydown)="key($event)" (pointerdown)="closeMenus()" (contextmenu)="onContext($event)">
       <div class="map" #el></div>

@@ -1,5 +1,5 @@
 import { DEFAULT_CALIBRATION, setSiteOrigin } from './constants';
-import { courseDegrees, solveCalibration, toGeo, toLocal } from './geo';
+import { courseDegrees, rotateCalibrationAbout, solveCalibration, toGeo, toLocal, toLocalAt, turnTowards } from './geo';
 
 describe('geo', () => {
   beforeAll(() => setSiteOrigin({ lat: 45.528698, lon: 12.133305 })); // these cases are written against this site
@@ -58,5 +58,21 @@ describe('geo', () => {
     expect(courseDegrees(0, -5, cal)).toBeCloseTo(0, 6); // -Z = north
     expect(courseDegrees(5, 0, cal)).toBeCloseTo(90, 6); // +X = east
     expect(courseDegrees(0, 5, cal)).toBeCloseTo(180, 6);
+  });
+});
+
+describe('turning a path about its start', () => {
+  it('the start stays where it is and the end swings toward the pin', () => {
+    const origin = { lat: 45, lon: 12 };
+    const cal = { rot: 30, dx: 12, dz: -7 };
+    const a = { lat: 45.0002, lon: 12.0003 }, b = { lat: 45.0011, lon: 12.0001 };
+    const [ax, az] = toLocalAt(origin, a.lat, a.lon, cal), [bx, bz] = toLocalAt(origin, b.lat, b.lon, cal);
+    const pin = { x: ax + 40, z: az + 40 };
+    const turned = rotateCalibrationAbout(cal, { x: ax, z: az }, turnTowards({ x: ax, z: az }, { x: bx, z: bz }, pin));
+    const [ax2, az2] = toLocalAt(origin, a.lat, a.lon, turned), [bx2, bz2] = toLocalAt(origin, b.lat, b.lon, turned);
+    expect(ax2).toBeCloseTo(ax, 6);
+    expect(az2).toBeCloseTo(az, 6);
+    expect(Math.hypot(bx2 - ax2, bz2 - az2)).toBeCloseTo(Math.hypot(bx - ax, bz - az), 6); // a GPS path keeps its length
+    expect(Math.atan2(bz2 - az2, bx2 - ax2)).toBeCloseTo(Math.atan2(pin.z - az, pin.x - ax), 6); // and points at the pin
   });
 });

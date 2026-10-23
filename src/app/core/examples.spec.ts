@@ -4,6 +4,7 @@ import { sanitizeSpec } from './site-spec';
 import index from '../../../public/library/bandos.json';
 import villetta from '../../../public/library/bandos/villetta.json';
 import chiari from '../../../public/library/bandos/chiari-e-forti.json';
+import hidden from '../../../public/library/bandos/villetta-no-place.json';
 
 describe('example bandos', () => {
   it('keeps only well-formed rows, with files inside bandos/', () => {
@@ -21,7 +22,8 @@ describe('example bandos', () => {
 
   it('every published example is listed and loads as a bando', () => {
     const rows = sanitizeExamples(index);
-    expect(rows.map((r) => r.name)).toEqual(['Chiari e Forti', 'Bando Villetta']);
+    expect(rows.map((r) => r.name)).toEqual(['Chiari e Forti', 'Villetta (place hidden)', 'Bando Villetta']);
+    expect(rows.find((r) => r.name === 'Villetta (place hidden)')?.privacy).toBe('hidden');
     for (const raw of [villetta, chiari]) {
       const spec = sanitizeSpec(raw);
       expect(spec).not.toBeNull();
@@ -33,5 +35,16 @@ describe('example bandos', () => {
     expect(c.buildings.find((b) => b.name === 'Ruined mill')).toMatchObject({ roofless: true, crenels: true });
     expect(c.structures?.map((s) => s.block?.id).sort()).toEqual(['abando/sign-tower', 'abando/water-tower']);
     expect(sanitizeSpec(villetta)!.buildings.find((b) => b.block?.id === 'abando/vault-shed')?.levels[0]?.roof).toBe('vault');
+  });
+
+  it('the example without its place gives nothing away and carries its own ground', () => {
+    const h = sanitizeSpec(hidden)!;
+    expect(h.privacy).toBe('hidden');
+    expect(h.origin).toEqual({ lat: 0, lon: 0 });
+    expect(h.zone ?? h.areas ?? h.geoCorners ?? h.calibration).toBeUndefined();
+    expect(h.terrain?.base?.source).toBe('embedded');
+    expect((h.terrain?.base?.data ?? '').length).toBeGreaterThan(1000);
+    expect(JSON.stringify(hidden)).not.toMatch(/Via |nameFromMap/);
+    expect(h.buildings.length).toBe(sanitizeSpec(villetta)!.buildings.length);
   });
 });
