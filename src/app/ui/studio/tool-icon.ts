@@ -82,6 +82,19 @@ export const TOOL_ICONS: Readonly<Record<string, readonly Stroke[]>> = {
   terrainFlatten: [{ p: 'M2 20 L7 11 H17 L22 20' }, { p: 'M5 8 H19', d: true }],
   terrainHill: [{ p: 'M2 19 Q12 1 22 19' }, { p: 'M2 19 H22', d: true }],
   terrainCrater: [{ p: 'M2 11 H5 Q12 25 19 11 H22' }, { p: 'M5 11 L6 9 M19 11 L18 9' }],
+  // ---- views panel: cameras, view toggles, show / hide ----
+  eye: [{ p: 'M2 12 C5 6 19 6 22 12 C19 18 5 18 2 12 Z' }, { p: 'M9 12 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0' }],
+  eyeOff: [{ p: 'M2 12 C5 6 19 6 22 12 C19 18 5 18 2 12 Z' }, { p: 'M4 20 L20 4' }],
+  eyeHalf: [{ p: 'M2 12 C5 6 19 6 22 12 C19 18 5 18 2 12 Z' }, { p: 'M12 9 a3 3 0 0 0 0 6 Z', f: true }],
+  camOrbit: [{ p: 'M3 12 a9 4 0 1 0 18 0 a9 4 0 1 0 -18 0', d: true }, { p: 'M9 12 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0' }, { p: 'M19 9 l2 3 l-3 1' }],
+  camChase: [{ p: 'M10 15 L14 9 L18 15 L14 13.5 Z' }, { p: 'M3 21 L8 17 M5 21 l3 -4 l-4 1' }],
+  camFpv: [{ p: 'M3 7 H21 V17 H3 Z' }, { p: 'M12 10 v4 M10 12 h4' }],
+  camTop: [{ p: 'M4 4 H20 V20 H4 Z', d: true }, { p: 'M12 7 L15 15 L12 13.5 L9 15 Z' }],
+  roof: [{ p: 'M3 11 L12 4 L21 11' }, { p: 'M5 11 V20 H19 V11', d: true }],
+  xray: [{ p: 'M4 6 H14 V18 H4 Z', d: true }, { p: 'M10 10 H20 V20 H10 Z' }],
+  follow: [{ p: 'M12 3 a9 9 0 1 0 0.01 0', d: true }, { p: 'M12 8 L15.5 16 L12 14 L8.5 16 Z', f: true }],
+  recentre: [{ p: 'M12 3 V7 M12 17 V21 M3 12 H7 M17 12 H21' }, { p: 'M7 12 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0' }],
+  resetLayout: [{ p: 'M4 12 a8 8 0 1 0 2.5 -5.8' }, { p: 'M3 3 V7.5 H7.5' }],
 };
 
 /** A tool's icon as a small inline SVG. */

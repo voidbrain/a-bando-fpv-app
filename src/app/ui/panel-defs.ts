@@ -8,6 +8,8 @@ export interface PanelDef {
   title: string;
   /** Section of the Views panel that shows / hides it. */
   group: 'views' | 'telemetry' | 'simulator' | 'tools';
+  /** Telemetry only: a panel you work with (`controls`) or one that shows the flight (`views`). */
+  sub?: 'controls' | 'views';
   visible: boolean;
   /** First position (CSS pixels from the named edges); dragging replaces it. */
   anchor: { left?: number; right?: number; top?: number; bottom?: number };
@@ -20,19 +22,19 @@ export interface PanelDef {
 }
 
 export const PANELS: readonly PanelDef[] = [
-  { id: 'views', title: 'Views', group: 'tools', visible: true, anchor: { left: 12, top: 12 }, width: 210 },
-  { id: 'flights', title: 'Flights', group: 'telemetry', visible: true, anchor: { left: 12, top: 232 }, width: 250 },
+  { id: 'views', title: 'Views', group: 'tools', visible: true, anchor: { left: 12, top: 12 }, width: 236 },
+  { id: 'flights', title: 'Flights', group: 'telemetry', sub: 'controls', visible: true, anchor: { left: 12, top: 232 }, width: 250 },
   { id: 'simulator', title: 'Simulator', group: 'simulator', visible: true, anchor: { left: 12, bottom: 12 }, width: 250 },
   { id: 'radio', title: 'Radio controller', group: 'simulator', visible: false, anchor: { left: 280, top: 300 }, width: 280 },
-  { id: 'timeline', title: 'Timeline', group: 'telemetry', visible: true, anchor: { left: 280, bottom: 12 }, width: 560 },
-  { id: 'speed', title: 'Speed', group: 'telemetry', visible: true, anchor: { right: 12, top: 12 }, width: 170 },
-  { id: 'attitude', title: 'Attitude & heading', group: 'telemetry', visible: true, anchor: { right: 12, top: 168 }, width: 270 },
-  { id: 'compass', title: 'Map north', group: 'telemetry', visible: false, anchor: { right: 300, top: 12 }, width: 170 },
-  { id: 'path', title: 'Flight path', group: 'telemetry', visible: true, anchor: { right: 12, bottom: 12 }, width: 330, resizable: true, height: 270 },
+  { id: 'timeline', title: 'Timeline', group: 'telemetry', sub: 'controls', visible: true, anchor: { left: 280, bottom: 12 }, width: 560 },
+  { id: 'speed', title: 'Speed', group: 'telemetry', sub: 'views', visible: true, anchor: { right: 12, top: 12 }, width: 170 },
+  { id: 'attitude', title: 'Attitude & heading', group: 'telemetry', sub: 'views', visible: true, anchor: { right: 12, top: 168 }, width: 270 },
+  { id: 'compass', title: 'Map north', group: 'telemetry', sub: 'views', visible: false, anchor: { right: 300, top: 12 }, width: 170 },
+  { id: 'path', title: 'Flight path', group: 'telemetry', sub: 'views', visible: true, anchor: { right: 12, bottom: 12 }, width: 330, resizable: true, height: 270 },
   { id: 'studio', title: 'Bandos editor', group: 'tools', visible: true, anchor: { right: 12, top: 60 }, width: 760, resizable: true, height: 540 },
-  { id: 'blackbox', title: 'Blackbox', group: 'telemetry', visible: false, anchor: { right: 12, top: 330 }, width: 360 },
-  { id: 'video', title: 'Video', group: 'telemetry', visible: false, anchor: { left: 280, top: 12 }, width: 380 },
-  { id: 'live', title: 'Live link', group: 'telemetry', visible: false, anchor: { left: 280, top: 12 }, width: 300 },
+  { id: 'blackbox', title: 'Blackbox', group: 'telemetry', sub: 'controls', visible: false, anchor: { right: 12, top: 330 }, width: 360 },
+  { id: 'video', title: 'Video', group: 'telemetry', sub: 'controls', visible: false, anchor: { left: 280, top: 12 }, width: 380 },
+  { id: 'live', title: 'Live link', group: 'telemetry', sub: 'controls', visible: false, anchor: { left: 280, top: 12 }, width: 300 },
   { id: 'render', title: 'Render', group: 'tools', visible: false, anchor: { left: 280, top: 12 }, width: 300 },
   { id: 'guide', title: 'Guide me', group: 'tools', visible: true, anchor: { left: 280, top: 12 }, width: 300, resizable: true, height: 420 },
   { id: 'help', title: 'Controls', group: 'simulator', visible: false, anchor: { left: 280, top: 12 }, width: 300 },
@@ -43,3 +45,20 @@ export const PANELS: readonly PanelDef[] = [
 ];
 
 export const PANEL_BY_ID: Readonly<Record<PanelId, PanelDef>> = Object.fromEntries(PANELS.map((p) => [p.id, p])) as Record<PanelId, PanelDef>;
+
+/** How far a panel steps aside from others opened at the same first place, so a new one never hides the last one exactly. */
+export const CASCADE_STEP = 26;
+
+/**
+ * How many panels sit under this one at the same first place: shown, never dragged, with the same anchor, and opened
+ * before it (lower in the stacking order; the list order breaks ties). The panel is moved by that many {@link CASCADE_STEP}s.
+ */
+export function cascadeIndex(id: PanelId, panels: Readonly<Record<PanelId, { visible: boolean; x: number | null; y: number | null; z: number }>>): number {
+  const me = panels[id], def = PANEL_BY_ID[id];
+  if (!me?.visible || me.x !== null || me.y !== null) return 0;
+  const key = JSON.stringify(def.anchor), order = PANELS.findIndex((p) => p.id === id);
+  return PANELS.filter((p, i) => {
+    const o = panels[p.id];
+    return p.id !== id && o?.visible && o.x === null && o.y === null && JSON.stringify(p.anchor) === key && (o.z < me.z || (o.z === me.z && i < order));
+  }).length;
+}

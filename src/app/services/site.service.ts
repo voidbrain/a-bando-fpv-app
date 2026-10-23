@@ -135,19 +135,19 @@ export class SiteService {
     if (this.library.load(spec.id)) spec.id = uid();
     this.library.save(spec);
     this.applySpec(spec, true);
-    this.toast.show(`Imported “${spec.name}”${spec.privacy === 'hidden' ? ' (its place is hidden)' : spec.privacy === 'rounded' ? ' (its place is rounded to ~1 km)' : ''}.`);
+    this.toast.show(`Imported “${spec.name}”${spec.privacy === 'hidden' ? ' (its place is hidden)' : ''}.`);
     return true;
   }
 
-  /** A bando as a file to share: its exact place, rounded to ~1 km, or hidden (the real ground then travels inside). */
-  async exportShared(id: string, privacy: Privacy): Promise<{ name: string; text: string; ground: boolean } | null> {
+  /** A bando as a file to share: with its exact place, or hidden (the real ground then travels inside). A hidden bando stays hidden. */
+  async exportShared(id: string, privacy: Privacy): Promise<{ name: string; text: string; ground: boolean; hidden: boolean } | null> {
     const spec = this.library.load(id) ?? (this.active().id === id ? this.active() : null);
     if (!spec) return null;
     const key = spec.terrain?.base?.key;
     if (key && !getTerrainBase(key)) await this.elevation.ensure(spec);
     const copy = shareCopy(spec, privacy, key ? getTerrainBase(key) : null);
     const slug = spec.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'bando';
-    return { name: `${slug}${privacy === 'exact' ? '' : `-${privacy}`}.bando.json`, text: JSON.stringify(copy), ground: !!copy.terrain?.base?.data };
+    return { name: `${slug}${copy.privacy ? '-hidden' : ''}.bando.json`, text: JSON.stringify(copy), ground: !!copy.terrain?.base?.data, hidden: !!copy.privacy };
   }
 
   /**

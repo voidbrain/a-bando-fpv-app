@@ -14,8 +14,8 @@ export interface SiteEntry {
   name: string;
   createdAt: number;
   origin: { lat: number; lon: number };
-  /** A shared copy whose place is rounded or hidden. */
-  privacy?: 'rounded' | 'hidden';
+  /** A bando whose place is hidden. */
+  privacy?: 'hidden';
   buildings: number;
 }
 
