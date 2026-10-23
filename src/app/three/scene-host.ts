@@ -109,7 +109,7 @@ export class SceneHost {
       const m = o as THREE.Mesh;
       if (m.geometry) m.geometry.dispose();
     });
-    this.site = buildSiteFromSpec(spec);
+    this.site = buildSiteFromSpec(spec, { merge: true });
     this.scene.add(this.site.group);
     return this.site;
   }
