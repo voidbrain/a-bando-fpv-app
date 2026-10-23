@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { siteGround, siteOutline } from './site-ground';
 import { emptySpec, sanitizeSpec, type BuildingSpec } from './site-spec';
-import { applyStroke, brushStroke, buildHeights, contourPaths, heightColor, heightPixels, heightRange, defaultTerrain, emptyGrid, flattenPad, heightAt, rayGround, sanitizeTerrain, setTerrainBase, type TerrainSpec } from './terrain';
+import { applyStroke, brushStroke, rampGuide, sculptStroke, buildHeights, contourPaths, heightColor, heightPixels, heightRange, defaultTerrain, emptyGrid, flattenPad, heightAt, rayGround, sanitizeTerrain, setTerrainBase, type TerrainSpec } from './terrain';
 
 const flat = (half = 50): TerrainSpec => ({ cell: 1, half: { e: half, n: half }, strokes: [] });
 const bld = (x: number, z: number, l: number, w: number, rot = 0): BuildingSpec => ({ id: `b${x}`, name: 'b', pos: { x, z }, rotDeg: rot, length: l, width: w, levels: [] });
@@ -192,5 +192,27 @@ describe('brush strokes from a drag', () => {
     expect(px.data.length).toBe(px.w * px.h * 4);
     expect(px.data[3]).toBe(170);
     expect(px.data.slice(0, 3)).not.toEqual(px.data.slice(4, 7)); // the high corner has another colour
+  });
+});
+
+describe('sculpting and construction lines', () => {
+  it('a held press grows higher and wider, and the right button lowers', () => {
+    const a = sculptStroke({ x: 1.23, z: 4.56 }, 0.5, false, { radius: 6, rate: 2 });
+    const b = sculptStroke({ x: 1.23, z: 4.56 }, 3, false, { radius: 6, rate: 2 });
+    expect(a.op).toBe('raise');
+    expect(b.strength).toBeGreaterThan(a.strength);
+    expect(b.radius).toBeGreaterThan(a.radius);
+    expect(b.pts).toEqual([{ x: 1.2, z: 4.6 }]);
+    expect(sculptStroke({ x: 0, z: 0 }, 60, true, { radius: 6, rate: 2 })).toMatchObject({ op: 'lower', radius: 24, strength: 40 });
+    const g = emptyGrid({ cell: 1, half: { e: 20, n: 20 } });
+    applyStroke(g, b);
+    expect(heightAt(g, 1.2, 4.6)).toBeCloseTo(6, 1);
+  });
+  it('a ramp guide is a band along the drag with its slope', () => {
+    const r = rampGuide({ x: 0, z: 0 }, { x: 20, z: 0 }, 3, 5);
+    expect(r.len).toBe(20);
+    expect(r.slope).toBe(25);
+    expect(r.outline).toEqual([{ x: 0, z: 3 }, { x: 20, z: 3 }, { x: 20, z: -3 }, { x: 0, z: -3 }]);
+    expect(r.arrow[1]).toEqual({ x: 20, z: 0 });
   });
 });

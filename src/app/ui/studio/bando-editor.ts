@@ -13,7 +13,6 @@ import { columnsInLine, pointsInside, treeZones } from '../../core/elements';
 import { FENCES, fenceDef, newFence, setFenceMaterial, type FenceMaterial } from '../../core/fences';
 import { areaCorners } from '../../core/areas';
 import { roadDef, surfaceDef } from '../../core/layers';
-import type { TerrainOp } from '../../core/terrain';
 import { siteGround } from '../../core/site-ground';
 import { PickMenu, type PickOption } from './pick-menu';
 import { BlocksBox } from './blocks-box';
@@ -47,10 +46,10 @@ import { LayerTool } from './editor/layer-tool';
 import { MeasureTool } from './editor/measure-tool';
 import { BlockTool } from './editor/block-tool';
 import { ToolbarDock } from './editor/toolbar-dock';
-import { TerrainTool, TERRAIN_OPS } from './editor/terrain-tool';
+import { TerrainTool, TERRAIN_OPS, type Brush } from './editor/terrain-tool';
 import { UndergroundTool } from './editor/underground-tool';
 
-type Entry = { key: string; tool: Tool; mode?: ScatterMode; op?: TerrainOp; icon: string; name: string; color: string; hint: string; group: string; sep?: boolean };
+type Entry = { key: string; tool: Tool; mode?: ScatterMode; op?: Brush; icon: string; name: string; color: string; hint: string; group: string; sep?: boolean };
 type CtxItem = { label: string; act?: () => void; danger?: boolean; sep?: boolean; head?: boolean };
 
 /** Tools that place something on the selected building: while one is active, a click puts the thing where the ghost is. */
@@ -678,7 +677,7 @@ export class BandoEditor {
     if (t === 'road') return 'Drag along the way. Select a road to change its kind, width or surface.';
     if (t === 'water' && this.layers.waterMode() === 'line') return 'Drag along the course of a canal or ditch: the water follows the line at the width above. Select it (click its edge) to change it.';
     if (t === 'surface' || t === 'water') return `Draw the outline by hand. Select it (click its edge, or in ☰ Elements) to change it or delete it.`;
-    if (t === 'terrain') return { raise: 'Drag to raise the ground along the stroke.', lower: 'Drag to dig along the stroke.', smooth: 'Drag to soften bumps and steps.', flatten: 'Drag from a point: the ground around the stroke goes to that point\'s height.', hill: 'Click to put a hill there.', crater: 'Click to dig a crater (with a little rim).', ramp: 'Drag from the foot of the ramp to its top.' }[this.terrain.op()] + ' One stroke = one undo step.';
+    if (t === 'terrain') return { sculpt: 'Hold the left button to raise the ground, the right one to lower it: the longer you hold, the higher and wider it grows. Move while holding to shape a ridge or a ditch.', raise: 'Drag to raise the ground along the stroke.', lower: 'Drag to dig along the stroke.', smooth: 'Drag to soften bumps and steps.', flatten: 'Drag from a point: the ground around the stroke goes to that point\'s height.', hill: 'Click to put a hill there.', crater: 'Click to dig a crater (with a little rim).', ramp: 'Drag from the foot of the ramp to its top.' }[this.terrain.op()] + ' One stroke = one undo step.';
     if (t === 'scatter') return { pen: 'Drag along a path: trees are planted randomly in a strip around it.', rect: 'Drag a square: it is filled with random trees.', circle: 'Drag from the centre: a circle is filled with random trees.', lasso: 'Draw a loop freehand: it is filled with random trees.' }[this.scatterMode()];
     if (t === 'door' || t === 'window') return this.b() ? `Click a wall of “${this.b()!.name}” to add a ${t}.` : 'Select a building first.';
     if (t === 'wall') return this.b() ? 'Drag inside the building to draw an interior wall.' : 'Select a building first.';
@@ -853,7 +852,8 @@ export class BandoEditor {
     });
     // a right click opens the context menu: it must never start a drag (a press the browser then swallows leaves the drag stuck)
     this.wrapEl().nativeElement.addEventListener('pointerdown', (ev) => {
-      if (ev.button === 2 && !this.view3d()) ev.stopPropagation();
+      // except sculpting, where the right button lowers the ground
+      if (ev.button === 2 && !this.view3d() && !(this.tool() === 'terrain' && this.terrain.op() === 'sculpt')) ev.stopPropagation();
     }, true);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     this.applyBase(this.placeHidden() ? 'off' : this.studio.basemap(), this.studio.mapOpacity());
@@ -1124,7 +1124,11 @@ export class BandoEditor {
     else if (t === 'scatter') this.drag.set({ t: 'scatter', pts: [{ x: p.x, z: p.z }] });
     else if (t === 'road' || t === 'surface' || t === 'water') this.drag.set({ t: 'layer', pts: [{ x: p.x, z: p.z }] });
     else if (t === 'tunnel') this.drag.set({ t: 'under', a: { x: snap(p.x, 0.5), z: snap(p.z, 0.5) }, b: { x: snap(p.x, 0.5), z: snap(p.z, 0.5) } });
-    else if (t === 'terrain') this.drag.set({ t: 'terrain', pts: [{ x: p.x, z: p.z }], h0: siteGround(this.ed.draft()).at(p.x, p.z) });
+    else if (t === 'terrain' && this.terrain.op() === 'sculpt') {
+      // Populous-style: hold to raise (left button) or lower (right button); it grows while held
+      this.terrain.sculptDown({ x: p.x, z: p.z }, e.button === 2);
+      this.drag.set({ t: 'sculpt' });
+    } else if (t === 'terrain') this.drag.set({ t: 'terrain', pts: [{ x: p.x, z: p.z }], h0: siteGround(this.ed.draft()).at(p.x, p.z) });
     else if (t === 'tree') {
       this.ed.addTree(snap(p.x, 0.5), snap(p.z, 0.5), this.newTreeKind());
       this.applyNow();
@@ -1637,6 +1641,7 @@ export class BandoEditor {
     }
     // a drag whose button was released elsewhere (a right-click menu, a lost pointer-up) must not keep following the pointer
     if (e.buttons === 0 && e.pointerType === 'mouse' && !this.world3d) {
+      if (d.t === 'sculpt') this.terrain.sculptUp();
       this.drag.set(null);
       this.dragPlacement.set(null);
       return;
@@ -1795,6 +1800,10 @@ export class BandoEditor {
         if (Math.hypot(p.x - last.x, p.z - last.z) * this.ppm() >= 4) this.drag.set({ ...d, pts: [...d.pts, p] });
         break;
       }
+      case 'sculpt':
+        this.hover.set(p);
+        this.terrain.sculptMove(p);
+        break;
       case 'terrain': {
         const op = this.terrain.op();
         this.hover.set(p);
@@ -1938,6 +1947,8 @@ export class BandoEditor {
       this.layers.commit(d.pts);
     } else if (d.t === 'under') {
       this.under.commit(d.a, d.b);
+    } else if (d.t === 'sculpt') {
+      this.terrain.sculptUp();
     } else if (d.t === 'terrain') {
       this.terrain.commit(d.pts, d.h0);
     } else if (d.t === 'scatter') {
@@ -2046,6 +2057,7 @@ export class BandoEditor {
   protected onContext(e: MouseEvent): void {
     e.preventDefault();
     if (this.mode() !== 'model' || this.view3d()) return;
+    if (this.tool() === 'terrain' && this.terrain.op() === 'sculpt') return; // the right button sculpts: no menu
     const t = e.target as Element;
     if (t.closest('.palette, .ctx, .opts, app-float-box')) return;
     this.fly.set(null);
