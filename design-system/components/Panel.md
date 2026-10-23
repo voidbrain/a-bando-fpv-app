@@ -1,6 +1,6 @@
 # Panel
 
-Panel is the app's floating window: a translucent `panel` box with a draggable title bar, collapse (▾) and transparent (◐) buttons, and projected content.
+Panel is the app's floating window: a translucent `panel` box with a draggable title bar, transparent (◐), tips on hover (?, `accent` while on), collapse (▾) and close (×, not on Views, which shows the others again) buttons, and projected content.
 
 ## Use
 

@@ -1,5 +1,5 @@
-import { Component, computed, inject, signal } from '@angular/core';
-import { snippetForMark, type Snippet } from '../core/tour';
+import { Component, ElementRef, computed, inject, linkedSignal, signal, viewChild } from '@angular/core';
+import { captionPlace, snippetForMark, type Snippet } from '../core/tour';
 import { TourService } from '../services/tour.service';
 
 /**
@@ -31,7 +31,7 @@ import { TourService } from '../services/tour.service';
       </svg>
     }
     @if (tour.state(); as s) {
-      <div class="bar" role="status" aria-live="polite">
+      <div #bar class="bar" role="status" aria-live="polite" [style.left.px]="barAt().left" [style.top.px]="barAt().top">
         <div class="head">
           <b>{{ s.title }}</b>
           <span class="dim small mono">{{ s.index }} / {{ s.total }}</span>
@@ -51,7 +51,7 @@ import { TourService } from '../services/tour.service';
       <div class="tip" role="dialog" [attr.aria-label]="t.s.title" [style.left.px]="t.x" [style.top.px]="t.y" (mouseenter)="keepTip()" (mouseleave)="dropTip()">
         <b>{{ t.s.title }}</b>
         <div class="dim small">{{ t.s.beats[0]?.say }}</div>
-        <button class="btn" (click)="show(t.s)">▶ Show me</button>
+        <button class="btn primary" (click)="show(t.s)">▶ Show me</button>
       </div>
     }
   `,
@@ -102,16 +102,16 @@ import { TourService } from '../services/tour.service';
     .bar {
       pointer-events: auto;
       position: fixed;
-      left: 50%;
-      bottom: 48px;
-      transform: translateX(-50%);
-      width: min(560px, calc(100vw - 32px));
+      width: min(520px, calc(100vw - 32px));
       padding: 8px 10px 0;
       background: var(--panel-solid);
-      border: 1px solid var(--line);
+      border: 2px solid var(--accent);
       border-radius: 10px;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 10px 32px rgba(0, 0, 0, 0.6);
       overflow: hidden;
+      transition:
+        left 0.3s,
+        top 0.3s;
     }
     .head {
       display: flex;
@@ -123,7 +123,7 @@ import { TourService } from '../services/tour.service';
     }
     .say {
       margin: 6px 0 8px;
-      font-size: 13px;
+      font-size: 14px;
       line-height: 1.45;
       color: var(--text);
     }
@@ -141,14 +141,14 @@ import { TourService } from '../services/tour.service';
     .tip {
       pointer-events: auto;
       position: fixed;
-      width: 240px;
+      width: 260px;
       display: flex;
       flex-direction: column;
       gap: 4px;
       align-items: flex-start;
       padding: 8px 10px;
       background: var(--panel-solid);
-      border: 1px solid var(--line);
+      border: 2px solid var(--accent);
       border-radius: 8px;
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
     }
@@ -164,6 +164,18 @@ export class TourOverlay {
   private hide: ReturnType<typeof setTimeout> | null = null;
   private last: Element | null = null;
   protected readonly on = computed(() => this.tour.tips() && !this.tour.state());
+  private readonly barEl = viewChild<ElementRef<HTMLElement>>('bar');
+  /** The caption follows the action: next to what the tour points at (measured height, so long captions fit). */
+  protected readonly barAt = computed(() => {
+    const h = this.barEl()?.nativeElement.offsetHeight || 110;
+    this.tour.state(); // re-measure when the caption changes
+    return captionPlace(this.near(), { w: innerWidth, h: innerHeight }, { w: Math.min(520, innerWidth - 32), h });
+  });
+  /** The last target pointed at while the guide runs: between pointings the caption stays where it was. */
+  private readonly near = linkedSignal<{ f: ReturnType<TourService['focus']>; on: boolean }, ReturnType<TourService['focus']>>({
+    source: () => ({ f: this.tour.focus(), on: !!this.tour.state() }),
+    computation: (src, prev) => src.f ?? (src.on ? (prev?.value ?? null) : null),
+  });
 
   protected hover(e: MouseEvent): void {
     if (!this.on()) return;
@@ -176,7 +188,7 @@ export class TourOverlay {
     if (!s) return this.dropTip();
     this.timer = setTimeout(() => {
       const r = el.getBoundingClientRect();
-      const x = Math.min(innerWidth - 256, Math.max(8, r.right + 8)), y = Math.min(innerHeight - 140, Math.max(8, r.top));
+      const x = Math.min(innerWidth - 276, Math.max(8, r.right + 8)), y = Math.min(innerHeight - 140, Math.max(8, r.top));
       this.keepTip();
       this.tip.set({ s, x, y });
     }, 700);

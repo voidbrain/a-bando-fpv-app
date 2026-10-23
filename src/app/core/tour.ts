@@ -286,6 +286,21 @@ export function backTarget(first: readonly boolean[], i: number): number {
   return s < i ? s : startOf(Math.max(0, s - 1));
 }
 
+/**
+ * Where the caption bar goes (its top-left corner, px): just below the target the tour points at, or above it when
+ * there is no room below, centred on it and kept 16 px inside the window; without a target, centred near the bottom.
+ */
+export function captionPlace(target: { x: number; y: number; w: number; h: number } | null, view: { w: number; h: number }, bar: { w: number; h: number }): { left: number; top: number } {
+  const gap = 14, m = 16;
+  const clampX = (x: number): number => Math.max(m, Math.min(view.w - bar.w - m, x));
+  if (!target) return { left: clampX((view.w - bar.w) / 2), top: Math.max(m, view.h - bar.h - 48) };
+  const left = clampX(target.x + target.w / 2 - bar.w / 2);
+  if (target.y + target.h + gap + bar.h <= view.h - m) return { left, top: target.y + target.h + gap };
+  if (target.y - gap - bar.h >= m) return { left, top: target.y - gap - bar.h };
+  // a target as tall as the window (a panel): beside it, else over its lower part
+  return { left, top: Math.max(m, view.h - bar.h - 48) };
+}
+
 /** Roughly how long beats take to play, milliseconds (waits, drags, typing, cursor moves). */
 export function playTime(beats: readonly Beat[]): number {
   let ms = 0;

@@ -145,6 +145,8 @@ export class TourService {
     this.stop = this.paused = this.skip = false;
     this.jump = null;
     this.firsts = beats.map((b) => b.first);
+    // the layout before the guide: the panels it opens or moves go back when it ends
+    const before = Object.fromEntries(Object.entries(this.layout.panels()).map(([id, p]) => [id, { visible: p.visible, x: p.x, y: p.y, minimized: p.minimized }]));
     const c = this.cursor() ?? { x: innerWidth / 2, y: innerHeight / 2, down: false };
     this.cursor.set({ ...c, down: false });
     try {
@@ -166,6 +168,7 @@ export class TourService {
     } catch (e) {
       if (!(e instanceof Stopped)) console.warn('tour', e);
     } finally {
+      this.layout.restore(before);
       this.ai.demo.set(false);
       this.state.set(null);
       this.cursor.set(null);
@@ -180,14 +183,12 @@ export class TourService {
    */
   private async prepare(needs: readonly Need[]): Promise<void> {
     if (needs.includes('zone')) {
-      this.layout.setVisible('studio', true);
-      this.layout.raise('studio');
+      await this.open('studio');
       if (this.studio.view() !== 'zone' || !this.studio.isNew()) this.studio.create();
       await this.sleep(900);
     }
     if (needs.includes('model')) {
-      this.layout.setVisible('studio', true);
-      this.layout.raise('studio');
+      await this.open('studio');
       const open = this.studio.view() === 'zone' && this.site.active().id === TOUR_BANDO.id && this.editor?.state().mode === 'model';
       if (!open) {
         if (this.site.peek(TOUR_BANDO.id)) {
@@ -206,7 +207,7 @@ export class TourService {
     }
     if (needs.includes('log') && !this.flights.all.length) await this.hook('demoLog');
     if (needs.includes('video') && !this.video.loaded()) {
-      this.layout.setVisible('video', true);
+      await this.open('video');
       await this.hook('demoVideo');
     }
   }
@@ -345,8 +346,24 @@ export class TourService {
     this.cursor.set({ x, y, down: false });
   }
 
+  /** What is under a point of the page, looking through the tour's own caption and tip. */
   private hitAt(x: number, y: number): HTMLElement | null {
-    return document.elementFromPoint(x, y) as HTMLElement | null;
+    return (document.elementsFromPoint(x, y).find((e) => !e.closest('app-tour-overlay')) as HTMLElement | undefined) ?? null;
+  }
+
+  /**
+   * Show a panel the step works in: one that was closed opens in the middle of the window, where the action is (the
+   * layout is put back when the guide ends). Views stays where the pilot keeps it.
+   */
+  private async open(id: PanelId): Promise<void> {
+    const was = this.layout.panels()[id];
+    this.layout.setVisible(id, true);
+    this.layout.raise(id);
+    if (was.visible || id === 'views') return;
+    await this.sleep(60); // let it render to measure it (a timer: animation frames stop in a background tab)
+    const el = document.querySelector<HTMLElement>(`app-panel[data-id="${id}"]`);
+    const r = el?.getBoundingClientRect();
+    if (r && r.width) this.layout.moveTo(id, Math.max(8, Math.round((innerWidth - r.width) / 2)), Math.max(8, Math.round((innerHeight - r.height) / 2.4)));
   }
 
   /** Buttons, labels and inputs get a plain click; anything else (the map, the plan) the full pointer sequence. */
@@ -367,12 +384,9 @@ export class TourService {
 
   private async hook(h: Hook, arg?: string): Promise<void> {
     switch (h) {
-      case 'panel': {
-        const id = arg as PanelId;
-        this.layout.setVisible(id, true);
-        this.layout.raise(id);
+      case 'panel':
+        await this.open(arg as PanelId);
         return this.sleep(300);
-      }
       case 'list':
         if (this.studio.view() !== 'list') this.studio.back();
         return this.sleep(300);
