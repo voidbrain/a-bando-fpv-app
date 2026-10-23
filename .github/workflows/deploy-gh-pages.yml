@@ -18,7 +18,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  checks:
+    # the whole CI, browser tests included: nothing is published that did not pass them
+    uses: ./.github/workflows/ci.yml
+
   build:
+    needs: checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -41,10 +46,6 @@ jobs:
       - name: Build the block catalogue
         # library/blocks/*.json -> public/library/catalog.json (fails on a bad id or file name)
         run: node tools/build-catalog.mjs
-
-      - name: Test
-        # includes core/catalog.spec.ts: every published block must pass the app's own checks
-        run: npx ng test --watch=false
 
       - name: Build
         # Production build (baseHref /a-bando-fpv-app/ set in angular.json);

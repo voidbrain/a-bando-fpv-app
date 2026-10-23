@@ -1,5 +1,7 @@
 import { Component, effect, inject, signal, untracked } from '@angular/core';
 import { LayoutStore } from '../../state/layout.store';
+import { LibraryStore } from '../../services/library-store.service';
+import { storageAdvice } from '../../core/storage-errors';
 import type { Privacy } from '../../core/share';
 import { BackupService } from '../../services/backup.service';
 import { DownloadService } from '../../services/download.service';
@@ -31,6 +33,12 @@ import { BandoEditor } from './bando-editor';
           <button class="btn" (click)="backupAll()" [disabled]="!site.bandos().length" title="Save every bando and your own blocks in one file (keep it somewhere safe: the browser can lose what it stores)">Back up all</button>
           <label class="btn" title="Bring back a backup file: bandos it has that are missing here are added, an older copy here is replaced, a newer one is kept">Restore…<input type="file" accept=".json,application/json" hidden (change)="restoreFile($event)" /></label>
         </div>
+        @if (storage.health().problem; as pb) {
+          <div class="notice warn" role="alert">
+            {{ advice(pb) }}
+            <button class="btn" (click)="backupAll()">Back up all</button>
+          </div>
+        }
         @if (site.bandos().length === 0) {
           <div class="empty dim">
             No bando yet. Press <b>New bando</b>, search a place, frame the area on the map and generate the 3D model.
@@ -100,6 +108,17 @@ import { BandoEditor } from './bando-editor';
     .name {
       width: 180px;
     }
+    .notice {
+      margin: 6px 0;
+      padding: 6px 8px;
+      border: 1px solid var(--warn);
+      border-radius: 6px;
+      font-size: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
     .list {
       display: flex;
       flex-direction: column;
@@ -160,6 +179,8 @@ export class StudioPanel {
   protected readonly site = inject(SiteService);
   private readonly toast = inject(ToastService);
   private readonly layout = inject(LayoutStore);
+  protected readonly storage = inject(LibraryStore);
+  protected readonly advice = storageAdvice;
   private readonly downloads = inject(DownloadService);
   private readonly backups = inject(BackupService);
   protected readonly examples = inject(ExampleBandosService);

@@ -4,6 +4,8 @@ name: CI
 on:
   pull_request:
     branches: [main]
+  # the deploy workflow runs the same checks (unit, types, translations, examples, build, e2e) before it publishes
+  workflow_call:
 
 permissions:
   contents: read

@@ -10,3 +10,6 @@ public/demo/
 # end-to-end runs
 /test-results/
 /playwright-report/
+
+# macOS folder metadata
+.DS_Store

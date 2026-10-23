@@ -17,8 +17,9 @@ const sameRect = (a: RoomInfo['rect'], b: RoomInfo['rect']): boolean => Math.abs
  */
 export class SiteEditor {
   readonly draft = signal<SiteSpec>(cloneSpec(EMPTY_SPEC));
-  private past: SiteSpec[] = [];
-  private future: SiteSpec[] = [];
+  /** Undo / redo steps: the spec and which building was selected then (undo brings the selection back too). */
+  private past: { spec: SiteSpec; sel: string }[] = [];
+  private future: { spec: SiteSpec; sel: string }[] = [];
   /** Currently selected building id ('' = none). */
   readonly selectedId = signal('');
   /** Partition-drawing mode: first corner picked, waiting for the second. */
@@ -44,15 +45,26 @@ export class SiteEditor {
   undo(): void {
     const prev = this.past.pop();
     if (!prev) return;
-    this.future.push(cloneSpec(this.draft()));
-    this.draft.set(prev);
+    this.future.push(this.step());
+    this.restore(prev);
   }
 
   redo(): void {
     const next = this.future.pop();
     if (!next) return;
-    this.past.push(cloneSpec(this.draft()));
-    this.draft.set(next);
+    this.past.push(this.step());
+    this.restore(next);
+  }
+
+  /** The current state as a history step. */
+  private step(): { spec: SiteSpec; sel: string } {
+    return { spec: cloneSpec(this.draft()), sel: this.selectedId() };
+  }
+
+  /** Back to a history step: its spec, and its selection if that building exists in it (never a dangling id). */
+  private restore(h: { spec: SiteSpec; sel: string }): void {
+    this.draft.set(h.spec);
+    this.selectedId.set(h.spec.buildings.some((b) => b.id === h.sel) ? h.sel : '');
   }
 
   // ---- building-level edits ----
@@ -309,7 +321,7 @@ export class SiteEditor {
 
   /** Start a continuous edit (a mouse drag): one undo step for the whole gesture. Follow with {@link live} calls. */
   beginGesture(): void {
-    this.past.push(cloneSpec(this.draft()));
+    this.past.push(this.step());
     if (this.past.length > 60) this.past.shift();
     this.future = [];
   }
@@ -322,7 +334,7 @@ export class SiteEditor {
   }
 
   private commit(fn: (s: SiteSpec) => void): void {
-    this.past.push(cloneSpec(this.draft()));
+    this.past.push(this.step());
     if (this.past.length > 60) this.past.shift();
     this.future = [];
     const next = cloneSpec(this.draft());

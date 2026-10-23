@@ -1,5 +1,8 @@
 import { Component, afterNextRender, effect, inject, untracked } from '@angular/core';
 import { SHOWCASE, showcaseLink } from './core/tour';
+import { storageAdvice } from './core/storage-errors';
+import { LibraryStore } from './services/library-store.service';
+import { ToastService } from './services/toast.service';
 import { I18nService } from './services/i18n.service';
 import { TourService } from './services/tour.service';
 import { FlightService } from './services/flight.service';
@@ -81,6 +84,12 @@ export class App {
       if (link.lang) i18n.set(link.lang);
       afterNextRender(() => setTimeout(() => void tour.playTour(SHOWCASE), 1200));
     }
+    // the browser refusing to keep data is said once per kind of problem, with the way out (Back up all)
+    const store = inject(LibraryStore), toast = inject(ToastService), told = new Set<string>();
+    effect(() => {
+      const p = store.health().problem;
+      if (p && !told.has(p)) untracked(() => (told.add(p), toast.show(storageAdvice(p), 9000)));
+    });
     inject(ShortcutsService).bind();
     inject(FrameLoopService).start();
 
