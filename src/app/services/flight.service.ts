@@ -1,7 +1,8 @@
 import { Injectable, effect, inject, signal, untracked } from '@angular/core';
 import { findFlips, findLiftoff } from '../core/flight/analysis';
 import { createFlight, flightStats, maxSpeed, prepareFlight } from '../core/flight/flight';
-import { activeGround } from '../core/takeoff';
+import { activeGround, autoAlignFlights, setAutoAlign, takeoffSpot } from '../core/takeoff';
+import { alignShift } from '../core/share';
 import { parseLog } from '../core/flight/log-parser';
 import { Vec3 } from '../core/math3d';
 import type { Calibration, Flight, GeoSample, Telemetry } from '../core/models';
@@ -66,6 +67,15 @@ export class FlightService {
   add(name: string, pts: GeoSample[], tel: Telemetry | null = null, opts: { frame?: boolean; live?: boolean } = {}): Flight {
     const f = createFlight(name, pts, tel, opts.live ?? false);
     prepareFlight(f, this.calibration.calibration(), activeGround() ?? undefined);
+    // a bando shared without its place: the log is GPS, so its start goes onto the take-off pad (once; pins fine-tune)
+    const first = f.loc[0];
+    if (autoAlignFlights() && first && !opts.live) {
+      const s = alignShift({ x: first.x, z: first.z }, takeoffSpot());
+      setAutoAlign(false);
+      this.calibration.shift(s.dx, s.dz);
+      prepareFlight(f, this.calibration.calibration(), activeGround() ?? undefined);
+      this.toast.show('This bando has no real place: the flight starts on its take-off pad. Pin start / end and the compass fine-tune it.', 4500);
+    }
     this.byId.set(f.id, f);
     this.store.add({ id: f.id, name: f.name, live: f.live, stats: this.describe(f) });
     this.updateSpeedMax();

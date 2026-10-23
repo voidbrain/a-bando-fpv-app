@@ -48,12 +48,13 @@ export class ElevationService {
    */
   async ensure(spec: SiteSpec): Promise<boolean> {
     const b = spec.terrain?.base;
-    if (!b || b.source !== 'aws-terrarium' || hasTerrainBase(b.key)) return false;
+    if (!b || b.source === 'flat' || hasTerrainBase(b.key)) return false;
     const cached = await get(b.key);
     if (cached) {
       setTerrainBase(b.key, cached);
       return true;
     }
+    if (b.source === 'embedded') return false; // it came in a file and the cache lost it: nothing to download from
     try {
       const again = await this.fetchBase(spec);
       return again.base.key === b.key;
@@ -61,6 +62,12 @@ export class ElevationService {
       return false;
     }
   }
+}
+
+/** Register heights under a key and keep them in the cache (the ground that came inside a shared file). */
+export async function cacheBase(key: string, h: Float32Array): Promise<void> {
+  setTerrainBase(key, h);
+  await put(key, h);
 }
 
 /** PNG bytes to RGBA pixels (via an ImageBitmap on an offscreen canvas). */

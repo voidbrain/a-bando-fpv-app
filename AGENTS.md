@@ -169,3 +169,9 @@ npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
 - The catalogue lives in `library/blocks/*.json` (see `library/README.md`); `tools/build-catalog.mjs` writes `public/library/catalog.json`, and `core/catalog.spec.ts` imports it and checks every block. Add a block = a file + a version bump when changing one.
 - `LibraryStore` (IndexedDB, localStorage fallback in tests) is loaded by an app initializer before anything reads it. `SiteLibraryService` and `BlockLibraryService` read it synchronously from memory. The pilot's own blocks are `local/…` and are never touched by a sync.
 - The Blocks panel (`ui/studio/blocks-box.ts`) arms a placement (`armed` in the editor: the next click on the map places it, Esc stops); patterns apply to the selected building's current floor.
+
+## Sharing bandos
+- `core/share.ts` `shareCopy(spec, 'exact' | 'rounded' | 'hidden', heights)`: rounded / hidden copies drop the zone, areas, GPS landmarks, the pilot's calibration and the datum; hidden puts the origin at 0, 0. A copy that is not exact carries its real ground as `terrain.base.data` (Int16 decimetres, base64, source `embedded`). Export: Bandos list → place choice → Export (`SiteService.exportShared`).
+- Import (`SiteService.importJson`) moves `data` out of the spec into the elevation cache (`cacheBase`): the spec is JSON-cloned on every edit, a 1 MB string in it would slow every drag. A clashing id gets a new one; the import is saved.
+- `spec.privacy === 'hidden'`: no map under the editor, no Area mode. With `privacy` set and no pilot calibration yet, the next loaded flight is shifted so its first fix lands on the take-off pad (`autoAlignFlights`, once).
+- The inspector's Modules section lists the library's pattern blocks (`kind: 'pattern'`); there are no hard-coded presets any more. The catalogue syncs in the background at start-up.

@@ -17,3 +17,8 @@ export const setTakeoff = (p: Takeoff): void => takeoffSignal.set({ x: p.x, z: p
 const groundSignal = signal<((x: number, z: number) => number) | null>(null);
 export const activeGround = computed(() => groundSignal());
 export const setActiveGround = (fn: ((x: number, z: number) => number) | null): void => groundSignal.set(fn);
+
+/** The active bando's place is hidden / rounded and no flight was aligned yet: the next loaded flight starts on the pad. */
+const autoAlignSignal = signal(false);
+export const autoAlignFlights = computed(() => autoAlignSignal());
+export const setAutoAlign = (on: boolean): void => autoAlignSignal.set(on);

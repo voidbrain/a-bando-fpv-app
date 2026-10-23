@@ -54,3 +54,13 @@ describe('catalogue sync and search', () => {
     expect(searchBlocks(list, 'grain').map((b) => b.id)).toEqual(['a/silo']);
   });
 });
+
+describe('façade blocks from the catalogue', () => {
+  it('apply to the chosen walls only', () => {
+    const facade = sanitizeCatalog(published).blocks.find((b) => b.id === 'abando/facade-store')!;
+    const all = applyPattern(hall(), 0, facade, { side: 'all' })[0]!;
+    const north = applyPattern(hall(), 0, facade, { side: 'n' })[0]!;
+    expect(parseInt(north, 10)).toBeGreaterThan(0);
+    expect(parseInt(north, 10)).toBeLessThan(parseInt(all, 10));
+  });
+});

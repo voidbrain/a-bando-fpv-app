@@ -251,6 +251,8 @@ export interface SiteSpec {
   bearingDeg: number;
   /** The map zone the model was generated from (centre + half extents in metres, east/north), so it can be re-edited. */
   zone?: ZoneSpec;
+  /** A shared copy whose place was rounded (~1 km) or hidden; absent = the exact place. */
+  privacy?: 'rounded' | 'hidden';
   /** When several map areas were combined: each of them (`zone` then covers them all); `fillGaps` kept what lies between. */
   areas?: ZoneSpec[];
   fillGaps?: boolean;
@@ -410,6 +412,7 @@ export function sanitizeSpec(raw: unknown): SiteSpec | null {
           .map((a) => ({ lat: a.lat, lon: a.lon, halfE: a.halfE, halfN: a.halfN, ...(typeof a.rotDeg === 'number' && isFinite(a.rotDeg) && a.rotDeg ? { rotDeg: a.rotDeg } : {}) }))
       : undefined,
     fillGaps: typeof s.fillGaps === 'boolean' ? s.fillGaps : undefined,
+    privacy: s.privacy === 'hidden' || s.privacy === 'rounded' ? s.privacy : undefined,
     bearingDeg: typeof s.bearingDeg === 'number' ? s.bearingDeg : 0,
     genScale: typeof s.genScale === 'number' ? s.genScale : 1,
     groundColor: typeof s.groundColor === 'string' ? s.groundColor : '#789b52',

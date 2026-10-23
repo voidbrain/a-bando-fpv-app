@@ -6,7 +6,10 @@ import { bounds, edgesOf, recentre, rectilinear, type Pt } from '../core/footpri
 import type { BuildingSpec, LocationInfo, SiteSpec, StructureSpec, TreeSpec, Vec2, WallOpening, ZoneSpec } from '../core/site-spec';
 import { keepInsideAreas } from '../core/areas';
 import { emptySpec, uid } from '../core/site-spec';
-import { setActiveGround, setTakeoff } from '../core/takeoff';
+import { setActiveGround, setAutoAlign, setTakeoff } from '../core/takeoff';
+import { decodeHeights, shareCopy, type Privacy } from '../core/share';
+import { emptyGrid, getTerrainBase } from '../core/terrain';
+import { cacheBase } from './elevation.service';
 import { hasTerrainBase, type HeightGrid } from '../core/terrain';
 import { ElevationService } from './elevation.service';
 import { siteGround } from '../core/site-ground';
@@ -111,20 +114,39 @@ export class SiteService {
     return true;
   }
 
-  /** Import a spec (JSON text from a file drop / paste). */
+  /**
+   * Import a bando file. The real ground it carries (a shared copy whose place is hidden) moves to the local cache, out
+   * of the spec; a bando already in the library under the same id is kept and the import gets a new one. It is saved.
+   */
   importJson(text: string): boolean {
     const spec = this.library.importJson(text);
     if (!spec) {
       this.toast.show('Not a valid site file.');
       return false;
     }
+    const base = spec.terrain?.base;
+    if (spec.terrain && base?.data) {
+      const h = decodeHeights(base.data, emptyGrid(spec.terrain).h.length);
+      delete base.data;
+      if (h) void cacheBase(base.key, h);
+      else delete spec.terrain.base;
+    }
+    if (this.library.load(spec.id)) spec.id = uid();
+    this.library.save(spec);
     this.applySpec(spec, true);
-    this.toast.show(`Imported “${spec.name}”.`);
+    this.toast.show(`Imported “${spec.name}”${spec.privacy === 'hidden' ? ' (its place is hidden)' : spec.privacy === 'rounded' ? ' (its place is rounded to ~1 km)' : ''}.`);
     return true;
   }
 
-  exportActive(): string {
-    return this.library.exportJson(this.active());
+  /** A bando as a file to share: its exact place, rounded to ~1 km, or hidden (the real ground then travels inside). */
+  async exportShared(id: string, privacy: Privacy): Promise<{ name: string; text: string; ground: boolean } | null> {
+    const spec = this.library.load(id) ?? (this.active().id === id ? this.active() : null);
+    if (!spec) return null;
+    const key = spec.terrain?.base?.key;
+    if (key && !getTerrainBase(key)) await this.elevation.ensure(spec);
+    const copy = shareCopy(spec, privacy, key ? getTerrainBase(key) : null);
+    const slug = spec.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'bando';
+    return { name: `${slug}${privacy === 'exact' ? '' : `-${privacy}`}.bando.json`, text: JSON.stringify(copy), ground: !!copy.terrain?.base?.data };
   }
 
   /**
@@ -448,6 +470,7 @@ export class SiteService {
     setSiteOrigin(spec.origin);
     const ground = siteGround(spec);
     setTakeoff({ ...spec.droneStart, y: ground.start });
+    setAutoAlign(!!spec.privacy && !spec.calibration);
     if (ground.grid !== this.groundGrid) {
       this.groundGrid = ground.grid;
       setActiveGround(ground.grid ? ground.at : null);

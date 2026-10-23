@@ -25,11 +25,14 @@ export interface TerrainStroke {
 
 /** Where the real ground came from; the heights are in the registry under `key`. */
 export interface TerrainBase {
-  source: 'aws-terrarium' | 'flat';
+  /** `embedded`: the heights came inside a shared file (its place may be hidden): kept in the local cache only. */
+  source: 'aws-terrarium' | 'flat' | 'embedded';
   key: string;
   fetchedAt: number;
-  /** Real elevation (m above sea level) that maps to y = 0. */
+  /** Real elevation (m above sea level) that maps to y = 0 (0 when the place is hidden). */
   datum: number;
+  /** Only in a shared file: the heights themselves (see core/share.ts); moved to the cache on import. */
+  data?: string;
 }
 
 export interface TerrainSpec {
@@ -75,8 +78,8 @@ export function sanitizeTerrain(raw: unknown): TerrainSpec | undefined {
   const half = { e: num(t.half?.e, 200, 20, MAX_HALF), n: num(t.half?.n, 200, 20, MAX_HALF) };
   const b = t.base;
   const base: TerrainBase | undefined =
-    b && typeof b.key === 'string' && (b.source === 'aws-terrarium' || b.source === 'flat')
-      ? { source: b.source, key: b.key, fetchedAt: num(b.fetchedAt, 0, 0, 1e15), datum: num(b.datum, 0, -500, 9000) }
+    b && typeof b.key === 'string' && (b.source === 'aws-terrarium' || b.source === 'flat' || b.source === 'embedded')
+      ? { source: b.source, key: b.key.slice(0, 120), fetchedAt: num(b.fetchedAt, 0, 0, 1e15), datum: num(b.datum, 0, -500, 9000), ...(typeof b.data === 'string' && b.data.length < 4_000_000 ? { data: b.data } : {}) }
       : undefined;
   const strokes = (Array.isArray(t.strokes) ? t.strokes : [])
     .filter((s): s is TerrainStroke => !!s && OPS.includes(s.op) && Array.isArray(s.pts))
@@ -104,6 +107,11 @@ export function setTerrainBase(key: string, h: Float32Array): void {
 
 export function hasTerrainBase(key: string): boolean {
   return bases.has(key);
+}
+
+/** The registered real-ground heights under `key` (to pack them into a shared file), or null. */
+export function getTerrainBase(key: string): Float32Array | null {
+  return bases.get(key) ?? null;
 }
 
 // ---- grid -------------------------------------------------------------------------------------------

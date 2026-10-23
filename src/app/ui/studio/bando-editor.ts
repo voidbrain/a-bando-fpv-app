@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import * as L from 'leaflet';
 import { contains, edgesOf, type Pt, type Rect } from '../../core/footprint';
 import { buildingsOverlap, stairsFor, columnGrid, columnRow, convertBuilding, duplicateColumn, duplicateColumns, fillModule, mergeBuildings, overlapsOthers, repeatOpening } from '../../core/building-ops';
-import { addOpening, insideBuilding, listOpenings, moveOpening, outlineOf, wallsOf, previewOpening, patchOpening, removeOpening, reshapeBuilding, resetToRect, resizeOpening, type OpenSeg } from '../../core/openings';
+import { addOpening, insideBuilding, listOpenings, moveOpening, outlineOf, previewOpening, patchOpening, removeOpening, reshapeBuilding, resetToRect, resizeOpening, type OpenSeg } from '../../core/openings';
 import { cloneSpec, uid, type BuildingSpec, type LevelSpec, type LocationInfo, type RoadKind, type RoadSpec, type SiteSpec, type StructureKind, type StructureSpec, type SurfaceKind, type UndergroundSpec } from '../../core/site-spec';
 import { autoAlign, magnetAngle } from '../../core/align';
 import { columnsInLine, pointsInside, treeZones } from '../../core/elements';
@@ -16,11 +16,10 @@ import { contourPaths, defaultTerrain, type Falloff, type TerrainOp, type Terrai
 import { siteGround } from '../../core/site-ground';
 import { PickMenu, type PickOption } from './pick-menu';
 import { BlocksBox, type BlockArm } from './blocks-box';
-import { applyPattern, detachInstance, placeBlock, removeInstance, updateInstance } from '../../core/blocks';
+import { applyPattern, detachInstance, paramValues, placeBlock, removeInstance, updateInstance, type BlockSpec, type ParamValue } from '../../core/blocks';
 import { BlockLibraryService } from '../../services/block-library.service';
 import { expandShapes, shapesFootprint } from '../../core/shapes';
 import { anglesAt, arcOf, fmtLength, lengthOf, nearestSnap, orthoSnap, snapTargets, type Seg } from '../../core/measure';
-import { applyStore, setColumnRows, setFacade, type FacadePattern } from '../../core/modules';
 import { areaOf, nearBuilding, scatterTrees, type ScatterMode } from '../../core/scatter';
 import { placeColumn, type Placement } from '../../core/placement';
 import { RECT_KINDS, STRUCTURE_DEFAULTS } from '../../three/structures';
@@ -116,7 +115,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
     <div class="bar">
       <ng-content />
       <div class="seg">
-        <button [class.on]="mode() === 'area'" (click)="setMode('area')">1 · Area</button>
+        <button [class.on]="mode() === 'area'" [disabled]="placeHidden()" (click)="setMode('area')" [title]="placeHidden() ? 'This bando was shared without its place: there is no map area to edit' : ''">1 · Area</button>
         <button [class.on]="mode() === 'model'" [disabled]="!hasModel()" (click)="setMode('model')" [title]="hasModel() ? '' : 'Generate the model first'">2 · Model</button>
       </div>
       @if (mode() === 'model') {
@@ -820,31 +819,25 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                   }
                   <details class="sec mods">
                     <summary>Modules · repeatable blocks <span class="dim small">(floor {{ levelName(level()) }})</span></summary>
-                    <div class="row">
-                      <b>Façade</b>
-                      <select (change)="modSide.set(selVal($event))" title="Which wall">
-                        <option value="all" [selected]="modSide() === 'all'">all walls</option>
-                        <option value="n" [selected]="modSide() === 'n'">north</option><option value="s" [selected]="modSide() === 's'">south</option>
-                        <option value="e" [selected]="modSide() === 'e'">east</option><option value="w" [selected]="modSide() === 'w'">west</option>
-                      </select>
-                      <select (change)="modPattern.set(selVal($event))" title="What each bay is">
-                        <option value="store" [selected]="modPattern() === 'store'">2 panels + 1 door</option>
-                        <option value="panels" [selected]="modPattern() === 'panels'">all lower panels</option>
-                        <option value="doors" [selected]="modPattern() === 'doors'">all full-height doors</option>
-                      </select>
-                      <label title="Distance between piers">bay <input type="number" min="2" max="20" step="0.5" [value]="modBay()" (change)="modBay.set(num($event))" /> m</label>
-                      <button class="btn" (click)="applyFacade()" [disabled]="!!bd.footprint" title="Replace the openings of the wall(s): piers, bays, lintel above. Editable afterwards">Apply</button>
-                    </div>
-                    <div class="row">
-                      <b>Columns</b>
-                      <label>rows <input type="number" min="1" max="8" step="1" [value]="modRows()" (change)="modRows.set(num($event))" /></label>
-                      <label>every <input type="number" min="2" max="40" step="1" [value]="modStep()" (change)="modStep.set(num($event))" /> m</label>
-                      <label title="Edge rows from the long walls">edge <input type="number" min="1" max="30" step="0.5" [value]="modInset()" (change)="modInset.set(num($event))" /> m</label>
-                      <button class="btn" (click)="applyColumnRows()" title="Replace this floor's columns with rows along the hall (4 rows = 1 - 2 - 1)">Apply</button>
-                    </div>
-                    <div class="row">
-                      <button class="btn" (click)="storeShell()" [disabled]="!!bd.footprint" title="The main store in one go: long walls 2 panels + 1 door, one end all doors, the other all panels, 4 rows of columns. Only for this building.">▦ Main store preset</button>
-                    </div>
+                    @for (pb of patternBlocks(); track pb.id) {
+                      <div class="row">
+                        <b [title]="pb.description ?? ''">{{ pb.name }}</b>
+                        @for (p of pb.params; track p.key) {
+                          @if (p.type === 'choice') {
+                            <select (change)="setModValue(pb.id, p.key, selValue($event))" [title]="p.label" [attr.aria-label]="p.label">
+                              @for (o of p.options ?? []; track o) {
+                                <option [value]="o" [selected]="modValue(pb, p.key) === o">{{ sideLabel(o) }}</option>
+                              }
+                            </select>
+                          } @else if (p.type !== 'bool') {
+                            <label [title]="p.label">{{ p.label.toLowerCase() }} <input type="number" [min]="p.min ?? null" [max]="p.max ?? null" [step]="p.step ?? (p.type === 'int' ? 1 : 0.5)" [value]="modValue(pb, p.key)" (change)="setModValue(pb.id, p.key, num($event))" /></label>
+                          }
+                        }
+                        <button class="btn" (click)="applyBlockPattern({ block: pb, params: modValues()[pb.id] ?? {}, rot: 0 })" [disabled]="!!bd.footprint && needsRect(pb)" [title]="(pb.description ?? '') + ' Replaces what was there; still editable one by one.'">Apply</button>
+                      </div>
+                    } @empty {
+                      <div class="dim small">No pattern blocks yet: open ▦ Blocks to fetch the catalogue.</div>
+                    }
                   </details>
                 }
                 @if (selBlock(); as sb) {
@@ -1730,6 +1723,9 @@ export class BandoEditor {
     this.colSet.set(set);
     this.toast.show(`${set.length} columns selected (${along === 'x' ? 'row' : along === 'z' ? 'line' : 'all alike'}).`);
   }
+  /** A bando shared without its place: no map under it (it would show the sea at 0°, 0°), no area to regenerate. */
+  protected readonly placeHidden = computed(() => this.ed.draft().privacy === 'hidden');
+
   // ---- blocks: placing from the library ----
   private readonly shapeBoxes = new WeakMap<object, { x0: number; z0: number; x1: number; z1: number }>();
   /** The plan footprint of an object made of shapes (remembered per shapes list). */
@@ -1778,6 +1774,7 @@ export class BandoEditor {
       const x = this.index(s, id);
       if (x) done = applyPattern(x, Math.min(this.level(), x.levels.length - 1), a.block, a.params);
     });
+    this.colSet.set([]);
     this.applyNow();
     this.toast.show(done.length ? `“${a.block.name}” on floor ${this.levelName(this.level())}: ${done.join(', ')}.` : 'That pattern changed nothing here.');
   }
@@ -2475,7 +2472,7 @@ export class BandoEditor {
       this.ed.selectedId(); // another building: back to the whole building
       untracked(() => this.floorFocus.set(false));
     });
-    effect(() => this.applyBase(this.studio.basemap(), this.studio.mapOpacity()));
+    effect(() => this.applyBase(this.placeHidden() ? 'off' : this.studio.basemap(), this.studio.mapOpacity()));
     effect(() => {
       // a tool that is no longer offered (nothing selected, left the floor ...) falls back to Select
       const t = this.tool(), visible = this.visibleTools();
@@ -2532,7 +2529,7 @@ export class BandoEditor {
       if (ev.button === 2 && !this.view3d()) ev.stopPropagation();
     }, true);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
-    this.applyBase(this.studio.basemap(), this.studio.mapOpacity());
+    this.applyBase(this.placeHidden() ? 'off' : this.studio.basemap(), this.studio.mapOpacity());
     const sync = (): void => {
       const c = map.getCenter();
       this.center.set({ lat: c.lat, lon: c.lng });
@@ -2555,7 +2552,7 @@ export class BandoEditor {
     const mpp = this.mpp();
     this.rot.set(sh?.rot ?? 0);
     this.half.set(sh ? { e: clampHalf(sh.e), n: clampHalf(sh.n) } : { e: clampHalf(this.size().w * 0.35 * mpp), n: clampHalf(this.size().h * 0.35 * mpp) });
-    this.mode.set(this.studio.initialMode() === 'model' && this.hasModel() ? 'model' : 'area');
+    this.mode.set((this.studio.initialMode() === 'model' || this.placeHidden()) && this.hasModel() ? 'model' : 'area');
     this.destroyRef.onDestroy(() => {
       ro.disconnect();
       if (this.indoor()) this.view.setRoofHidden(this.roofBefore);
@@ -3983,35 +3980,17 @@ export class BandoEditor {
     this.applyNow();
   }
 
-  protected readonly modSide = signal('all');
-  protected readonly modPattern = signal('store');
-  protected readonly modBay = signal(5);
-  protected readonly modRows = signal(4);
-  protected readonly modStep = signal(10);
-  protected readonly modInset = signal(4);
-  protected selVal = (e: Event): string => (e.target as HTMLSelectElement).value;
-  protected applyFacade(): void {
-    let n = 0;
-    this.mutate((b) => {
-      const li = Math.min(this.level(), b.levels.length - 1);
-      for (const w of wallsOf(b)) if (this.modSide() === 'all' || w.key === this.modSide()) n += setFacade(b, li, w, this.modPattern() as FacadePattern, { bay: this.modBay() });
-    }, 0);
-    this.toast.show(n ? `${n} bays made.` : 'No wall long enough for that bay size.');
+  /** The Modules section: every pattern block of the library (catalogue and own), with its values per block. */
+  protected readonly patternBlocks = computed(() => this.blockLib.all().filter((b) => b.kind === 'pattern'));
+  protected readonly modValues = signal<Record<string, Record<string, ParamValue>>>({});
+  protected modValue = (b: BlockSpec, key: string): ParamValue => paramValues(b, this.modValues()[b.id])[key]!;
+  protected setModValue(id: string, key: string, v: ParamValue): void {
+    this.modValues.update((m) => ({ ...m, [id]: { ...m[id], [key]: v } }));
   }
-  protected applyColumnRows(): void {
-    let n = 0;
-    this.mutate((b) => {
-      n = setColumnRows(b, Math.min(this.level(), b.levels.length - 1), { rows: this.modRows(), step: this.modStep(), inset: this.modInset() });
-    }, 0);
-    this.colSet.set([]);
-    this.toast.show(n ? `${n} columns placed.` : 'No room for columns.');
-  }
-  protected storeShell(): void {
-    this.mutate((b) => {
-      applyStore(b, Math.min(this.level(), b.levels.length - 1), { bay: this.modBay(), step: this.modStep(), rows: this.modRows(), inset: this.modInset() });
-    }, 0);
-    this.toast.show('Store shell applied to this floor. Doors, panels and columns are still editable one by one.');
-  }
+  protected selValue = (e: Event): string => (e.target as HTMLSelectElement).value;
+  /** Façade and store patterns work on rectangular buildings only. */
+  protected needsRect = (b: BlockSpec): boolean => !!(b.content.pattern?.facade || b.content.pattern?.store);
+  protected sideLabel = (o: string): string => ({ all: 'all walls', n: 'north', s: 'south', e: 'east', w: 'west' })[o] ?? o;
 
   protected readonly setName = (b: BuildingSpec, v: string): void => { b.name = v; };
   protected readonly setLength = (b: BuildingSpec, v: number): void => { b.length = Math.max(2, v); };

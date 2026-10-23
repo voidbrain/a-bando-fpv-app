@@ -1,4 +1,6 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
+import type { Privacy } from '../../core/share';
+import { DownloadService } from '../../services/download.service';
 import { FormsModule } from '@angular/forms';
 import { SiteService } from '../../services/site.service';
 import { StudioService } from '../../services/studio.service';
@@ -33,12 +35,20 @@ import { BandoEditor } from './bando-editor';
               <button class="title" (click)="studio.open(b.id)" [title]="'Show ' + b.name + ' in 3D'">
                 <b>{{ b.name }}</b>
                 @if (b.id === site.active().id) { <span class="badge">open</span> }
-                <span class="dim small mono">{{ b.buildings }} buildings · {{ b.origin.lat.toFixed(4) }}, {{ b.origin.lon.toFixed(4) }}</span>
+                <span class="dim small mono">{{ b.buildings }} buildings · {{ b.privacy === 'hidden' ? 'place hidden' : (b.privacy === 'rounded' ? '~' : '') + b.origin.lat.toFixed(b.privacy === 'rounded' ? 2 : 4) + ', ' + b.origin.lon.toFixed(b.privacy === 'rounded' ? 2 : 4) }}</span>
               </button>
               <div class="acts">
-                <button class="btn" (click)="studio.edit(b.id)" title="Change the area on the map and regenerate">Edit area</button>
+                <button class="btn" (click)="studio.edit(b.id)" [title]="b.privacy === 'hidden' ? 'Edit the model (its place is hidden, so there is no map area)' : 'Change the area on the map and regenerate'">{{ b.privacy === 'hidden' ? 'Edit' : 'Edit area' }}</button>
                 <button class="btn" (click)="rename(b.id, b.name)">Rename</button>
                 <button class="btn" (click)="duplicate(b.id)">Duplicate</button>
+                <span class="grp">
+                  <select class="exp" [value]="privacy()" (change)="privacy.set(privacyOf($event))" [attr.aria-label]="'Place in the exported file of ' + b.name" title="What the file says about where it is">
+                    <option value="exact" [selected]="privacy() === 'exact'">exact place</option>
+                    <option value="rounded" [selected]="privacy() === 'rounded'">place ~1 km</option>
+                    <option value="hidden" [selected]="privacy() === 'hidden'">place hidden</option>
+                  </select>
+                  <button class="btn" (click)="exportOne(b.id)" title="Save it as a file to share (the place as chosen)">Export</button>
+                </span>
                 <button class="btn danger" (click)="remove(b.id, b.name)">Delete</button>
               </div>
             </div>
@@ -114,6 +124,21 @@ export class StudioPanel {
   protected readonly studio = inject(StudioService);
   protected readonly site = inject(SiteService);
   private readonly toast = inject(ToastService);
+  private readonly downloads = inject(DownloadService);
+  /** How much of its place an exported file keeps (hidden by default: share a bando, not its address). */
+  protected readonly privacy = signal<Privacy>('hidden');
+  protected privacyOf = (e: Event): Privacy => {
+    const v = (e.target as HTMLSelectElement).value;
+    return v === 'exact' || v === 'rounded' ? v : 'hidden';
+  };
+
+  protected async exportOne(id: string): Promise<void> {
+    const f = await this.site.exportShared(id, this.privacy());
+    if (!f) return;
+    this.downloads.save(f.name, f.text, 'application/json');
+    const where = this.privacy() === 'hidden' ? ' without its place' : this.privacy() === 'rounded' ? ' with its place rounded to ~1 km' : '';
+    this.toast.show(`Exported ${f.name}${where}${f.ground ? '; its real ground travels inside' : ''}.`);
+  }
 
   protected rename(id: string, current: string): void {
     const name = prompt('Bando name', current);

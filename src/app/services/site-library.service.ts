@@ -14,6 +14,8 @@ export interface SiteEntry {
   name: string;
   createdAt: number;
   origin: { lat: number; lon: number };
+  /** A shared copy whose place is rounded or hidden. */
+  privacy?: 'rounded' | 'hidden';
   buildings: number;
 }
 
@@ -45,7 +47,7 @@ export class SiteLibraryService {
       .all<SiteRecord>('sites')
       .filter((r) => r && r.spec && typeof r.spec.id === 'string')
       .sort((a, b) => b.savedAt - a.savedAt)
-      .map(({ spec }) => ({ id: spec.id, name: spec.name, createdAt: spec.createdAt, origin: spec.origin, buildings: spec.buildings?.length ?? 0 }));
+      .map(({ spec }) => ({ id: spec.id, name: spec.name, createdAt: spec.createdAt, origin: spec.origin, buildings: spec.buildings?.length ?? 0, ...(spec.privacy ? { privacy: spec.privacy } : {}) }));
   }
 
   load(id: string): SiteSpec | null {
@@ -110,16 +112,12 @@ export class SiteLibraryService {
     this.save(spec);
   }
 
-  /** Import a spec exported by {@link exportJson} (JSON.parse + sanitize). Returns null when invalid. */
+  /** Read a bando file (JSON.parse + sanitize). Returns null when invalid. */
   importJson(text: string): SiteSpec | null {
     try {
       return sanitizeSpec(JSON.parse(text) as unknown);
     } catch {
       return null;
     }
-  }
-
-  exportJson(spec: SiteSpec): string {
-    return JSON.stringify(spec, null, 2);
   }
 }
