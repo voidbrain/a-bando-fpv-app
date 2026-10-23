@@ -571,6 +571,7 @@ export const IT: Readonly<Record<string, string>> = {
   'battlements': 'merli',
   'Battlements along the top of the walls (on a flat roof or an open shell)': 'Merli lungo la cima dei muri (su un tetto piano o un guscio aperto)',
   'Sign tower': 'Torre insegna',
+  'Caged roof ladder': 'Scala alla marinara con gabbia',
   '0 = intact. A ruin first has holes in the roof; from 60 % the roof is gone and the walls lose their upper part along a broken line; from 75 % the upper floors are gone too': '0 = intatto. Una rovina ha prima buchi nel tetto; dal 60 % il tetto non c’è più e i muri perdono la parte alta lungo una linea spezzata; dal 75 % non ci sono più nemmeno i piani superiori',
   'basement m': 'seminterrato m',
   'A basement under the ground floor: the ground is cut under the building; reach it through a void in the ground floor': 'Un seminterrato sotto il piano terra: il terreno è tagliato sotto l’edificio; ci si arriva da un vuoto nel piano terra',
