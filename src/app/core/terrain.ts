@@ -358,3 +358,31 @@ export function contourPaths(g: HeightGrid, step = 1, stride = g.nx * g.nz > 90_
   }
   return { minor: minor.join(''), major: major.join('') };
 }
+
+/** Height-map colours, low to high: dark green, green, yellow, brown, snow white (blue would read as water). */
+const RAMP: readonly [number, number, number][] = [
+  [0.12, 0.33, 0.24],
+  [0.25, 0.62, 0.35],
+  [0.85, 0.76, 0.42],
+  [0.66, 0.4, 0.23],
+  [0.95, 0.95, 0.95],
+];
+
+/** The colour (r, g, b in 0..1) of a height `h` on a map whose heights run from `lo` to `hi`; flat ground is green. */
+export function heightColor(h: number, lo: number, hi: number): [number, number, number] {
+  if (hi - lo < 0.5) return RAMP[1]!;
+  const t = Math.min(1, Math.max(0, (h - lo) / (hi - lo))) * (RAMP.length - 1);
+  const i = Math.min(RAMP.length - 2, Math.floor(t)), f = t - i;
+  const a = RAMP[i]!, b = RAMP[i + 1]!;
+  return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+}
+
+/** Lowest and highest height of a grid. */
+export function heightRange(g: HeightGrid): { lo: number; hi: number } {
+  let lo = Infinity, hi = -Infinity;
+  for (let k = 0; k < g.h.length; k++) {
+    lo = Math.min(lo, g.h[k]!);
+    hi = Math.max(hi, g.h[k]!);
+  }
+  return { lo, hi };
+}

@@ -32,8 +32,10 @@ at the end are decided (2026-10-22); each section names the ones it depends on a
 | Q12 privacy (export)                     | `core/share.ts`, Bandos list → Export                                       | exact / ~1 km / hidden; hidden copies carry their real ground; flights snap to the take-off pad |
 | Modules from the library                 | inspector → Modules                                                         | the pattern blocks of the library replace the hard-coded presets                                |
 
-Not done from Part 1: building basements through a negative `baseY` (1.6, last paragraph), 3D measures (1.4), a
-section view along a tunnel (1.6), national DEMs (Q6). The terrain tools work in the 2D editor only.
+Built later: building basements (`BuildingSpec.basement`, a volume under the levelled pad), measures over the ground
+(height difference and length along it), the side view along a tunnel or room (inspector), the terrain and layer tools in
+the 3D view (with the height under the pointer and a brush ring), and the ground drawn as a height map (3D and under the
+plan) or a wireframe (3D). Not done: national DEMs (Q6).
 
 ## Goals
 

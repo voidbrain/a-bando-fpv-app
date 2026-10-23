@@ -25,8 +25,9 @@ export class SiteEditor {
   readonly partitionFrom = signal<{ x: number; z: number } | null>(null);
 
   readonly building = computed(() => this.draft().buildings.find((b) => b.id === this.selectedId()) ?? null);
-  readonly canUndo = computed(() => this.past.length > 0);
-  readonly canRedo = computed(() => this.future.length > 0);
+  // the history lists are plain arrays: read the draft so these follow every edit, undo and redo (each sets the draft)
+  readonly canUndo = computed(() => (this.draft(), this.past.length > 0));
+  readonly canRedo = computed(() => (this.draft(), this.future.length > 0));
 
   /** Replace the draft with an external spec (generated, loaded from the library, or imported). Clears history. */
   load(spec: SiteSpec): void {

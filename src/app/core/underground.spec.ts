@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { sanitizeLayers } from './layers';
 import type { UndergroundSpec } from './site-spec';
-import { buildHeights } from './terrain';
-import { cutMask, floorUnder, isCut, newTunnel, tunnelAxis, tunnelOutline, volumeSolids } from './underground';
+import { buildHeights, heightAt } from './terrain';
+import { basementVolume, cutMask, floorUnder, isCut, newTunnel, sectionProfile, tunnelAxis, tunnelOutline, volumeSolids } from './underground';
 
 const hill = () => buildHeights({ cell: 1, half: { e: 80, n: 80 }, strokes: [{ op: 'hill', pts: [{ x: 0, z: 0 }], radius: 35, strength: 10 }] }).grid;
 const tunnel = (): UndergroundSpec => ({ id: 't', name: 'T', outline: tunnelOutline({ x: -45, z: 0 }, { x: 45, z: 0 }, 4), floor: -0.5, ceiling: 3, shape: 'box', wall: 0.4 });
@@ -52,5 +52,25 @@ describe('underground volumes', () => {
     expect(l.underground![0]!.ceiling).toBeCloseTo(t.floor + 0.8);
     expect(l.underground![0]!.shape).toBe('box');
     expect(l.underground![0]!.wall).toBe(3);
+  });
+});
+
+describe('side view and basements', () => {
+  it('samples the ground along a tunnel, a little past its ends', () => {
+    const g = hill();
+    const p = sectionProfile(tunnel(), (x, z) => heightAt(g, x, z), 40);
+    expect(p.ground).toHaveLength(41);
+    expect(Math.max(...p.ground)).toBeGreaterThan(8); // the hill over the middle
+    expect(p.ground[0]).toBeLessThan(1); // flat before the mouth
+    expect(p.len).toBeGreaterThan(90);
+    const room = sectionProfile({ ...tunnel(), outline: [{ x: 0, z: 0 }, { x: 4, z: 0 }, { x: 4, z: 20 }, { x: 0, z: 20 }] }, () => 0, 10);
+    expect(room.len).toBeGreaterThan(20); // along its long side
+  });
+
+  it('a basement is a volume from its depth up to the pad', () => {
+    const b = { id: 'b', name: 'Hall', pos: { x: 0, z: 0 }, rotDeg: 0, length: 10, width: 6, levels: [], basement: { height: 3 } };
+    const v = basementVolume(b, [{ x: -5, z: -3 }, { x: 5, z: -3 }, { x: 5, z: 3 }, { x: -5, z: 3 }], 2)!;
+    expect([v.floor, v.ceiling]).toEqual([-1, 2]);
+    expect(basementVolume({ ...b, basement: undefined }, [], 0)).toBeNull();
   });
 });

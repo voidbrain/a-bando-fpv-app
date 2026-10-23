@@ -170,3 +170,18 @@ describe('merge across a gap', () => {
     expect(s.buildings[0]!.length).toBeCloseTo(30);
   });
 });
+
+describe('editor history buttons', () => {
+  it('can undo / redo follow the edits (they once stayed disabled)', async () => {
+    const { SiteEditor } = await import('./site-editor');
+    const { emptySpec } = await import('./site-spec');
+    const ed = new SiteEditor();
+    ed.load(emptySpec());
+    expect(ed.canUndo()).toBe(false);
+    ed.commitSite((s) => void (s.name = 'x'));
+    expect(ed.canUndo()).toBe(true);
+    ed.undo();
+    expect(ed.canUndo()).toBe(false);
+    expect(ed.canRedo()).toBe(true);
+  });
+});

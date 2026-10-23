@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { siteGround, siteOutline } from './site-ground';
 import { emptySpec, sanitizeSpec, type BuildingSpec } from './site-spec';
-import { applyStroke, buildHeights, contourPaths, defaultTerrain, emptyGrid, flattenPad, heightAt, rangeUnder, rayGround, sanitizeTerrain, setTerrainBase, type TerrainSpec } from './terrain';
+import { applyStroke, buildHeights, contourPaths, heightColor, heightRange, defaultTerrain, emptyGrid, flattenPad, heightAt, rangeUnder, rayGround, sanitizeTerrain, setTerrainBase, type TerrainSpec } from './terrain';
 
 const flat = (half = 50): TerrainSpec => ({ cell: 1, half: { e: half, n: half }, strokes: [] });
 const bld = (x: number, z: number, l: number, w: number, rot = 0): BuildingSpec => ({ id: `b${x}`, name: 'b', pos: { x, z }, rotDeg: rot, length: l, width: w, levels: [] });
@@ -138,5 +138,17 @@ describe('contours', () => {
     expect(c.minor.length).toBeGreaterThan(100);
     expect(c.major.length).toBeGreaterThan(10);
     expect(c.minor).toMatch(/^M-?\d/);
+  });
+});
+
+describe('height map colours', () => {
+  it('runs from dark green (low) to white (high); flat ground is green', () => {
+    expect(heightColor(0, 0, 100)[1]).toBeGreaterThan(heightColor(0, 0, 100)[0]); // greenish
+    expect(heightColor(100, 0, 100)).toEqual([0.95, 0.95, 0.95]);
+    expect(heightColor(3, 3, 3.2)).toEqual(heightColor(0, 0, 0));
+    const g = emptyGrid(flat(10));
+    g.h[5] = 4;
+    g.h[6] = -2;
+    expect(heightRange(g)).toEqual({ lo: -2, hi: 4 });
   });
 });

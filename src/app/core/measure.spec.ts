@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { anglesAt, arcOf, nearestSnap, orthoSnap, snapTargets, fmtLength } from './measure';
+import { anglesAt, arcOf, fmtLength, groundProfile, nearestSnap, orthoSnap, snapTargets } from './measure';
 import { emptySpec } from './site-spec';
 
 describe('measure helpers', () => {
@@ -33,5 +33,15 @@ describe('measure helpers', () => {
     const p = orthoSnap({ x: 0, z: 0 }, { x: 10, z: 3 });
     expect(p.z).toBeCloseTo(3);
     expect(fmtLength(5)).toBe('5.00 m');
+  });
+});
+
+describe('measures over the ground', () => {
+  it('report the height difference and the length along a slope; flat ground adds nothing', () => {
+    const flat = groundProfile({ a: { x: 0, z: 0 }, b: { x: 30, z: 40 } }, () => 0);
+    expect(flat).toEqual({ dh: 0, along: 50, flat: 50 });
+    const slope = groundProfile({ a: { x: 0, z: 0 }, b: { x: 40, z: 0 } }, (x) => x * 0.75);
+    expect(slope.dh).toBeCloseTo(30);
+    expect(slope.along).toBeCloseTo(50);
   });
 });

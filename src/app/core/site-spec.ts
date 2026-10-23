@@ -158,6 +158,8 @@ export interface BuildingSpec {
   floorColor?: string;
   /** Greenhouse-style thin steel frame instead of masonry walls (walls ignored). */
   frame?: 'greenhouse';
+  /** A basement under the ground floor, `height` metres deep inside (see core/underground.ts basementVolume). */
+  basement?: { height: number };
   /** Placed from a library block. */
   block?: BlockRef;
 }

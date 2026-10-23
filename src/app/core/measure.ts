@@ -93,3 +93,19 @@ export function arcOf(at: Pt, d1: number, d2: number, r: number): { path: string
   const lr = r * 0.62;
   return { path: `M ${s.x} ${s.z} A ${r} ${r} 0 0 ${diff > 0 ? 1 : 0} ${e.x} ${e.z}`, label: { x: at.x + lr * Math.cos(mid), z: at.z + lr * Math.sin(mid) } };
 }
+
+/**
+ * A measure over the terrain: the height difference from A to B and the length along the ground (sampled every metre or
+ * so), next to the straight plan length. `heightAt` = the ground height (0 everywhere on flat ground).
+ */
+export function groundProfile(s: Seg, heightAt: (x: number, z: number) => number): { dh: number; along: number; flat: number } {
+  const dx = s.b.x - s.a.x, dz = s.b.z - s.a.z, flat = Math.hypot(dx, dz);
+  const n = Math.max(1, Math.min(400, Math.ceil(flat)));
+  let along = 0, prev = heightAt(s.a.x, s.a.z);
+  for (let i = 1; i <= n; i++) {
+    const y = heightAt(s.a.x + (dx * i) / n, s.a.z + (dz * i) / n);
+    along += Math.hypot(flat / n, y - prev);
+    prev = y;
+  }
+  return { dh: prev - heightAt(s.a.x, s.a.z), along, flat };
+}
