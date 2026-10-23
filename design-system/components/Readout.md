@@ -11,4 +11,4 @@ Readout is the mono pill at the bottom of the map showing live distances and ang
 
 The text; position it centred 12px above the map's bottom edge.
 
-Source: `src/app/ui/studio/bando-editor.ts (.read)`.
+Source: `src/app/ui/studio/bando-editor.scss (.read)`.

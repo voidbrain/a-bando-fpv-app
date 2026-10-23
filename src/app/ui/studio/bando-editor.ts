@@ -7,22 +7,19 @@ import * as L from 'leaflet';
 import { contains, edgesOf, type Pt, type Rect } from '../../core/footprint';
 import { buildingsOverlap, stairsFor, columnGrid, columnRow, convertBuilding, duplicateColumn, duplicateColumns, fillModule, mergeBuildings, overlapsOthers, repeatOpening } from '../../core/building-ops';
 import { addOpening, insideBuilding, listOpenings, moveOpening, outlineOf, previewOpening, patchOpening, removeOpening, reshapeBuilding, resetToRect, resizeOpening, type OpenSeg } from '../../core/openings';
-import { cloneSpec, uid, type BuildingSpec, type LevelSpec, type LocationInfo, type RoadKind, type RoadSpec, type SiteSpec, type StructureKind, type StructureSpec, type SurfaceKind, type UndergroundSpec } from '../../core/site-spec';
+import { cloneSpec, uid, type BuildingSpec, type LevelSpec, type LocationInfo, type SiteSpec, type StructureKind, type StructureSpec } from '../../core/site-spec';
 import { autoAlign, magnetAngle } from '../../core/align';
 import { columnsInLine, pointsInside, treeZones } from '../../core/elements';
 import { FENCES, fenceDef, newFence, setFenceMaterial, type FenceMaterial } from '../../core/fences';
 import { areaCorners } from '../../core/areas';
-import { ROADS, SURFACES, WATER_COLOR, mergeWaters, roadDef, simplifyPath, stripOutline, surfaceDef } from '../../core/layers';
-import { newTunnel, sectionProfile, tunnelAxis, tunnelOutline } from '../../core/underground';
-import type { GroundStyle } from '../../three/site-model';
-import { contourPaths, defaultTerrain, heightColor, heightRange, type Falloff, type TerrainOp, type TerrainStroke } from '../../core/terrain';
+import { roadDef, surfaceDef } from '../../core/layers';
+import type { TerrainOp } from '../../core/terrain';
 import { siteGround } from '../../core/site-ground';
 import { PickMenu, type PickOption } from './pick-menu';
 import { BlocksBox, type BlockArm } from './blocks-box';
 import { applyPattern, detachInstance, paramValues, placeBlock, removeInstance, updateInstance, type BlockSpec, type ParamValue } from '../../core/blocks';
 import { BlockLibraryService } from '../../services/block-library.service';
 import { expandShapes, shapesFootprint } from '../../core/shapes';
-import { anglesAt, arcOf, fmtLength, groundProfile, lengthOf, nearestSnap, orthoSnap, snapTargets, type Seg } from '../../core/measure';
 import { areaOf, nearBuilding, scatterTrees, type ScatterMode } from '../../core/scatter';
 import { placeColumn, type Placement } from '../../core/placement';
 import { RECT_KINDS, STRUCTURE_DEFAULTS } from '../../three/structures';
@@ -46,40 +43,14 @@ import type { SitePick } from '../../three/site-view';
 import { SiteView } from './site-view';
 import { TourService } from '../../services/tour.service';
 import type { PreviewTarget } from '../../three/element-preview';
+import { polyPts, type Drag, type EditorHost, type Handle, type Pick, type Tool } from './editor/editor-host';
+import { LayerTool } from './editor/layer-tool';
+import { MeasureTool } from './editor/measure-tool';
+import { TerrainTool, TERRAIN_OPS } from './editor/terrain-tool';
+import { UndergroundTool } from './editor/underground-tool';
 
-type Tool = 'select' | 'building' | 'structure' | 'stairs' | 'merge' | 'cut' | 'wing' | 'tree' | 'scatter' | 'fence' | 'door' | 'window' | 'wall' | 'void' | 'column' | 'measure' | 'terrain' | 'road' | 'surface' | 'water' | 'tunnel';
-type Pick = { t: 'building' } | { t: 'tree'; i: number } | { t: 'opening'; id: string } | { t: 'wall'; i: number } | { t: 'fence'; i: number } | { t: 'void'; i: number } | { t: 'column'; i: number } | { t: 'structure'; i: number } | { t: 'road'; i: number } | { t: 'surface'; i: number } | { t: 'water'; i: number } | { t: 'under'; i: number } | null;
 type Entry = { key: string; tool: Tool; mode?: ScatterMode; op?: TerrainOp; icon: string; name: string; color: string; hint: string; group: string; sep?: boolean };
 type CtxItem = { label: string; act?: () => void; danger?: boolean; sep?: boolean; head?: boolean };
-type Handle = 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se';
-type Drag =
-  | { t: 'move'; ox: number; oz: number; px: number; pz: number }
-  | { t: 'resize'; sx: number; sz: number; ax: number; az: number }
-  | { t: 'rotate' }
-  | { t: 'edge'; start: BuildingSpec; axis: 'x' | 'z'; at: number; from: number; to: number; n: 1 | -1 }
-  | { t: 'tree'; i: number; dx: number; dz: number }
-  | { t: 'open'; id: string }
-  | { t: 'openEnd'; id: string; end: 0 | 1 }
-  | { t: 'draw'; x0: number; z0: number; x1: number; z1: number }
-  | { t: 'shape'; op: 'add' | 'cut'; a: Pt; b: Pt }
-  | { t: 'wallDraw'; a: Pt; b: Pt }
-  | { t: 'bridgeDraw'; a: Pt; b: Pt }
-  | { t: 'structMove'; i: number; dx: number; dz: number }
-  | { t: 'structRot'; i: number }
-  | { t: 'fenceDraw'; a: Pt; b: Pt }
-  | { t: 'scatter'; pts: Pt[] }
-  | { t: 'terrain'; pts: Pt[]; h0: number }
-  | { t: 'layer'; pts: Pt[] }
-  | { t: 'under'; a: Pt; b: Pt }
-  | { t: 'fenceEnd'; i: number; end: 0 | 1 }
-  | { t: 'voidDraw'; a: Pt; b: Pt }
-  | { t: 'column'; i: number; dx: number; dz: number }
-  | { t: 'selArea'; pts: Pt[]; add: boolean }
-  | { t: 'pan'; x: number; y: number }
-  | { t: 'measMove'; i: number; last: Pt }
-  | { t: 'measEnd'; i: number; end: 0 | 1; old: Pt }
-  | { t: 'frame'; h: Handle }
-  | { t: 'frameRot' };
 
 /** Tools that place something on the selected building: while one is active, a click puts the thing where the ghost is. */
 const PLACE: readonly Tool[] = ['door', 'window', 'wall', 'void', 'column', 'stairs', 'cut', 'wing'];
@@ -98,8 +69,6 @@ const STRUCT_ICON: Record<StructureKind, string> = {
   chimney: 'chimney', silo: 'silo', tank: 'tank', water_tower: 'waterTower', lattice_tower: 'lattice', tower_crane: 'crane',
   bridge: 'bridge', stairs: 'stairs', ramp: 'ramp', container: 'container', car: 'car', truck: 'truck', excavator: 'excavator', shapes: 'blocks',
 };
-const ROAD_ICON: Record<RoadKind, string> = { road: 'road', track: 'track', path: 'pathway', rail: 'rail' };
-const SURFACE_ICON: Record<SurfaceKind, string> = { grass: 'grassland', asphalt: 'asphalt', concrete: 'concrete', gravel: 'gravel', dirt: 'dirt', sand: 'sand', rubble: 'rubble' };
 const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: 'concrete', brick: 'brick', wood: 'fence', metal: 'metalSheet', chainlink: 'chainlink' };
 
 /**
@@ -115,1349 +84,8 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
   selector: 'app-bando-editor',
   imports: [FormsModule, FloatBox, AssistantBox, ElementsBox, ElementPreview, SiteView, ToolIcon, PickMenu, BlocksBox],
   host: { class: 'be' },
-  template: `
-    <div class="bar">
-      <ng-content />
-      <div class="seg">
-        <button [class.on]="mode() === 'area'" [disabled]="placeHidden()" (click)="setMode('area')" [title]="placeHidden() ? 'This bando was shared without its place: there is no map area to edit' : ''">1 · Area</button>
-        <button [class.on]="mode() === 'model'" [disabled]="!hasModel()" (click)="setMode('model')" data-tour="tab-model" [title]="hasModel() ? '' : 'Generate the model first'">2 · Model</button>
-      </div>
-      @if (mode() === 'model') {
-        <div class="seg" title="2D edits the plan; 3D just looks around the whole bando">
-          <button [class.on]="!view3d()" (click)="view3d.set(false)" data-tour="view-2d">2D</button>
-          <button [class.on]="view3d()" (click)="setView3d()" data-tour="view-3d">3D</button>
-        </div>
-        @if (view3d()) {
-          <label class="lay" title="Show the roofs in the 3D view"><input type="checkbox" [checked]="roofs3d()" (change)="roofs3d.set(checked($event))" /> roofs</label>
-        }
-        @if (ed.draft().terrain) {
-          <label class="lay" title="How the ground is drawn: its own colours, coloured by height (also under the 2D plan), or as a wireframe (3D)">ground
-            <select [value]="groundStyle()" (change)="groundStyle.set(asGroundStyle($event))">
-              <option value="natural" [selected]="groundStyle() === 'natural'">natural</option>
-              <option value="height" [selected]="groundStyle() === 'height'">height map</option>
-              <option value="wire" [selected]="groundStyle() === 'wire'">wireframe</option>
-            </select>
-          </label>
-        }
-        @if (!view3d()) {
-          <button class="btn" [class.on]="indoor()" [disabled]="!b() || !!b()!.frame" (click)="toggleIndoor()" title="Take the roof off and edit one floor of the selected building: walls, doors, windows, voids, columns, stairs">{{ indoor() ? '✓ Indoors' : 'Indoors' }}</button>
-          @if (indoor() && b(); as ib) {
-            <span class="grp">
-              @for (l of ib.levels; track $index) {
-                <button class="btn" [class.on]="$index === level()" (click)="pickLevel($index)" title="Edit this floor · click again to see the whole building">{{ levelName($index) }}</button>
-              }
-              <button class="btn" (click)="addLevel()" title="Add a floor on top (a copy of the last one; the roof moves up)">＋</button>
-              <button class="btn" [disabled]="ib.levels.length < 2" (click)="removeFloor()" title="Remove the selected floor">－</button>
-            </span>
-          }
-        }
-      }
-      <span class="sp"></span>
-      @if (mode() === 'model') {
-        <button class="btn" [disabled]="!ed.canUndo()" (click)="undo()" title="Undo (Ctrl+Z)">↶</button>
-        <button class="btn" [disabled]="!ed.canRedo()" (click)="redo()" title="Redo">↷</button>
-        <button class="btn" [class.on]="blocksOpen()" (click)="blocksOpen.set(!blocksOpen())" data-tour="library" title="Library: ready-made objects, buildings and patterns, yours and from the online catalogue">▦ Library</button>
-        <button class="btn" [class.on]="elementsOpen()" (click)="elementsOpen.set(!elementsOpen())" title="Elements: list of all buildings, structures, walls and trees (grouped by area), with thumbnails and links">☰ Elements</button>
-        <button class="btn" [class.on]="ai.open()" (click)="ai.open.set(!ai.open())" data-tour="ai" title="Chat with the AI assistant to edit buildings and interiors">💬 AI @if (ai.busy()) { <i class="spin"></i> }</button>
-        <button class="btn primary" (click)="save()">Save</button>
-      }
-      @if (placeHidden()) {
-        <span class="dim small" title="This bando was shared without its place: no map, no map data, no Area step. Flights start on its take-off pad; pin start / end and the compass fine-tune them.">no map · place hidden</span>
-      } @else {
-        <label class="lay" title="Map under the model">🗺
-          <select [value]="studio.basemap()" (change)="setBase($event)">
-            <option value="street">Street</option>
-            <option value="sat">Satellite</option>
-            <option value="off">Hidden</option>
-          </select>
-        </label>
-        <label class="lay" title="Map opacity"><input type="range" min="0.2" max="1" step="0.05" [value]="studio.mapOpacity()" (input)="setOpacity($event)" /></label>
-      }
-    </div>
-    <div class="wrap" #wrap tabindex="0" data-tour="map" [class.v3]="view3d() && overlayOn()" (keydown)="key($event)" (pointerdown)="closeMenus()" (contextmenu)="onContext($event)">
-      <div class="map" #el></div>
-
-      @if (overlayOn() && !view3d()) {
-        <svg
-          #svg
-          class="ov"
-          [class.cap]="captures()"
-          [class.sel]="tool() === 'select'"
-          [class.placing]="placing()"
-          [class.indoor]="indoor()"
-          [attr.viewBox]="vb()"
-          preserveAspectRatio="none"
-          (pointerdown)="bgDown($event)"
-          (pointermove)="move($event)"
-          (pointerup)="up($event)"
-          (pointercancel)="up($event)"
-          (pointerleave)="hover.set(null)"
-          (wheel)="wheel($event)"
-        >
-          @for (p of ed.draft().pads; track $index) {
-            <rect [attr.x]="p.x - p.w / 2" [attr.y]="p.z - p.d / 2" [attr.width]="p.w" [attr.height]="p.d" [attr.transform]="'rotate(' + (p.rotDeg ?? 0) + ' ' + p.x + ' ' + p.z + ')'" [attr.fill]="p.color ?? '#888'" opacity="0.55" />
-          }
-          @if (heightImage(); as hi) {
-            <image [attr.href]="hi.href" [attr.x]="hi.x" [attr.y]="hi.z" [attr.width]="hi.w" [attr.height]="hi.d" preserveAspectRatio="none" style="image-rendering: pixelated" pointer-events="none" />
-          }
-          @if (contours(); as ct) {
-            <path [attr.d]="ct.minor" fill="none" stroke="#3a2a14" stroke-opacity="0.35" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none" />
-            <path [attr.d]="ct.major" fill="none" stroke="#3a2a14" stroke-opacity="0.7" stroke-width="1.6" vector-effect="non-scaling-stroke" pointer-events="none" />
-          }
-          @for (sf of ed.draft().surfaces ?? []; track $index) {
-            <polygon class="hit edge" [class.out]="indoor()" [attr.points]="polyPts(sf.pts)" [attr.fill]="surfColor(sf.kind)" fill-opacity="0.45" [attr.stroke]="isPicked('surface', $index) ? '#ffd166' : surfColor(sf.kind)" [attr.stroke-width]="isPicked('surface', $index) ? 3 : 1.5" vector-effect="non-scaling-stroke" [attr.data-pk]="'surface:' + $index" (pointerdown)="layerDown($event, 'surface', $index)" />
-          }
-          @for (w of ed.draft().waters ?? []; track $index) {
-            <polygon class="hit edge" [class.out]="indoor()" [attr.points]="polyPts(w.pts)" [attr.fill]="waterColor" fill-opacity="0.6" [attr.stroke]="isPicked('water', $index) ? '#ffd166' : '#1f4f73'" [attr.stroke-width]="isPicked('water', $index) ? 3 : 1.5" vector-effect="non-scaling-stroke" [attr.data-pk]="'water:' + $index" (pointerdown)="layerDown($event, 'water', $index)" />
-          }
-          @if (cutCells(); as cc) {
-            <path [attr.d]="cc" fill="#101410" fill-opacity="0.75" pointer-events="none" />
-          }
-          @for (u of ed.draft().underground ?? []; track u.id) {
-            <polygon class="hit edge" [class.out]="indoor()" [attr.points]="polyPts(u.outline)" fill="none" [attr.stroke]="underSel() === u ? '#ffd166' : tc('tunnel')" [attr.stroke-width]="underSel() === u ? 3 : 2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" [attr.data-pk]="'under:' + $index" (pointerdown)="underDown($event, $index)" />
-          }
-          @if (underPreview(); as up) {
-            <polygon [attr.points]="up" [attr.fill]="tc('tunnel')" fill-opacity="0.2" [attr.stroke]="tc('tunnel')" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
-          }
-          @for (r of ed.draft().roads ?? []; track $index) {
-            @if (isPicked('road', $index)) {
-              <polyline [attr.points]="polyPts(r.pts)" fill="none" stroke="#ffd166" [attr.stroke-width]="r.width + 2 / ppm()" stroke-linecap="round" stroke-linejoin="round" pointer-events="none" />
-            }
-            <polyline class="hit" [class.out]="indoor()" [attr.points]="polyPts(r.pts)" fill="none" [attr.stroke]="roadColor(r)" [attr.stroke-width]="r.width" [attr.stroke-dasharray]="r.kind === 'rail' ? r.width * 0.6 + ' ' + r.width * 0.3 : null" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" [attr.data-pk]="'road:' + $index" (pointerdown)="layerDown($event, 'road', $index)" />
-          }
-          @if (layerPreview(); as lp) {
-            @if (tool() === 'road') {
-              <polyline [attr.points]="lp" fill="none" [attr.stroke]="tc('road')" stroke-opacity="0.7" [attr.stroke-width]="roadWidth()" stroke-linecap="round" stroke-linejoin="round" pointer-events="none" />
-            } @else {
-              <polygon [attr.points]="lp" [attr.fill]="tc(tool())" fill-opacity="0.25" [attr.stroke]="tc(tool())" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
-            }
-          }
-          @for (f of pathView(); track f.id) {
-            @for (sg of f.segs; track $index) {
-              <polyline [attr.points]="sg.pts" fill="none" [attr.stroke]="sg.color" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" pointer-events="none" />
-            }
-            @if (f.start; as s0) {
-              <circle [attr.cx]="s0.x" [attr.cy]="s0.z" [attr.r]="7 / ppm()" fill="#3ddc84" stroke="#0b2a17" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none" />
-              <text [attr.x]="s0.x" [attr.y]="s0.z" text-anchor="middle" dominant-baseline="central" [attr.font-size]="9 / ppm()" font-weight="700" fill="#0b2a17" pointer-events="none">S</text>
-            }
-            @if (f.end; as e0) {
-              <circle [attr.cx]="e0.x" [attr.cy]="e0.z" [attr.r]="7 / ppm()" fill="#ff6b6b" stroke="#3a0b0b" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none" />
-              <text [attr.x]="e0.x" [attr.y]="e0.z" text-anchor="middle" dominant-baseline="central" [attr.font-size]="9 / ppm()" font-weight="700" fill="#3a0b0b" pointer-events="none">E</text>
-            }
-          }
-          @if (zoneRect(); as zr) {
-            <rect [attr.transform]="'rotate(' + zr.rot + ' ' + (zr.x + zr.w / 2) + ' ' + (zr.z + zr.d / 2) + ')'" [attr.x]="zr.x" [attr.y]="zr.z" [attr.width]="zr.w" [attr.height]="zr.d" fill="none" stroke="#ffd166" stroke-width="2" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" />
-          }
-          @for (st of ed.draft().structures ?? []; track st.id) {
-            <g class="hit" [class.out]="indoor() && st.kind !== 'stairs' && st.kind !== 'ramp'" [attr.transform]="'translate(' + st.x + ' ' + st.z + ') rotate(' + st.rotDeg + ')'" [attr.data-pk]="'structure:' + $index" (pointerdown)="structDown($event, $index)">
-              @switch (st.kind) {
-                @case ('bridge') {
-                  <rect [attr.x]="-(st.length ?? 30) / 2" [attr.y]="-st.size / 2" [attr.width]="st.length ?? 30" [attr.height]="st.size" fill="#8d8d86" fill-opacity="0.85" [attr.stroke]="structI() === $index ? '#ffd166' : '#3a3a36'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
-                  <line [attr.x1]="-(st.length ?? 30) / 2" y1="0" [attr.x2]="(st.length ?? 30) / 2" y2="0" stroke="#f2e9b8" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" pointer-events="none" />
-                }
-                @case ('lattice_tower') {
-                  <rect [attr.x]="-st.size" [attr.y]="-st.size" [attr.width]="st.size * 2" [attr.height]="st.size * 2" fill="#c9ced2" fill-opacity="0.6" [attr.stroke]="structI() === $index ? '#ffd166' : '#4c5359'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
-                  <line [attr.x1]="-st.size" [attr.y1]="-st.size" [attr.x2]="st.size" [attr.y2]="st.size" stroke="#4c5359" vector-effect="non-scaling-stroke" pointer-events="none" />
-                  <line [attr.x1]="st.size" [attr.y1]="-st.size" [attr.x2]="-st.size" [attr.y2]="st.size" stroke="#4c5359" vector-effect="non-scaling-stroke" pointer-events="none" />
-                }
-                @case ('shapes') {
-                  @if (shapesBox(st); as fb) {
-                    <rect [attr.x]="fb.x0" [attr.y]="fb.z0" [attr.width]="fb.x1 - fb.x0" [attr.height]="fb.z1 - fb.z0" fill="#c9c5b8" fill-opacity="0.75" [attr.stroke]="structI() === $index ? '#ffd166' : '#3a3a36'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" stroke-dasharray="4 2" vector-effect="non-scaling-stroke" />
-                  }
-                }
-                @case ('tower_crane') {
-                  <line [attr.x1]="-(st.length ?? 45) * 0.25" y1="0" [attr.x2]="st.length ?? 45" y2="0" stroke="#e0b020" stroke-width="5" vector-effect="non-scaling-stroke" />
-                  <rect [attr.x]="-st.size" [attr.y]="-st.size" [attr.width]="st.size * 2" [attr.height]="st.size * 2" fill="#e0b020" [attr.stroke]="structI() === $index ? '#ffd166' : '#4c4220'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
-                }
-                @default {
-                  @if (isRect(st.kind)) {
-                    <rect [attr.x]="-(st.length ?? 6) / 2" [attr.y]="-st.size / 2" [attr.width]="st.length ?? 6" [attr.height]="st.size" [attr.fill]="rectFill(st.kind)" fill-opacity="0.85" [attr.stroke]="structI() === $index ? '#ffd166' : '#2b2b28'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
-                    <line [attr.x1]="-(st.length ?? 6) * 0.32" y1="0" [attr.x2]="(st.length ?? 6) * 0.32" y2="0" stroke="#1d1d1b" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none" />
-                    <polygon [attr.points]="arrowHead(st.length ?? 6, st.size)" fill="#1d1d1b" pointer-events="none" />
-                  } @else {
-                    <circle [attr.r]="st.size" [attr.fill]="st.kind === 'chimney' ? '#a86b52' : '#c4c8c6'" fill-opacity="0.85" [attr.stroke]="structI() === $index ? '#ffd166' : '#3a3a36'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" vector-effect="non-scaling-stroke" />
-                    <circle [attr.r]="st.size * 0.55" fill="none" stroke="#3a3a36" vector-effect="non-scaling-stroke" pointer-events="none" />
-                  }
-                }
-              }
-            </g>
-            <text [attr.x]="st.x" [attr.y]="st.z + (isRect(st.kind) ? 0 : st.size + 4)" text-anchor="middle" [attr.font-size]="Math.max(2, 11 / ppm())" fill="#1b231e" stroke="#fff" stroke-width="0.35" paint-order="stroke" pointer-events="none">{{ st.name }}</text>
-            @if (structI() === $index && (isRect(st.kind) || st.kind === 'lattice_tower' || st.kind === 'tower_crane')) {
-              <g [attr.transform]="'translate(' + st.x + ' ' + st.z + ') rotate(' + st.rotDeg + ')'">
-                <line x1="0" [attr.y1]="-(isRect(st.kind) ? st.size / 2 : st.size)" x2="0" [attr.y2]="-(isRect(st.kind) ? st.size / 2 : st.size) - 30 / ppm()" stroke="#b7ed83" vector-effect="non-scaling-stroke" pointer-events="none" />
-                <g class="hit rotk" [attr.transform]="'translate(0 ' + (-(isRect(st.kind) ? st.size / 2 : st.size) - 30 / ppm()) + ') scale(' + 1 / ppm() + ')'" (pointerdown)="structRotDown($event, $index)">
-                  <title>Drag to rotate · Shift: 15° steps</title>
-                  <circle r="10" fill="#ffd166" stroke="#12200b" stroke-width="1.5" />
-                  <path d="M -4.5 2.5 A 5 5 0 1 1 1.5 4.8" fill="none" stroke="#12200b" stroke-width="1.8" stroke-linecap="round" />
-                  <path d="M 1.5 4.8 L -0.5 1.6 M 1.5 4.8 L 4.6 3.6" fill="none" stroke="#12200b" stroke-width="1.8" stroke-linecap="round" />
-                </g>
-              </g>
-            }
-          }
-          @for (w of ed.draft().walls ?? []; track $index) {
-            <line class="hit" [class.out]="indoor()" [attr.x1]="w.a.x" [attr.y1]="w.a.z" [attr.x2]="w.b.x" [attr.y2]="w.b.z" [attr.stroke]="fenceI() === $index ? '#ffd166' : (w.color ?? fenceColor(w.material))" [attr.stroke-dasharray]="w.material === 'chainlink' ? '2 2' : null" stroke-width="6" stroke-linecap="round" vector-effect="non-scaling-stroke" [attr.data-pk]="'fence:' + $index" (pointerdown)="fenceDown($event, $index)" />
-            @if (fenceI() === $index) {
-              <circle class="hit" [attr.cx]="w.a.x" [attr.cy]="w.a.z" [attr.r]="hr()" fill="#fff" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="fenceEndDown($event, $index, 0)" />
-              <circle class="hit" [attr.cx]="w.b.x" [attr.cy]="w.b.z" [attr.r]="hr()" fill="#fff" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="fenceEndDown($event, $index, 1)" />
-            }
-          }
-          @for (t of ed.draft().trees; track $index) {
-            <circle class="hit" [class.out]="indoor()" [attr.cx]="t.x" [attr.cy]="t.z" [attr.r]="t.r" [attr.fill]="t.kind === 'c' ? '#2f6b3c' : '#4f9a4a'" fill-opacity="0.85" [attr.stroke]="isTreeSel($index) ? '#ffd166' : '#1d3d22'" stroke-width="1.5" vector-effect="non-scaling-stroke" [attr.data-pk]="'tree:' + $index" (pointerdown)="treeDown($event, $index)" />
-          }
-          @for (bd of ed.draft().buildings; track bd.id) {
-            <g [attr.transform]="tf(bd)" [attr.opacity]="indoor() && bd.id !== ed.selectedId() ? 0.35 : 1">
-              @if (bd.frame) {
-                @for (x of ribs(bd); track x) {
-                  <line [attr.x1]="x" [attr.y1]="-bd.width / 2" [attr.x2]="x" [attr.y2]="bd.width / 2" stroke="#56655f" vector-effect="non-scaling-stroke" pointer-events="none" />
-                }
-              }
-              <polygon class="hit" [attr.points]="outline(bd)" [attr.fill]="bd.color ?? '#d7d0bd'" [attr.fill-opacity]="indoor() && bd.id === ed.selectedId() ? 0.2 : 0.8" [attr.stroke]="bd.id === ed.selectedId() ? (magnetHit() ? '#38d6ff' : '#b7ed83') : '#2d3a33'" [attr.stroke-width]="bd.id === ed.selectedId() ? 3 : 1.5" vector-effect="non-scaling-stroke" [attr.data-pk]="'building:' + bd.id" (pointerdown)="bldDown($event, bd)" />
-            </g>
-            <text [attr.x]="bd.pos.x" [attr.y]="bd.pos.z" text-anchor="middle" dominant-baseline="middle" [attr.font-size]="labelSize(bd)" fill="#1b231e" stroke="#fff" stroke-width="0.35" paint-order="stroke" pointer-events="none">{{ bd.name }}</text>
-          }
-          @if (b(); as bd) {
-            <g [attr.transform]="tf(bd)">
-              @if (!indoor()) {
-                @for (pt of lvl()?.partitions ?? []; track $index) {
-                  <line [attr.x1]="pt[0].x - bd.length / 2" [attr.y1]="pt[0].z - bd.width / 2" [attr.x2]="pt[1].x - bd.length / 2" [attr.y2]="pt[1].z - bd.width / 2" stroke="#3a463f" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke" pointer-events="none" />
-                }
-              }
-              @if (indoor()) {
-                @for (pt of lvl()?.partitions ?? []; track $index) {
-                  <line class="hit" [attr.x1]="pt[0].x - bd.length / 2" [attr.y1]="pt[0].z - bd.width / 2" [attr.x2]="pt[1].x - bd.length / 2" [attr.y2]="pt[1].z - bd.width / 2" [attr.stroke]="wallI() === $index ? '#ffd166' : '#f1f4f2'" stroke-width="5" stroke-linecap="round" vector-effect="non-scaling-stroke" [attr.data-pk]="'wall:' + $index" (pointerdown)="wallDown($event, $index)" />
-                }
-                @if (drag()?.t === 'wallDraw') {
-                  <line [attr.x1]="wd().a.x - bd.length / 2" [attr.y1]="wd().a.z - bd.width / 2" [attr.x2]="wd().b.x - bd.length / 2" [attr.y2]="wd().b.z - bd.width / 2" [attr.stroke]="tc('wall')" stroke-width="4" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
-                }
-              }
-              @if (indoor() && placing()) {
-                <path [attr.d]="gridPath(bd, 1)" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1" fill="none" vector-effect="non-scaling-stroke" pointer-events="none" />
-                <path [attr.d]="gridPath(bd, 5)" stroke="#ffffff" stroke-opacity="0.28" stroke-width="1" fill="none" vector-effect="non-scaling-stroke" pointer-events="none" />
-              }
-              @if (indoor()) {
-                @for (v of lvl()?.voids ?? []; track $index) {
-                  <rect class="hit" [attr.x]="v.x0 - bd.length / 2" [attr.y]="v.z0 - bd.width / 2" [attr.width]="v.x1 - v.x0" [attr.height]="v.z1 - v.z0" [attr.fill]="v.water ? '#3d86b6' : '#0b0e0c'" fill-opacity="0.65" [attr.stroke]="voidI() === $index ? '#ffd166' : '#8fb7d1'" stroke-width="2" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" [attr.data-pk]="'void:' + $index" (pointerdown)="voidDown($event, $index)" />
-                }
-                @for (c of lvl()?.columns ?? []; track $index) {
-                  @if (c.round) {
-                    <circle class="hit" [attr.cx]="c.x - bd.length / 2" [attr.cy]="c.z - bd.width / 2" [attr.r]="c.size / 2" fill="#c9c5b8" [attr.stroke]="isColSel($index) ? '#ffd166' : '#222'" [attr.stroke-width]="isColSel($index) ? 3 : 2" vector-effect="non-scaling-stroke" [attr.data-pk]="'col:' + $index" (pointerdown)="colDown($event, $index)" (dblclick)="selectColumns('x')" />
-                  } @else {
-                    <rect class="hit" [attr.x]="c.x - bd.length / 2 - c.size / 2" [attr.y]="c.z - bd.width / 2 - c.size / 2" [attr.width]="c.size" [attr.height]="c.size" fill="#c9c5b8" [attr.stroke]="isColSel($index) ? '#ffd166' : '#222'" [attr.stroke-width]="isColSel($index) ? 3 : 2" vector-effect="non-scaling-stroke" [attr.data-pk]="'col:' + $index" (pointerdown)="colDown($event, $index)" (dblclick)="selectColumns('x')" />
-                  }
-                }
-                @if (pv(); as g) {
-                  @for (gl of g.guides; track $index) {
-                    <line [attr.x1]="gl.x0 - bd.length / 2" [attr.y1]="gl.z0 - bd.width / 2" [attr.x2]="gl.x1 - bd.length / 2" [attr.y2]="gl.z1 - bd.width / 2" [attr.stroke]="gl.kind === 'equal' ? '#7dff9a' : '#7fd0ff'" stroke-width="1.5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
-                  }
-                  @for (lb of g.labels; track $index) {
-                    <text [attr.x]="lb.x - bd.length / 2" [attr.y]="lb.z - bd.width / 2" text-anchor="middle" dominant-baseline="middle" [attr.font-size]="Math.max(0.5, (lb.kind === 'wall' ? 10 : 12) / ppm())" [attr.fill]="lb.kind === 'equal' ? '#7dff9a' : lb.kind === 'wall' ? '#c9d3cc' : '#bfe7ff'" [attr.fill-opacity]="lb.kind === 'wall' ? 0.75 : 1" stroke="#101612" stroke-width="0.25" paint-order="stroke" pointer-events="none">{{ lb.text }}</text>
-                  }
-                  @if (g.seg; as sg) {
-                    <line [attr.x1]="sg.x0 - bd.length / 2" [attr.y1]="sg.z0 - bd.width / 2" [attr.x2]="sg.x1 - bd.length / 2" [attr.y2]="sg.z1 - bd.width / 2" [attr.stroke]="sg.kind === 'door' ? '#ff9a2e' : '#4fc3f7'" stroke-width="9" stroke-opacity="0.75" vector-effect="non-scaling-stroke" pointer-events="none" />
-                  }
-                  @if (ghostKind() === 'column') {
-                    @if (colShape() === 'round') {
-                      <circle [attr.cx]="g.x - bd.length / 2" [attr.cy]="g.z - bd.width / 2" [attr.r]="colSize() / 2" [attr.fill]="g.valid ? '#b7ed83' : '#ff6b6b'" fill-opacity="0.55" [attr.stroke]="g.valid ? '#b7ed83' : '#ff6b6b'" vector-effect="non-scaling-stroke" pointer-events="none" />
-                    } @else {
-                      <rect [attr.x]="g.x - bd.length / 2 - colSize() / 2" [attr.y]="g.z - bd.width / 2 - colSize() / 2" [attr.width]="colSize()" [attr.height]="colSize()" [attr.fill]="g.valid ? '#b7ed83' : '#ff6b6b'" fill-opacity="0.55" [attr.stroke]="g.valid ? '#b7ed83' : '#ff6b6b'" vector-effect="non-scaling-stroke" pointer-events="none" />
-                    }
-                  } @else if (ghostKind() === 'stairs') {
-                    <rect [attr.x]="g.x - bd.length / 2 - stairsGhost().w / 2" [attr.y]="g.z - bd.width / 2 - stairsGhost().d / 2" [attr.width]="stairsGhost().w" [attr.height]="stairsGhost().d" [attr.fill]="g.valid ? '#b7ed83' : '#ff6b6b'" fill-opacity="0.4" [attr.stroke]="g.valid ? '#b7ed83' : '#ff6b6b'" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" pointer-events="none" />
-                  }
-                }
-                @if (drag()?.t === 'voidDraw') {
-                  <rect [attr.x]="vd().x - bd.length / 2" [attr.y]="vd().z - bd.width / 2" [attr.width]="vd().w" [attr.height]="vd().d" [attr.fill]="tc('void')" fill-opacity="0.4" [attr.stroke]="tc('void')" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
-                }
-              }
-              @for (o of openings(); track o.id) {
-                <line class="hit" [attr.x1]="seg(o).x1" [attr.y1]="seg(o).y1" [attr.x2]="seg(o).x2" [attr.y2]="seg(o).y2" [attr.stroke]="o.kind === 'door' ? '#ff9a2e' : '#4fc3f7'" [attr.stroke-width]="openId() === o.id ? 10 : 7" vector-effect="non-scaling-stroke" [attr.data-pk]="'opening:' + o.id" (pointerdown)="openDown($event, o.id)" />
-                @if (openId() === o.id) {
-                  <circle class="hit" [attr.cx]="seg(o).x1" [attr.cy]="seg(o).y1" [attr.r]="hr()" fill="#fff" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="openEndDown($event, o.id, 0)" />
-                  <circle class="hit" [attr.cx]="seg(o).x2" [attr.cy]="seg(o).y2" [attr.r]="hr()" fill="#fff" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="openEndDown($event, o.id, 1)" />
-                }
-              }
-              @if (tool() === 'select' && !indoor()) {
-                @if (!bd.footprint) {
-                  @for (c of corners; track $index) {
-                    <rect class="hit" [attr.x]="c[0] * bd.length / 2 - hr()" [attr.y]="c[1] * bd.width / 2 - hr()" [attr.width]="hr() * 2" [attr.height]="hr() * 2" fill="#b7ed83" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="cornerDown($event, c[0], c[1])" />
-                  }
-                } @else {
-                  @for (e of edgesOf(bd.footprint); track e.i) {
-                    <rect class="hit" [attr.x]="(e.axis === 'x' ? (e.from + e.to) / 2 : e.at) - hr()" [attr.y]="(e.axis === 'x' ? e.at : (e.from + e.to) / 2) - hr()" [attr.width]="hr() * 2" [attr.height]="hr() * 2" fill="#b7ed83" stroke="#12200b" vector-effect="non-scaling-stroke" (pointerdown)="edgeDown($event, e.i)" />
-                  }
-                }
-                <line [attr.x1]="0" [attr.y1]="-bd.width / 2" [attr.x2]="0" [attr.y2]="-bd.width / 2 - 30 / ppm()" stroke="#b7ed83" vector-effect="non-scaling-stroke" pointer-events="none" />
-                <g class="hit rotk" [attr.transform]="'translate(0 ' + (-bd.width / 2 - 30 / ppm()) + ') scale(' + 1 / ppm() + ')'" (pointerdown)="rotDown($event)">
-                  <title>Drag to rotate · magnet lines it up with neighbours · Shift: 15° steps · Alt: free</title>
-                  <circle r="10" fill="#ffd166" stroke="#12200b" stroke-width="1.5" />
-                  <path d="M -4.5 2.5 A 5 5 0 1 1 1.5 4.8" fill="none" stroke="#12200b" stroke-width="1.8" stroke-linecap="round" />
-                  <path d="M 1.5 4.8 L -0.5 1.6 M 1.5 4.8 L 4.6 3.6" fill="none" stroke="#12200b" stroke-width="1.8" stroke-linecap="round" />
-                </g>
-              }
-              @if (drag()?.t === 'shape') {
-                <rect [attr.x]="sh().x" [attr.y]="sh().z" [attr.width]="sh().w" [attr.height]="sh().d" [attr.fill]="sh().op === 'cut' ? tc('cut') : tc('wing')" fill-opacity="0.35" [attr.stroke]="sh().op === 'cut' ? tc('cut') : tc('wing')" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
-              }
-            </g>
-          }
-          @if (drag()?.t === 'bridgeDraw') {
-            <line [attr.x1]="bdw().a.x" [attr.y1]="bdw().a.z" [attr.x2]="bdw().b.x" [attr.y2]="bdw().b.z" [attr.stroke]="tc('structure')" [attr.stroke-width]="7" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" pointer-events="none" />
-          }
-          @for (z of zonePolys(); track $index) {
-            <polygon [attr.points]="z" [attr.fill]="tc('scatter')" fill-opacity="0.08" [attr.stroke]="tc('scatter')" stroke-width="1.5" stroke-dasharray="5 4" vector-effect="non-scaling-stroke" pointer-events="none" />
-          }
-          @if (zoneHi(); as zh) {
-            <polygon [attr.points]="zh" [attr.fill]="tc('scatter')" fill-opacity="0.22" [attr.stroke]="tc('scatter')" stroke-width="3" vector-effect="non-scaling-stroke" pointer-events="none" />
-          }
-          @if (scatterPreview(); as sp) {
-            <polygon [attr.points]="sp" [attr.fill]="tc('scatter')" fill-opacity="0.2" [attr.stroke]="tc('scatter')" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
-          }
-          @if (drag()?.t === 'fenceDraw') {
-            <line [attr.x1]="fd().a.x" [attr.y1]="fd().a.z" [attr.x2]="fd().b.x" [attr.y2]="fd().b.z" [attr.stroke]="tc('fence')" stroke-width="5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
-          }
-          @if (drag()?.t === 'draw') {
-            <rect [attr.x]="dr().x" [attr.y]="dr().z" [attr.width]="dr().w" [attr.height]="dr().d" fill="#b7ed83" fill-opacity="0.25" stroke="#b7ed83" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
-          }
-          @for (m of meas().segs; track $index) {
-            <line [attr.x1]="m.a.x" [attr.y1]="m.a.z" [attr.x2]="m.b.x" [attr.y2]="m.b.z" [attr.stroke]="measSel() === $index ? '#fff' : tc('measure')" [attr.stroke-width]="measSel() === $index ? 3 : 2" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" pointer-events="none" />
-            <line class="mhit" [attr.data-pk]="'meas:' + $index" [attr.x1]="m.a.x" [attr.y1]="m.a.z" [attr.x2]="m.b.x" [attr.y2]="m.b.z" stroke="transparent" stroke-width="14" vector-effect="non-scaling-stroke" [attr.pointer-events]="measHit()" (pointerdown)="measureLineDown($event, $index)"><title>Click to select · drag to move · Delete removes it</title></line>
-            <circle [attr.cx]="m.a.x" [attr.cy]="m.a.z" [attr.r]="4 / ppm()" [attr.fill]="tc('measure')" pointer-events="none" />
-            <circle [attr.cx]="m.b.x" [attr.cy]="m.b.z" [attr.r]="4 / ppm()" [attr.fill]="tc('measure')" pointer-events="none" />
-            <text [attr.x]="(m.a.x + m.b.x) / 2" [attr.y]="(m.a.z + m.b.z) / 2" text-anchor="middle" [attr.font-size]="13 / ppm()" fill="#c8f4ff" stroke="#222" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ fmt(m) }}</text>
-          }
-          @for (an of measArcs(); track $index) {
-            <path [attr.d]="an.path" fill="#ffb3f0" fill-opacity="0.18" stroke="#ffb3f0" stroke-width="1.5" vector-effect="non-scaling-stroke" pointer-events="none" />
-            <text [attr.x]="an.label.x" [attr.y]="an.label.z" text-anchor="middle" dominant-baseline="central" [attr.font-size]="11 / ppm()" fill="#ffd9f7" stroke="#222" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ an.deg.toFixed(1) }}°</text>
-          }
-          @if (measSelSeg(); as ms) {
-            <circle class="mhit" [attr.cx]="ms.a.x" [attr.cy]="ms.a.z" [attr.r]="6 / ppm()" fill="#fff" stroke="#0b3a47" stroke-width="1.5" vector-effect="non-scaling-stroke" [attr.pointer-events]="measHit() === 'stroke' ? 'all' : 'none'" (pointerdown)="measEndDown($event, 0)" />
-            <circle class="mhit" [attr.cx]="ms.b.x" [attr.cy]="ms.b.z" [attr.r]="6 / ppm()" fill="#fff" stroke="#0b3a47" stroke-width="1.5" vector-effect="non-scaling-stroke" [attr.pointer-events]="measHit() === 'stroke' ? 'all' : 'none'" (pointerdown)="measEndDown($event, 1)" />
-          }
-          @if (meas().a; as ma) {
-            <circle [attr.cx]="ma.x" [attr.cy]="ma.z" [attr.r]="5 / ppm()" [attr.fill]="tc('measure')" stroke="#fff" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none" />
-            @if (measHover(); as mh) {
-              <line [attr.x1]="ma.x" [attr.y1]="ma.z" [attr.x2]="mh.x" [attr.y2]="mh.z" [attr.stroke]="tc('measure')" stroke-width="2" stroke-dasharray="8 5" vector-effect="non-scaling-stroke" pointer-events="none" />
-              <text [attr.x]="(ma.x + mh.x) / 2" [attr.y]="(ma.z + mh.z) / 2" text-anchor="middle" [attr.font-size]="13 / ppm()" fill="#c8f4ff" stroke="#222" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ fmt({ a: ma, b: mh }) }}</text>
-            }
-          }
-          @if (measHover(); as mh) {
-            @if (measSnap()) {
-              <circle [attr.cx]="mh.x" [attr.cy]="mh.z" [attr.r]="8 / ppm()" fill="none" stroke="#ffe066" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none" />
-              <text [attr.x]="mh.x + 11 / ppm()" [attr.y]="mh.z + 14 / ppm()" [attr.font-size]="11 / ppm()" fill="#ffe066" stroke="#222" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ measSnap() }}</text>
-            }
-          }
-          @if (tool() === 'terrain') {
-            @if (terrPreview(); as tp) {
-              <path [attr.d]="tp" fill="none" [attr.stroke]="tc('terrain')" stroke-opacity="0.35" [attr.stroke-width]="terrainOp() === 'ramp' ? terrRadius() : terrRadius() * 2" stroke-linecap="round" stroke-linejoin="round" pointer-events="none" />
-            }
-            @if (hover(); as hv) {
-              <circle [attr.cx]="hv.x" [attr.cy]="hv.z" [attr.r]="terrainOp() === 'ramp' ? terrRadius() / 2 : terrRadius()" fill="none" [attr.stroke]="tc('terrain')" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke" pointer-events="none" />
-            }
-          }
-          @if (armed(); as am) {
-            @if (hover(); as hv) {
-              <circle [attr.cx]="hv.x" [attr.cy]="hv.z" [attr.r]="10 / ppm()" fill="none" stroke="#b7ed83" stroke-width="2" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" pointer-events="none" />
-              <text [attr.x]="hv.x + 12 / ppm()" [attr.y]="hv.z - 8 / ppm()" [attr.font-size]="11 / ppm()" fill="#eef4ed" stroke="#101410" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ am.block.name }}</text>
-            }
-          }
-          @if (selOutline(); as so) {
-            <polygon [attr.points]="so" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" pointer-events="none" />
-          }
-          <circle [attr.cx]="ed.draft().droneStart.x" [attr.cy]="ed.draft().droneStart.z" [attr.r]="2" fill="#ff6b6b" pointer-events="none" />
-        </svg>
-      }
-
-      @if (overlayOn() && view3d()) {
-        <app-site-view
-          [spec]="ed.draft()"
-          [roofHidden]="!roofs3d()"
-          [frameKey]="ed.draft().id"
-          [mode]="tool() === 'select' ? 'select' : 'draw'"
-          [selection]="sel3d()"
-          [focus]="focus3d()"
-          [flights]="flightList()"
-          [speedMax]="flights.speedMax"
-          (picked)="onPick3d($event)"
-          (ground)="onGround3d($event)"
-          [groundStyle]="groundStyle()"
-          [cursor]="cursor3d()"
-        />
-      }
-      @if (!(overlayOn() && view3d())) {
-        <svg class="compass" viewBox="-30 -30 60 60" aria-label="North is up">
-          <circle r="27" fill="rgba(10,16,12,0.75)" stroke="#6f8577" />
-          <polygon points="0,-23 5,-3 -5,-3" fill="#ff5a4d" />
-          <polygon points="0,23 5,3 -5,3" fill="#8a948d" />
-          <text y="-14" x="0" text-anchor="middle" dominant-baseline="middle" font-size="9" font-weight="700" fill="#fff" stroke="#000" stroke-width="2" paint-order="stroke">N</text>
-          @if (mode() === 'model' && b(); as cb) {
-            <line x1="0" y1="0" [attr.x2]="axisEnd(cb)[0]" [attr.y2]="axisEnd(cb)[1]" stroke="#b7ed83" stroke-width="2.5" stroke-linecap="round" />
-          }
-        </svg>
-      }
-      @if (mode() === 'model' && overlayOn()) {
-        <div #pal class="palette" role="toolbar" aria-label="Tools" aria-orientation="vertical" [style.left.px]="palXY().x" [style.top.px]="palXY().y" [style.z-index]="palZ()" (pointerdown)="$event.stopPropagation(); palZ.set(raiseZ(palOwner))">
-          <div class="tgrip" title="Drag to move the tools · double-click to put them back" (pointerdown)="tbDown($event, 'pal')" (pointermove)="tbMove($event)" (pointerup)="tbUp($event)" (pointercancel)="tbUp($event)" (dblclick)="tbReset('pal')" aria-hidden="true">⠿</div>
-          @for (g of groups(); track g.id) {
-            @if (g.sep) {
-              <i class="psep"></i>
-            }
-            <div class="pg">
-              <button class="pbtn" [attr.data-tour]="toolMarks(g.items)" [class.on]="g.on" [style.--tc]="g.shown.color" (pointerdown)="pbDown(g.id, g.items.length)" (pointerup)="pbUp()" (pointerleave)="pbUp()" (click)="pbClick(g.shown)" (contextmenu)="g.items.length > 1 ? toggleFly(g.id, $event) : $event.preventDefault()" [title]="g.shown.name + ' · ' + g.shown.hint + (g.items.length > 1 ? ' · hold or click the corner for the other tools' : '')">
-                <app-tool-icon [name]="g.shown.icon" />
-                @if (g.items.length > 1) {
-                  <span class="tri" (pointerdown)="$event.stopPropagation()" (click)="toggleFly(g.id, $event)"></span>
-                }
-              </button>
-              @if (fly() === g.id) {
-                <div class="fly" (pointerdown)="$event.stopPropagation()">
-                  @for (it of g.items; track it.key) {
-                    <button class="fbtn" [class.on]="entryActive(it)" [style.--tc]="it.color" (click)="pickEntry(it)" [title]="it.hint"><app-tool-icon [name]="it.icon" /> {{ it.name }}</button>
-                  }
-                </div>
-              }
-            </div>
-          }
-          @if (!indoor() && hasPath() && !view3d()) {
-            <i class="psep"></i>
-            <div class="pg"><button class="pbtn" [class.on]="pinMode() === 's'" style="--tc: #ff6b6b" (click)="armPin('s')" title="Pin start · click where the loaded flight started"><app-tool-icon name="pinStart" /></button></div>
-            <div class="pg"><button class="pbtn" [class.on]="pinMode() === 'e'" style="--tc: #ff6b6b" (click)="armPin('e')" title="Pin end · click where the loaded flight ended"><app-tool-icon name="pinEnd" /></button></div>
-          }
-        </div>
-        @if (!view3d() || tool() !== 'select') {
-          <div class="opts" role="toolbar" [attr.aria-label]="toolName() + ' options'" [style.left.px]="optsXY().left" [style.right.px]="optsXY().right" [style.top.px]="optsXY().top" [style.max-width.px]="optsXY().max" [style.z-index]="optsZ()" (pointerdown)="$event.stopPropagation(); optsZ.set(raiseZ(optsOwner))">
-            <span class="tgrip" title="Drag to move the options · double-click to put them back beside the tool" (pointerdown)="tbDown($event, 'opts')" (pointermove)="tbMove($event)" (pointerup)="tbUp($event)" (pointercancel)="tbUp($event)" (dblclick)="tbReset('opts')" aria-hidden="true">⠿</span>
-            <b [style.color]="toolColor()">{{ toolName() }}</b>
-                @switch (tool()) {
-                  @case ('select') {
-                    <span class="seg" title="How a drag on empty ground selects (outdoors: hold Shift; indoors: columns of the floor)">
-                      <button [class.on]="selShape() === 'box'" [attr.aria-pressed]="selShape() === 'box'" (click)="selShape.set('box')">▭ Box</button>
-                      <button [class.on]="selShape() === 'lasso'" [attr.aria-pressed]="selShape() === 'lasso'" (click)="selShape.set('lasso')">◌ Lasso</button>
-                    </span>
-                    <span class="dim small">{{ indoor() ? 'drag on the floor · Shift adds' : 'Shift + drag · Shift + click adds' }}</span>
-                    @if (!indoor()) {
-                      <label class="lay" title="While moving or rotating a building: snap flush to close neighbours and line up with their angles and the map axes. Hold Alt to drag freely."><input type="checkbox" [checked]="magnet()" (change)="magnet.set(checked($event))" /> magnet</label>
-                    }
-                  }
-                  @case ('structure') {
-                    <app-pick-menu label="What to place" [options]="structOptions" [value]="structKind()" (valueChange)="structKind.set(asStruct($event))" />
-                  }
-                  @case ('measure') {
-                    <button class="btn" [disabled]="measSel() === null" (click)="deleteMeasure()" title="Delete the selected measure (Delete key)">Delete</button>
-                    <button class="btn" [disabled]="!meas().segs.length" (click)="clearMeasures()" title="Remove all measures">Clear all</button>
-                  }
-                  @case ('scatter') {
-                    <app-pick-menu label="Brush shape" [options]="scatterOptions" [value]="scatterMode()" (valueChange)="scatterMode.set(asScatter($event))" />
-                    <app-pick-menu label="Trees" [options]="treeMixOptions" [value]="treeMix()" (valueChange)="treeMix.set(asMix($event))" />
-                    <label class="lay" title="Average distance between trees">every <input class="mini" type="number" min="2" max="30" step="0.5" [value]="scatterSpacing()" (change)="scatterSpacing.set(num($event))" /> m</label>
-                    @if (scatterMode() === 'pen') {
-                      <label class="lay" title="Width of the pen stroke">width <input class="mini" type="number" min="2" max="60" step="1" [value]="scatterWidth()" (change)="scatterWidth.set(num($event))" /> m</label>
-                    }
-                  }
-                  @case ('tunnel') {
-                    <app-pick-menu label="What" [options]="underKindOptions" [value]="underKind()" (valueChange)="underKind.set($event === 'room' ? 'room' : 'tunnel')" />
-                    @if (underKind() === 'tunnel') {
-                      <app-pick-menu label="Section" [compact]="true" [options]="underShapeOptions" [value]="underShape()" (valueChange)="underShape.set(asUnderShape($event))" />
-                      <label class="lay" title="Inside width, metres">width <input class="mini" type="number" min="0.8" max="30" step="0.5" [value]="underWidth()" (change)="underWidth.set(Math.max(0.8, num($event)))" /> m</label>
-                    }
-                    <label class="lay" title="Inside height, metres">height <input class="mini" type="number" min="0.8" max="30" step="0.5" [value]="underHeight()" (change)="underHeight.set(Math.max(0.8, num($event)))" /> m</label>
-                    <label class="lay" title="How far the floor is below the ground where you start dragging (a room: its ceiling)">depth <input class="mini" type="number" min="0" max="60" step="0.5" [value]="underDepth()" (change)="underDepth.set(Math.max(0, num($event)))" /> m</label>
-                  }
-                  @case ('road') {
-                    <app-pick-menu label="Kind" [options]="roadOptions" [value]="roadKind()" (valueChange)="setRoadKind(asRoad($event))" />
-                    <label class="lay" title="Width, metres">width <input class="mini" type="number" min="0.5" max="40" step="0.5" [value]="roadWidth()" (change)="roadWidth.set(Math.max(0.5, num($event)))" /> m</label>
-                  }
-                  @case ('surface') {
-                    <app-pick-menu label="Ground" [options]="surfaceOptions" [value]="surfaceKind()" (valueChange)="surfaceKind.set(asSurface($event))" />
-                  }
-                  @case ('water') {
-                    <span class="seg" title="Draw the outline by hand (a pond, a basin), or along a centre line (a canal, a ditch)">
-                      <button [class.on]="waterMode() === 'outline'" [attr.aria-pressed]="waterMode() === 'outline'" (click)="waterMode.set('outline')">◌ Outline</button>
-                      <button [class.on]="waterMode() === 'line'" [attr.aria-pressed]="waterMode() === 'line'" (click)="waterMode.set('line')">∿ Line</button>
-                    </span>
-                    @if (waterMode() === 'line') {
-                      <label class="lay" title="Width of the canal, metres">width <input class="mini" type="number" min="1" max="60" step="0.5" [value]="waterWidth()" (change)="waterWidth.set(Math.max(1, num($event)))" /> m</label>
-                    }
-                    <label class="lay" title="Depth of the basin below the water, metres">depth <input class="mini" type="number" min="0.2" max="20" step="0.5" [value]="waterDepth()" (change)="waterDepth.set(Math.max(0.2, num($event)))" /> m</label>
-                  }
-                  @case ('terrain') {
-                    <app-pick-menu label="Shape the ground" [options]="terrOpOptions" [value]="terrainOp()" (valueChange)="terrainOp.set(asOp($event))" />
-                    <label class="lay" title="Brush radius (ramp: its width)">⌀ <input class="mini" type="number" min="1" max="100" step="1" [value]="terrRadius()" (change)="terrRadius.set(Math.max(1, num($event)))" /> m</label>
-                    @if (terrainOp() !== 'flatten') {
-                      <label class="lay" [title]="terrainOp() === 'smooth' ? 'How much to soften (percent)' : 'Metres'">{{ terrStrengthLabel() }} <input class="mini" type="number" [min]="terrainOp() === 'smooth' ? 5 : 0.1" [max]="terrainOp() === 'smooth' ? 100 : 60" step="0.5" [value]="terrStrength()" (change)="terrStrength.set(Math.max(0.1, num($event)))" />{{ terrainOp() === 'smooth' ? '' : ' m' }}</label>
-                    }
-                    @if (terrainOp() !== 'ramp') {
-                      <app-pick-menu label="Edge" [compact]="true" [options]="falloffOptions" [value]="terrFalloff()" (valueChange)="terrFalloff.set(asFalloff($event))" />
-                    }
-                    <button class="btn" [disabled]="!ed.draft().terrain?.strokes?.length" (click)="clearTerrain()" title="Remove every terrain stroke (back to the real ground, or flat)">Reset</button>
-                    <button class="btn" [disabled]="loadingGround()" (click)="realGround()" [title]="ed.draft().terrain?.base ? 'Download the real ground again (your strokes stay)' : 'Download the real ground heights for this bando (your strokes stay)'">@if (loadingGround()) {<i class="spin"></i> } {{ ed.draft().terrain?.base ? 'Re-load real ground' : 'Real ground' }}</button>
-                  }
-                  @case ('tree') {
-                    <app-pick-menu label="Tree" [options]="treeMixOptions" [value]="treeMix()" (valueChange)="treeMix.set(asMix($event))" />
-                  }
-                  @case ('fence') {
-                    <app-pick-menu label="Material" [options]="fenceOptions" [value]="fenceMat()" (valueChange)="fenceMat.set(asFence($event))" />
-                  }
-                  @case ('building') {
-                    <label class="lay" title="Snap the new building flush against close neighbours (closes small gaps, straightens small angles)"><input type="checkbox" [checked]="autoAlign()" (change)="autoAlign.set(checked($event))" /> auto-align</label>
-                    <app-pick-menu label="What to draw" [options]="buildOptions" [value]="buildKind()" (valueChange)="buildKind.set($event === 'greenhouse' ? 'greenhouse' : 'building')" />
-                  }
-                  @case ('column') {
-                    <app-pick-menu label="Shape of new columns" [options]="colOptions" [value]="colShape()" (valueChange)="colShape.set($event === 'round' ? 'round' : 'square')" />
-                    <label class="lay" title="Column size (side or diameter), metres">⌀ <input type="number" class="mini" min="0.15" step="0.05" [value]="colSize()" (change)="colSize.set(Math.max(0.15, num($event)))" /> m</label>
-                  }
-                  @case ('stairs') {
-                    <app-pick-menu label="Stairs or a ramp" [options]="stairsOptions" [value]="stairsKind()" (valueChange)="stairsKind.set($event === 'ramp' ? 'ramp' : 'stairs')" />
-                    @if (level() < (b()?.levels.length ?? 1) - 1) {
-                      <label class="lay" title="Cut a hole in the floor above where the stairs arrive"><input type="checkbox" [checked]="stairwell()" (change)="stairwell.set(checked($event))" /> open floor above</label>
-                    }
-                  }
-                }
-
-          </div>
-        }
-      }
-      @if (mode() === 'area') {
-        <div class="frame" [style.left.px]="fb().l" [style.top.px]="fb().t" [style.width.px]="fb().w" [style.height.px]="fb().h" [style.transform]="'rotate(' + rot() + 'deg)'">
-          <div class="rotk" (pointerdown)="frameRotDown($event)" (pointermove)="move($event)" (pointerup)="up($event)" (pointercancel)="up($event)" title="Drag to turn the frame (shift = steps of 15°). Only what is inside the turned frame is used."></div>
-          @for (h of handles; track h) {
-            <div [class]="'h ' + h" (pointerdown)="frameDown($event, h)" (pointermove)="move($event)" (pointerup)="up($event)" (pointercancel)="up($event)"></div>
-          }
-        </div>
-        <div class="search">
-          <input type="text" [(ngModel)]="query" placeholder="Search a place or lat,lon" (keydown.enter)="search()" aria-label="Search a place" data-tour="search" />
-          <button class="btn" (click)="search()" [disabled]="searching()" data-tour="search-go">Go</button>
-        </div>
-        @if (hits().length) {
-          <div class="hits">
-            @for (h of hits(); track h.lat + ',' + h.lon) {
-              <button (click)="pick2(h)" [title]="h.label">{{ h.label }}</button>
-            }
-          </div>
-        }
-        <div class="read" [class.warn]="atMax()">{{ round(half().e * 2) }} × {{ round(half().n * 2) }} m{{ rot() ? ' · ' + round(rot()) + '°' : '' }}{{ atMax() ? ' (maximum)' : '' }} <button class="btn mini" [disabled]="!rot()" (click)="rot.set(0)" title="Turn the frame back to north-up">↺</button></div>
-      } @else if (!overlayOn()) {
-        <div class="notice">This bando was built with the old rotated layout and can't be drawn over the map. Go to <b>1 · Area</b> and press <b>Regenerate</b> to rebuild it aligned to the map.</div>
-      }
-
-      @if (groundUnder() !== null) {
-        <div class="read" aria-live="off">ground {{ groundUnder()!.toFixed(1) }} m</div>
-      }
-      @if (ctx(); as c) {
-        <div class="ctx" [style.left.px]="c.x" [style.top.px]="c.y" (pointerdown)="$event.stopPropagation()" (contextmenu)="$event.preventDefault(); $event.stopPropagation()">
-          @for (it of c.items; track $index) {
-            @if (it.sep) {
-              <i class="psep"></i>
-            } @else if (it.head) {
-              <div class="head">{{ it.label }}</div>
-            } @else {
-              <button [class.danger]="it.danger" (click)="runCtx(it)">{{ it.label }}</button>
-            }
-          }
-        </div>
-      }
-
-      @if (mode() === 'model' && overlayOn() && ai.open()) {
-        <app-assistant-box />
-      }
-      @if (mode() === 'model' && overlayOn() && blocksOpen()) {
-        <app-blocks-box [building]="b()" [structure]="structSel()" (arm)="armBlock($event)" (apply)="applyBlockPattern($event)" />
-      }
-      @if (mode() === 'model' && overlayOn() && elementsOpen()) {
-        <app-elements-box [spec]="ed.draft()" [selectedId]="ed.selectedId()" (go)="goTo($event)" (hover)="zoneHover.set($event)" (zones)="zonesOn.set($event)" />
-      }
-
-      @if (mode() === 'model' && overlayOn()) {
-        <app-float-box fid="inspector-v4" data-tour="inspector" title="Inspector" [x]="8" [y]="58" [w]="300" [h]="340" [right]="true" [cols]="true">
-          @if (previewTarget(); as pt) {
-            <app-element-preview [target]="pt" [key]="previewKey()" [caption]="previewCaption()" (picked)="onPreviewPick($event)" />
-          }
-          @switch (pick()?.t) {
-            @case ('opening') {
-              @if (op(); as o) {
-                <div class="f"><label>type <select (change)="setOpening({ kind: kindOf($event) })"><option value="door" [selected]="o.kind === 'door'">door</option><option value="window" [selected]="o.kind === 'window'">window</option></select></label></div>
-                <div class="f"><label>width <input type="number" min="0.4" step="0.1" [value]="o.w.toFixed(2)" (change)="setOpening({ w: num($event) })" /></label>
-                <label>height <input type="number" min="0.3" step="0.1" [value]="o.h.toFixed(2)" (change)="setOpening({ h: num($event) })" /></label></div>
-                @if (o.kind === 'window') {
-                  <div class="f"><label>sill (bottom) <input type="number" min="0" step="0.1" [value]="o.sill.toFixed(2)" (change)="setOpening({ sill: num($event) })" /></label></div>
-                }
-                <div class="f"><label>position on wall <input type="number" step="0.1" [value]="(o.c - o.from).toFixed(2)" (change)="setOpening({ c: o.from + num($event) })" /></label></div>
-                <div class="f"><label><input type="checkbox" [checked]="o.closed" (change)="setOpening({ closed: checked($event) })" /> closed ({{ o.kind === 'door' ? 'a door leaf' : 'a pane' }}; open = just the hole)</label></div>
-                <div class="f"><span class="dim">repeat along the wall</span><label>× <input type="number" min="2" max="40" step="1" [value]="repN()" (change)="repN.set(num($event))" /></label>
-                <label>every <input type="number" min="0.5" step="0.5" [value]="repS()" (change)="repS.set(num($event))" /> m</label>
-                <button class="btn" (click)="repeatSel()">Repeat</button></div>
-                <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
-              }
-            }
-            @case ('tree') {
-              @if (tree(); as t) {
-                @if (treeIdxs().length > 1) {
-                  <div class="f"><span class="dim">{{ treeIdxs().length }} trees selected · changes apply to all</span></div>
-                }
-                <div class="f"><label>height <input type="number" min="1" step="0.5" [value]="t.h" (change)="setTree({ h: num($event) })" /></label>
-                <label>radius <input type="number" min="0.5" step="0.25" [value]="t.r" (change)="setTree({ r: num($event) })" /></label></div>
-                <div class="f"><app-pick-menu label="Kind" [options]="treeKindOptions" [value]="t.kind" (valueChange)="setTree({ kind: $event === 'c' ? 'c' : 'd' })" />
-                <button class="btn danger" (click)="deleteSel()">Delete</button></div>
-              }
-            }
-            @case ('structure') {
-              @if (structSel(); as st) {
-                <div class="f"><label class="grow">name <input type="text" class="grow" [value]="st.name" (change)="setStruct({ name: text($event) })" /></label></div>
-                <div class="f"><span class="dim">{{ structLabel(st.kind) }}</span></div>
-                @if (st.kind === 'shapes') {
-                  <div class="f"><span class="dim">{{ (st.shapes ?? []).length }} shapes · {{ st.height.toFixed(1) }} m tall · its form comes from its block</span></div>
-                } @else {
-                  <div class="f"><label>{{ heightLabel(st.kind) }} <input type="number" min="0.3" step="0.5" [value]="st.height" (change)="setStruct({ height: num($event) })" /></label>
-                  <label>{{ sizeLabel(st.kind) }} <input type="number" min="0.3" step="0.1" [value]="st.size" (change)="setStruct({ size: num($event) })" /></label></div>
-                }
-                @if (hasLength(st.kind)) {
-                  <div class="f"><label>{{ st.kind === 'tower_crane' ? 'jib length' : 'length' }} <input type="number" min="1" step="0.5" [value]="(st.length ?? 6).toFixed(1)" (change)="setStruct({ length: num($event) })" /></label>
-                  @if (st.kind === 'bridge') {
-                    <label>style <select (change)="setStruct({ style: styleOf($event) })"><option value="beam" [selected]="(st.style ?? 'beam') === 'beam'">beam on piers</option><option value="arch" [selected]="st.style === 'arch'">arch</option></select></label>
-                  }</div>
-                }
-                <div class="f"><label>raised by <input type="number" min="0" step="0.5" [value]="st.y ?? 0" (change)="setStruct({ y: num($event) })" /> m</label>
-                @if (st.kind !== 'chimney' && st.kind !== 'silo' && st.kind !== 'tank' && st.kind !== 'water_tower') {
-                  <label>rotation° <input type="number" step="5" [value]="st.rotDeg.toFixed(0)" (change)="setStruct({ rotDeg: num($event) })" /></label>
-                }</div>
-                @if (selBlock(); as sb) {
-                  <div class="f"><span class="dim">From block “{{ sb.name }}” v{{ sb.ref.v }}</span>
-                  @if (sb.latest) {<button class="btn" (click)="updateSelBlock()">Update to v{{ sb.latest }}</button>}
-                  <button class="btn" (click)="detachSelBlock()" title="Keep it, forget the block">Detach</button>
-                  <button class="btn danger" (click)="removeSelBlock()" title="Remove everything this placement made">Remove placement</button></div>
-                }
-                <div class="f"><button class="btn" (click)="duplicateStruct()">⧉ Duplicate</button> <button class="btn danger" (click)="deleteSel()">Delete</button></div>
-              }
-            }
-            @case ('under') {
-              @if (underSel(); as u) {
-                <div class="f"><label class="grow">name <input type="text" class="grow" [value]="u.name" (change)="setUnder({ name: text($event) })" /></label></div>
-                <div class="f"><label>floor <input type="number" step="0.5" [value]="u.floor" (change)="setUnder({ floor: num($event) })" /> m</label>
-                <label>ceiling <input type="number" step="0.5" [value]="u.ceiling" (change)="setUnder({ ceiling: num($event) })" /> m</label></div>
-                <div class="f"><app-pick-menu label="Section" [options]="underShapeOptions" [value]="u.shape" (valueChange)="setUnder({ shape: asUnderShape($event) })" />
-                <label>walls <input type="number" min="0.1" max="3" step="0.1" [value]="u.wall" (change)="setUnder({ wall: Math.max(0.1, num($event)) })" /> m</label></div>
-                <div class="f"><label>water in it <input type="number" min="0" step="0.1" [value]="u.water ?? 0" (change)="setUnder({ water: Math.max(0, num($event)) || undefined })" /> m</label></div>
-                @if (underSection(); as sec) {
-                  <svg class="section" viewBox="0 0 260 96" role="img" [attr.aria-label]="'Side view along ' + u.name + ': ground, ceiling and floor'">
-                    <rect [attr.x]="sec.x0" [attr.y]="sec.ceil" [attr.width]="sec.x1 - sec.x0" [attr.height]="sec.floor - sec.ceil" fill="#101410" fill-opacity="0.85" stroke="#9b5de5" stroke-width="1.5" />
-                    <path [attr.d]="sec.groundFill" fill="#7d6a4f" fill-opacity="0.55" />
-                    <path [attr.d]="sec.ground" fill="none" stroke="#c49a6c" stroke-width="1.5" />
-                    <text x="4" y="10" font-size="9" fill="#aab9af">{{ sec.top.toFixed(1) }} m</text>
-                    <text x="4" y="92" font-size="9" fill="#aab9af">{{ sec.bottom.toFixed(1) }} m</text>
-                    <text x="256" y="92" font-size="9" fill="#aab9af" text-anchor="end">{{ sec.len.toFixed(0) }} m</text>
-                  </svg>
-                }
-                <div class="f"><span class="dim">Heights are metres from the bando's zero. It opens where the ground is between floor and ceiling: dashed = covered, dark = open.</span></div>
-                <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
-              }
-            }
-            @case ('road') {
-              @if (roadSel(); as r) {
-                <div class="f"><span class="dim">{{ roadLen(r).toFixed(0) }} m long</span></div>
-                <div class="f"><app-pick-menu label="Kind" [options]="roadOptions" [value]="r.kind" (valueChange)="setLayer({ kind: asRoad($event) })" />
-                <label>width <input type="number" min="0.5" max="40" step="0.5" [value]="r.width" (change)="setLayer({ width: Math.max(0.5, num($event)) })" /> m</label></div>
-                <div class="f"><app-pick-menu label="Surface" [options]="roadSurfaceOptions" [value]="r.surface ?? ''" (valueChange)="setLayer({ surface: $event ? asSurface($event) : undefined })" /></div>
-                <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
-              }
-            }
-            @case ('surface') {
-              @if (surfaceSel(); as sf) {
-                <div class="f"><app-pick-menu label="Ground" [options]="surfaceOptions" [value]="sf.kind" (valueChange)="setLayer({ kind: asSurface($event) })" /></div>
-                <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
-              }
-            }
-            @case ('water') {
-              @if (waterSel(); as w) {
-                <div class="f"><span class="dim">Water · its surface sits just below the lowest bank</span></div>
-                <div class="f"><label>depth <input type="number" min="0.2" max="20" step="0.5" [value]="w.depth" (change)="setLayer({ depth: Math.max(0.2, num($event)) })" /> m</label>
-                <label>level <input type="number" min="-10" max="5" step="0.1" [value]="w.level ?? -0.3" (change)="setLayer({ level: num($event) })" /> m</label></div>
-                <div class="f"><button class="btn" (click)="mergeWater()" title="Join it with every water it overlaps or touches into one outline">Merge overlapping</button>
-                <button class="btn danger" (click)="deleteSel()">Delete</button></div>
-              }
-            }
-            @case ('fence') {
-              @if (fence(); as w) {
-                <div class="f"><span class="dim">{{ fenceLabel(w.material) }} · {{ fenceLen(w).toFixed(1) }} m</span></div>
-                <div class="f"><app-pick-menu label="Material" [options]="fenceOptions" [value]="w.material ?? 'masonry'" (valueChange)="setFenceMat(asFence($event))" /></div>
-                <div class="f"><label>height <input type="number" min="0.3" step="0.1" [value]="w.height" (change)="setFence({ height: num($event) })" /></label>
-                <label>thickness <input type="number" min="0.1" step="0.05" [value]="w.thick" (change)="setFence({ thick: num($event) })" /></label></div>
-                <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
-              }
-            }
-            @case ('void') {
-              @if (voidSel(); as v) {
-                <div class="f"><span class="dim">Void · {{ (v.x1 - v.x0).toFixed(1) }} × {{ (v.z1 - v.z0).toFixed(1) }} m · floor {{ levelName(level()) }}</span></div>
-                @if (level() === 0) {
-                  <div class="f"><label><input type="checkbox" [checked]="!!v.water" (change)="setVoid({ water: checked($event) })" /> water (basin)</label></div>
-                }
-                <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
-              }
-            }
-            @case ('column') {
-              @if (colSel(); as c) {
-                @if (colIdxs().length > 1) {
-                  <div class="f"><span class="dim">{{ colIdxs().length }} columns selected</span></div>
-                }
-                <div class="f"><span class="dim">select</span>
-                <button class="btn" (click)="selectColumns('x')" title="Every column in the same east–west row (double-click a column does the same)">Row</button>
-                <button class="btn" (click)="selectColumns('z')" title="Every column in the same north–south line">Line</button>
-                <button class="btn" (click)="selectColumns('grid')" title="Every column of the same size and shape on this floor">All alike</button></div>
-                <div class="f"><label>size <input type="number" min="0.15" step="0.05" [value]="c.size" (change)="setColumn({ size: num($event) })" /></label>
-                <label><input type="checkbox" [checked]="!!c.round" (change)="setColumn({ round: checked($event) })" /> round</label></div>
-                <div class="f"><label>from west wall <input type="number" step="0.1" [value]="c.x.toFixed(2)" (change)="setColumn({ x: num($event) })" /></label>
-                <label>from north wall <input type="number" step="0.1" [value]="c.z.toFixed(2)" (change)="setColumn({ z: num($event) })" /></label></div>
-                <div class="f"><span class="dim">repeat</span><label>× <input type="number" min="2" max="60" step="1" [value]="colN()" (change)="colN.set(num($event))" /></label>
-                <label>every <input type="number" min="0.8" step="0.5" [value]="colS()" (change)="colS.set(num($event))" /> m</label>
-                <select (change)="colAxis.set(axisOf($event))"><option value="x" [selected]="colAxis() === 'x'">along x (east)</option><option value="z" [selected]="colAxis() === 'z'">along z (south)</option></select></div>
-                <div class="f"><button class="btn" (click)="colDup()" title="One copy, spacing away along the chosen direction">⧉ Duplicate</button>
-                <button class="btn" (click)="colRowAdd()">Make a row</button>
-                <button class="btn" (click)="colFill()" title="Fill the whole floor with columns like this one on a grid of the spacing above (not inside voids)">Fill floor</button></div>
-                <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
-              }
-            }
-            @case ('wall') {
-              <div class="f"><span class="dim">Interior wall</span> <button class="btn danger" (click)="deleteSel()">Delete wall</button></div>
-            }
-            @default {
-              @if (b(); as bd) {
-                <div class="sec">
-                  <label class="fld span2">name <input type="text" [value]="bd.name" (change)="mutate(setName, text($event))" /></label>
-                  @if (!bd.footprint) {
-                    <label class="fld">length m <input type="number" min="2" step="0.5" [value]="bd.length.toFixed(1)" (change)="mutate(setLength, num($event))" /></label>
-                    <label class="fld">width m <input type="number" min="2" step="0.5" [value]="bd.width.toFixed(1)" (change)="mutate(setWidth, num($event))" /></label>
-                  } @else {
-                    <div class="span2 dim">Shaped · {{ bd.length.toFixed(1) }} × {{ bd.width.toFixed(1) }} m · {{ bd.footprint.length }} corners
-                    <button class="btn" (click)="mutate(toRectangle, 0)" title="Back to a plain rectangle over the bounding box">Reset shape</button></div>
-                  }
-                  <label class="fld">rotation° <input type="number" step="5" [value]="bd.rotDeg.toFixed(0)" (change)="mutate(setRot, num($event))" /></label>
-                  @if (bd.frame) {
-                    <label class="fld">arch height <input type="number" min="0.3" max="1.3" step="0.05" [value]="bd.levels[0]?.vaultK ?? 0.7" (change)="editLevel(setArch, num($event))" /></label>
-                    <label class="fld" title="Off: only the steel skeleton is left (and it can be flown through)">glass <input type="checkbox" [checked]="bd.glass !== false" (change)="mutate(setGlass, checked($event))" /></label>
-                  } @else if (lvl(); as l) {
-                    <label class="fld">wall height m <input type="number" min="1" step="0.5" [value]="l.height" (change)="editLevel(setHeight, num($event))" data-tour="wall-height" /></label>
-                  }
-                </div>
-                @if (!bd.frame) {
-                  <div class="sec">
-                    <div class="st">Floors</div>
-                    <div class="row">
-                      @for (l of bd.levels; track $index) {
-                        <button class="btn" [class.on]="$index === level() && floorFocus()" [class.cur]="$index === level()" (click)="pickLevel($index)" title="Show only this floor solid, the rest of the building ghosted (click again for the whole building)">{{ levelName($index) }}</button>
-                      }
-                      <button class="btn" (click)="addLevel()" data-tour="add-floor" title="Add a floor on top (a copy of the last one; the roof moves up)">＋</button>
-                      <button class="btn" [disabled]="bd.levels.length < 2" (click)="removeFloor()" title="Remove the selected floor">－</button>
-                    </div>
-                    <label class="fld" title="0 = intact. A ruin first has holes in the roof; from 60 % the roof is gone and the walls lose their upper part along a broken line; from 75 % the upper floors are gone too">ruined % <input type="range" min="0" max="100" step="5" [value]="(bd.ruin ?? 0) * 100" (change)="mutate(setRuin, num($event))" /></label>
-                    <label class="fld" title="An open shell: the roof and the upper floors are gone, the walls stand as the ruin level says">open shell <input type="checkbox" [checked]="!!bd.roofless" (change)="mutate(setFlag('roofless'), checked($event))" /></label>
-                    <label class="fld" title="Battlements along the top of the walls (on a flat roof or an open shell)">battlements <input type="checkbox" [checked]="!!bd.crenels" (change)="mutate(setFlag('crenels'), checked($event))" /></label>
-                    @if (!bd.footprint) {
-                      <label class="fld" title="One wall more ruined than the rest (or less): percent, empty = as the building">ruin by wall
-                        <span class="walls">
-                          @for (sd of wallSides; track sd.k) {
-                            <input class="mini" type="number" min="0" max="100" step="5" [attr.aria-label]="'Ruin of the ' + sd.label + ' wall, percent'" [title]="sd.label + ' wall'" [placeholder]="sd.short" [value]="bd.ruinWalls?.[sd.k] !== undefined ? bd.ruinWalls![sd.k]! * 100 : ''" (change)="mutate(setWallRuin(sd.k), rawNum($event))" />
-                          }
-                        </span>
-                      </label>
-                    }
-                    <label class="fld" title="A basement under the ground floor: the ground is cut under the building; reach it through a void in the ground floor">basement m <input type="number" min="0" max="12" step="0.5" [value]="bd.basement?.height ?? 0" (change)="mutate(setBasement, num($event))" /></label>
-                  </div>
-                  @if (topLevel(); as tl) {
-                    <div class="sec">
-                      <div class="st">Roof</div>
-                      @if (!bd.footprint) {
-                        <label class="fld">shape <select (change)="editTop(setRoof, roofOf($event))"><option value="gable" [selected]="tl.roof === 'gable'">gable</option><option value="vault" [selected]="tl.roof === 'vault'">vault</option><option value="flat" [selected]="tl.roof === 'flat'">flat</option></select></label>
-                        <label class="fld">repeat × <input type="number" min="1" max="12" step="1" [value]="tl.roofCount ?? tl.vaultCount ?? 1" (change)="editTop(setCount, num($event))" /></label>
-                        <label class="chk span2"><input type="checkbox" [checked]="!!tl.roofTurn" (change)="editTop(setTurn, checked($event))" /> turn 90°</label>
-                      } @else {
-                        <span class="dim span2">flat (shaped building)</span>
-                      }
-                    </div>
-                  }
-                  <details class="sec mods">
-                    <summary>Modules · repeatable blocks <span class="dim small">(floor {{ levelName(level()) }})</span></summary>
-                    @for (pb of patternBlocks(); track pb.id) {
-                      <div class="row">
-                        <b [title]="pb.description ?? ''">{{ pb.name }}</b>
-                        @for (p of pb.params; track p.key) {
-                          @if (p.type === 'choice') {
-                            <select (change)="setModValue(pb.id, p.key, selValue($event))" [title]="p.label" [attr.aria-label]="p.label">
-                              @for (o of p.options ?? []; track o) {
-                                <option [value]="o" [selected]="modValue(pb, p.key) === o">{{ sideLabel(o) }}</option>
-                              }
-                            </select>
-                          } @else if (p.type !== 'bool') {
-                            <label [title]="p.label">{{ p.label.toLowerCase() }} <input type="number" [min]="p.min ?? null" [max]="p.max ?? null" [step]="p.step ?? (p.type === 'int' ? 1 : 0.5)" [value]="modValue(pb, p.key)" (change)="setModValue(pb.id, p.key, num($event))" /></label>
-                          }
-                        }
-                        <button class="btn" (click)="applyBlockPattern({ block: pb, params: modValues()[pb.id] ?? {}, rot: 0 })" [disabled]="!!bd.footprint && needsRect(pb)" [title]="(pb.description ?? '') + ' Replaces what was there; still editable one by one.'">Apply</button>
-                      </div>
-                    } @empty {
-                      <div class="dim small">No pattern blocks yet: open ▦ Library to fetch the catalogue.</div>
-                    }
-                  </details>
-                }
-                @if (selBlock(); as sb) {
-                  <div class="sec acts">
-                    <span class="dim small">From block “{{ sb.name }}” v{{ sb.ref.v }}</span>
-                    @if (sb.latest) {<button class="btn" (click)="updateSelBlock()">Update to v{{ sb.latest }}</button>}
-                    <button class="btn" (click)="detachSelBlock()" title="Keep it, forget the block">Detach</button>
-                    <button class="btn danger" (click)="removeSelBlock()" title="Remove everything this placement made">Remove placement</button>
-                  </div>
-                }
-                <div class="sec acts">
-                  <button class="btn" (click)="convertTo(bd.frame ? 'building' : 'greenhouse')" title="Rebuilds it as the other kind: the interior, openings and outline are lost">{{ bd.frame ? '→ Building' : '→ Greenhouse' }}</button>
-                  <button class="btn" (click)="duplicate()">⧉ Duplicate</button>
-                  <button class="btn danger" (click)="deleteSel()">Delete</button>
-                </div>
-              } @else {
-                <div class="dim">Click a building, tree, door or window on the map. Use the tools above to add or reshape.</div>
-              }
-            }
-          }
-        </app-float-box>
-      }
-    </div>
-
-    <div class="foot">
-      <span class="dim small grow">{{ hint() }}</span>
-      @if (mode() === 'area') {
-        <span class="grp areas" role="group" aria-label="Areas">
-          <button class="btn" (click)="studio.addArea()" title="Keep this framed area and frame another one: they are generated together">＋ Add area</button>
-          @for (a of studio.areas(); track $index) {
-            <span class="chip">Area {{ $index + 1 }} <button class="x" (click)="studio.removeArea($index)" [attr.aria-label]="'Remove area ' + ($index + 1)" title="Remove this area">✕</button></span>
-          }
-          @if (studio.areas().length) {
-            <label class="lay" title="On: one bando covering the areas and the ground between them. Off: only what is inside each area."><input type="checkbox" [checked]="studio.fillGaps()" (change)="studio.fillGaps.set(checked($event))" /> fill the gaps</label>
-          }
-        </span>
-        <button class="btn" (click)="setServer()" title="Use your own OpenStreetMap data server (e.g. the PHP proxy) instead of the public ones">Data server…</button>
-        <button class="btn primary" (click)="generate()" [disabled]="studio.busy()" data-tour="generate">{{ studio.busy() ? 'Building…' : studio.isNew() ? 'Generate 3D' : 'Regenerate 3D' }}</button>
-      }
-    </div>
-  `,
-  styles: `
-    :host {
-      display: flex;
-      flex-direction: column;
-      flex: 1 1 auto;
-      min-height: 0;
-      gap: 4px;
-    }
-    .bar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      align-items: center;
-    }
-    .seg {
-      display: inline-flex;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      overflow: hidden;
-    }
-    .seg button {
-      background: none;
-      border: 0;
-      padding: 3px 9px;
-      cursor: pointer;
-      color: var(--dim);
-    }
-    .seg button.on {
-      background: var(--accent);
-      color: var(--accent-ink);
-      font-weight: 700;
-    }
-    .sp {
-      flex: 1;
-    }
-    /* the palette and its options share one stacking order with the float boxes (ui/stacking.ts): last clicked on top */
-    .palette {
-      position: absolute;
-      left: 8px;
-      top: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      padding: 4px;
-      background: var(--panel-solid);
-      border: 1px solid var(--line);
-      border-radius: 9px;
-    }
-    .pg {
-      position: relative;
-    }
-    /* the corner mark that says "more tools here" */
-    .tri {
-      position: absolute;
-      right: 1px;
-      bottom: 1px;
-      width: 10px;
-      height: 10px;
-      clip-path: polygon(100% 0, 100% 100%, 0 100%);
-      background: var(--dim);
-    }
-    .tri:hover {
-      background: var(--text);
-    }
-    .fly {
-      position: absolute;
-      left: calc(100% + 6px);
-      top: 0;
-      z-index: 1260;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      min-width: 150px;
-      padding: 4px;
-      background: var(--panel-solid);
-      border: 1px solid var(--line);
-      border-radius: 9px;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
-    }
-    .fbtn {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 5px 8px;
-      white-space: nowrap;
-      color: var(--text, #e8efe9);
-      background: none;
-      border: 1px solid transparent;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    .fbtn:hover {
-      background: rgba(255, 255, 255, 0.08);
-    }
-    .fbtn.on {
-      background: rgba(255, 255, 255, 0.13);
-      border-color: var(--tc);
-    }
-    .ctx {
-      position: absolute;
-      z-index: 9000;
-      display: flex;
-      flex-direction: column;
-      min-width: 170px;
-      padding: 4px;
-      background: var(--panel-solid);
-      border: 1px solid var(--line);
-      border-radius: 9px;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-    }
-    .ctx button {
-      text-align: left;
-      padding: 5px 10px;
-      color: var(--text, #e8efe9);
-      background: none;
-      border: 0;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    .ctx button:hover {
-      background: rgba(255, 255, 255, 0.1);
-    }
-    .ctx button.danger {
-      color: #ff8a8a;
-    }
-    .ctx .head {
-      padding: 3px 10px;
-      font-size: 10px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--dim);
-    }
-    .pbtn {
-      position: relative;
-      width: 32px;
-      height: 32px;
-      display: grid;
-      place-items: center;
-      padding: 0;
-      font-size: 16px;
-      line-height: 1;
-      color: var(--text, #e8efe9);
-      background: none;
-      border: 1px solid transparent;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    .pbtn::after {
-      content: '';
-      position: absolute;
-      right: 3px;
-      bottom: 3px;
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--tc);
-    }
-    .pbtn:hover {
-      background: rgba(255, 255, 255, 0.08);
-    }
-    .pbtn.on {
-      background: rgba(255, 255, 255, 0.13);
-      border-color: var(--tc);
-    }
-    /* the handle that moves a toolbar */
-    .tgrip {
-      display: grid;
-      place-items: center;
-      height: 14px;
-      color: var(--dim);
-      cursor: grab;
-      touch-action: none;
-      font-size: 11px;
-      line-height: 1;
-    }
-    .tgrip:hover {
-      color: var(--text);
-    }
-    .opts .tgrip {
-      height: auto;
-      padding: 0 2px;
-    }
-    .psep {
-      display: block;
-      height: 1px;
-      margin: 3px 2px;
-      background: var(--line);
-    }
-    .opts {
-      /* left / right / top are bound: beside the active tool, or where it was dragged */
-      position: absolute;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 4px 10px;
-      padding: 4px 8px;
-      font-size: 12px;
-      background: var(--panel-solid);
-      border: 1px solid var(--line);
-      border-radius: 9px;
-    }
-    .grp {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      flex-wrap: wrap;
-    }
-    input.mini {
-      width: 54px;
-    }
-    .ov.cap.placing .hit {
-      pointer-events: none;
-    }
-    .ov.indoor .out {
-      opacity: 0.22;
-      pointer-events: none;
-    }
-    .lay {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 11px;
-    }
-    .lay input[type='range'] {
-      width: 56px;
-    }
-    .wrap {
-      position: relative;
-      /* dragging on the plan must never select the labels under the pointer */
-      user-select: none;
-      -webkit-user-select: none;
-      flex: 1 1 auto;
-      min-height: 240px;
-      border-radius: 6px;
-      overflow: hidden;
-      background: #0a0f0c;
-      outline: none;
-    }
-    .map {
-      position: absolute;
-      inset: 0;
-    }
-    .wrap.v3 .map {
-      visibility: hidden;
-    }
-    .ov {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 700;
-      pointer-events: none;
-      touch-action: none;
-    }
-    .ov.cap {
-      pointer-events: auto;
-      cursor: crosshair;
-    }
-    .ov.cap.sel {
-      cursor: default;
-    }
-    .ov .hit {
-      pointer-events: auto;
-      cursor: pointer;
-    }
-    .ov .rotk {
-      cursor: grab;
-    }
-    .section {
-      flex: 1 1 100%;
-      width: 100%;
-      height: auto;
-      background: #0a0f0c;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-    }
-    /* surfaces and water are picked by their edge only: a click inside them still pans the map or selects what is on them */
-    .ov .hit.edge {
-      pointer-events: visibleStroke;
-      stroke-linejoin: round;
-    }
-    .frame {
-      position: absolute;
-      z-index: 700;
-      pointer-events: none;
-      border: 2px dashed var(--accent);
-      box-shadow: 0 0 0 9999px rgba(8, 14, 10, 0.5);
-    }
-    .h {
-      position: absolute;
-      pointer-events: auto;
-      touch-action: none;
-    }
-    .h.n, .h.s { left: 12px; right: 12px; height: 14px; cursor: ns-resize; }
-    .h.e, .h.w { top: 12px; bottom: 12px; width: 14px; cursor: ew-resize; }
-    .h.n { top: -8px; } .h.s { bottom: -8px; }
-    .h.e { right: -8px; } .h.w { left: -8px; }
-    .h.nw, .h.ne, .h.sw, .h.se { width: 18px; height: 18px; background: var(--accent); border-radius: 3px; border: 2px solid #12200b; }
-    .h.nw { top: -10px; left: -10px; cursor: nwse-resize; }
-    .h.se { bottom: -10px; right: -10px; cursor: nwse-resize; }
-    .h.ne { top: -10px; right: -10px; cursor: nesw-resize; }
-    .h.sw { bottom: -10px; left: -10px; cursor: nesw-resize; }
-    .rotk {
-      position: absolute;
-      left: 50%;
-      top: -30px;
-      width: 16px;
-      height: 16px;
-      margin-left: -8px;
-      border-radius: 50%;
-      background: #ffd166;
-      border: 2px solid #12200b;
-      cursor: grab;
-      pointer-events: auto;
-      touch-action: none;
-    }
-    .search {
-      position: absolute;
-      z-index: 1100;
-      top: 8px;
-      left: 8px;
-      right: 56px;
-      display: flex;
-      gap: 6px;
-    }
-    .search input {
-      flex: 1;
-    }
-    .hits {
-      position: absolute;
-      z-index: 1100;
-      top: 40px;
-      left: 8px;
-      right: 56px;
-      max-height: 40%;
-      overflow: auto;
-      background: var(--panel-solid);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      display: flex;
-      flex-direction: column;
-    }
-    .hits button {
-      background: none;
-      border: 0;
-      border-bottom: 1px solid var(--line);
-      text-align: left;
-      padding: 5px 8px;
-      cursor: pointer;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .hits button:hover {
-      background: #31443a;
-    }
-    .compass {
-      position: absolute;
-      z-index: 1100;
-      right: 8px;
-      top: 8px;
-      width: 46px;
-      height: 46px;
-      pointer-events: none;
-    }
-    .spin {
-      display: inline-block;
-      width: 11px;
-      height: 11px;
-      border: 2px solid var(--dim);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      vertical-align: -1px;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-    .read {
-      position: absolute;
-      z-index: 1100;
-      left: 50%;
-      bottom: 12px;
-      transform: translateX(-50%);
-      background: rgba(10, 16, 12, 0.85);
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 2px 10px;
-      font: 600 12px var(--mono);
-      pointer-events: none;
-    }
-    .read.warn {
-      color: var(--warn);
-      border-color: var(--warn);
-    }
-    .notice {
-      position: absolute;
-      z-index: 1100;
-      left: 12px;
-      right: 12px;
-      top: 12px;
-      background: var(--panel-solid);
-      border: 1px solid var(--warn);
-      border-radius: 8px;
-      padding: 8px 10px;
-    }
-    .foot {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    .chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 1px 4px 1px 8px;
-      border: 1px dashed #ffd166;
-      border-radius: 9px;
-      font-size: 11px;
-    }
-    .chip .x {
-      background: none;
-      border: 0;
-      color: var(--dim);
-      cursor: pointer;
-      padding: 0 2px;
-    }
-    .chip .x:hover {
-      color: var(--text);
-    }
-    .f {
-      display: flex;
-      flex: 0 1 auto;
-      flex-wrap: wrap;
-      gap: 4px 8px;
-      align-items: center;
-    }
-    .f > label {
-      min-width: 0;
-    }
-    .f input[type='text'] {
-      min-width: 0;
-      flex: 1;
-    }
-    .f label {
-      display: inline-flex;
-      gap: 4px;
-      align-items: center;
-    }
-    .f input[type='number'] {
-      width: 64px;
-    }
-    .mods {
-      padding-top: 6px;
-    }
-    .mods summary {
-      cursor: pointer;
-    }
-    /* inspector sections: a caption, then fields two to a row */
-    .sec {
-      flex: 1 1 100%;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 4px 8px;
-      align-items: end;
-      padding-top: 6px;
-      border-top: 1px solid var(--line);
-    }
-    .sec > .st {
-      grid-column: 1 / -1;
-      font-size: 10px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--dim);
-    }
-    .sec .span2,
-    .sec .row {
-      grid-column: 1 / -1;
-    }
-    .sec .row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px 6px;
-      align-items: center;
-    }
-    .walls {
-      display: flex;
-      gap: 3px;
-      input {
-        width: 36px;
-      }
-    }
-    .fld {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      font-size: 11px;
-      color: var(--dim);
-      min-width: 0;
-    }
-    .fld input,
-    .fld select {
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .chk {
-      display: inline-flex;
-      gap: 6px;
-      align-items: center;
-    }
-    .sec.acts {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    details.sec.mods {
-      display: block;
-    }
-    .btn.cur:not(.on) {
-      border-color: var(--accent);
-    }
-  `,
+  templateUrl: './bando-editor.html',
+  styleUrl: './bando-editor.scss',
 })
 export class BandoEditor {
   protected readonly studio = inject(StudioService);
@@ -1513,27 +141,18 @@ export class BandoEditor {
     { mode: 'circle', icon: 'areaCircle', name: 'Tree area · circle' },
     { mode: 'lasso', icon: 'lasso', name: 'Tree area · lasso' },
   ];
-  private static readonly TERRAIN: readonly { op: TerrainOp; icon: string; name: string }[] = [
-    { op: 'raise', icon: 'terrainRaise', name: 'Terrain · raise' },
-    { op: 'lower', icon: 'terrainLower', name: 'Terrain · lower' },
-    { op: 'smooth', icon: 'terrainSmooth', name: 'Terrain · smooth' },
-    { op: 'flatten', icon: 'terrainFlatten', name: 'Terrain · flatten' },
-    { op: 'hill', icon: 'terrainHill', name: 'Terrain · hill' },
-    { op: 'crater', icon: 'terrainCrater', name: 'Terrain · crater' },
-    { op: 'ramp', icon: 'ramp', name: 'Terrain · ramp' },
-  ];
   /** Every tool on offer right now, with the brush expanded to its shapes. */
   protected readonly entries = computed<Entry[]>(() =>
     this.visibleTools().flatMap((t): Entry[] =>
       t.id === 'scatter'
         ? BandoEditor.SCATTER.map((m) => ({ key: `scatter:${m.mode}`, tool: t.id, mode: m.mode, icon: m.icon, name: m.name, color: t.color, hint: t.hint, group: t.group }))
         : t.id === 'terrain'
-          ? BandoEditor.TERRAIN.map((m) => ({ key: `terrain:${m.op}`, tool: t.id, op: m.op, icon: m.icon, name: m.name, color: t.color, hint: t.hint, group: t.group }))
+          ? TERRAIN_OPS.map((m) => ({ key: `terrain:${m.op}`, tool: t.id, op: m.op, icon: m.icon, name: m.name, color: t.color, hint: t.hint, group: t.group }))
           : [{ key: t.id, tool: t.id, icon: t.icon, name: t.name, color: t.color, hint: t.hint, group: t.group, sep: t.sep }],
     ),
   );
   private entryOn(e: Entry): boolean {
-    return this.tool() === e.tool && (!e.mode || this.scatterMode() === e.mode) && (!e.op || this.terrainOp() === e.op);
+    return this.tool() === e.tool && (!e.mode || this.scatterMode() === e.mode) && (!e.op || this.terrain.op() === e.op);
   }
   /** The palette: one button per group (like a paint program), showing the active tool of the group or the last one used. The rest sit in a flyout. */
   protected readonly groups = computed(() => {
@@ -1644,7 +263,7 @@ export class BandoEditor {
     if (def?.needsBuilding && (!this.b() || this.b()!.frame)) this.toast.show(this.b()?.frame ? `${e.name} does not work on a greenhouse.` : `${e.name}: select a building first, then use it.`);
     this.groupCur.update((g) => ({ ...g, [e.group]: e.key }));
     if (e.mode) this.scatterMode.set(e.mode);
-    if (e.op) this.terrainOp.set(e.op);
+    if (e.op) this.terrain.op.set(e.op);
     this.setTool(e.tool);
     this.fly.set(null);
   }
@@ -1691,8 +310,6 @@ export class BandoEditor {
   protected readonly colN = signal(4);
   protected readonly colS = signal(4);
   protected readonly colAxis = signal<'x' | 'z'>('x');
-  /** The pointer on the map while the measure tool waits for its second point (the live line). */
-  protected readonly measHover = signal<Pt | null>(null);
   protected readonly tool = signal<Tool>('select');
   /** What the Structure tool places, and what the Building tool draws. */
   protected readonly structKind = signal<StructureKind>('chimney');
@@ -1887,313 +504,11 @@ export class BandoEditor {
     this.applyNow();
   }
 
-  // ---- ground layers: roads, surfaces, water ----
-  protected readonly roadKind = signal<RoadKind>('road');
-  protected readonly roadWidth = signal(6);
-  protected readonly surfaceKind = signal<SurfaceKind>('asphalt');
-  protected readonly waterDepth = signal(1.5);
-  /** Water is drawn as an outline (a pond) or along a centre line `waterWidth` wide (a canal). */
-  protected readonly waterMode = signal<'outline' | 'line'>('outline');
-  protected readonly waterWidth = signal(8);
-  protected readonly roadOptions: readonly PickOption[] = ROADS.map((r) => ({ id: r.id, label: r.label, icon: ROAD_ICON[r.id], hint: `${r.width} m wide by default` }));
-  protected readonly surfaceOptions: readonly PickOption[] = SURFACES.map((x) => ({ id: x.id, label: x.label, icon: SURFACE_ICON[x.id] }));
-  protected readonly roadSurfaceOptions: readonly PickOption[] = [{ id: '', label: 'As its kind', icon: 'road' }, ...this.surfaceOptions];
-  protected asRoad = (v: string): RoadKind => roadDef(v as RoadKind).id;
-  protected asSurface = (v: string): SurfaceKind => surfaceDef(v as SurfaceKind).id;
-  protected roadColor = (r: RoadSpec): string => (r.surface ? surfaceDef(r.surface).color : roadDef(r.kind).color);
-  protected surfColor = (k: SurfaceKind): string => surfaceDef(k).color;
-  protected readonly waterColor = WATER_COLOR;
-  protected polyPts = (pts: readonly Pt[]): string => pts.map((q) => `${q.x},${q.z}`).join(' ');
-  /** The line / outline being drawn with a layer tool. */
-  protected readonly layerPreview = computed(() => {
-    const d = this.drag();
-    return d?.t === 'layer' ? this.polyPts(d.pts) : '';
-  });
-  protected setRoadKind(k: RoadKind): void {
-    this.roadKind.set(k);
-    this.roadWidth.set(roadDef(k).width);
-  }
-  /** A finished drag: a road along it, or a surface / water inside it (one undo step). */
-  private commitLayer(raw: Pt[]): void {
-    const t = this.tool();
-    const pts = simplifyPath(raw, Math.max(0.3, 3 / this.ppm()));
-    if (t === 'road') {
-      if (pts.length < 2 || Math.hypot(pts[pts.length - 1]!.x - pts[0]!.x, pts[pts.length - 1]!.z - pts[0]!.z) < 2) return void this.toast.show('Drag along the way to draw a road.');
-      this.ed.commitSite((s) => void (s.roads ??= []).push({ pts, width: this.roadWidth(), kind: this.roadKind() }));
-      this.pick.set({ t: 'road', i: (this.ed.draft().roads?.length ?? 1) - 1 });
-    } else {
-      const line = t === 'water' && this.waterMode() === 'line';
-      if (line && (pts.length < 2 || Math.hypot(pts[pts.length - 1]!.x - pts[0]!.x, pts[pts.length - 1]!.z - pts[0]!.z) < 2)) return void this.toast.show('Drag along the course of the canal.');
-      if (!line && pts.length < 3) return void this.toast.show('Draw a loop: the outline of the area.');
-      if (line) pts.splice(0, pts.length, ...stripOutline(pts, this.waterWidth()));
-      if (t === 'surface') {
-        this.ed.commitSite((s) => void (s.surfaces ??= []).push({ pts, kind: this.surfaceKind() }));
-        this.pick.set({ t: 'surface', i: (this.ed.draft().surfaces?.length ?? 1) - 1 });
-      } else {
-        this.ed.commitSite((s) => {
-          s.terrain ??= defaultTerrain(s.extent); // a basin is dug into the ground: the ground must be a terrain
-          (s.waters ??= []).push({ pts, depth: this.waterDepth() });
-        });
-        this.pick.set({ t: 'water', i: (this.ed.draft().waters?.length ?? 1) - 1 });
-      }
-    }
-    this.applyNow();
-  }
-  /** Join the selected water with the water it overlaps (one undo step). */
-  protected mergeWater(): void {
-    const p = this.pick();
-    if (p?.t !== 'water') return;
-    const r = mergeWaters(this.ed.draft().waters ?? [], p.i);
-    if (!r) return void this.toast.show('It does not overlap or touch any other water.');
-    this.ed.commitSite((s) => void (s.waters = r.waters));
-    this.pick.set({ t: 'water', i: r.index });
-    this.applyNow();
-    this.toast.show('Water merged.');
-  }
-  protected readonly roadSel = computed(() => {
-    const p = this.pick();
-    return p?.t === 'road' ? (this.ed.draft().roads?.[p.i] ?? null) : null;
-  });
-  protected readonly surfaceSel = computed(() => {
-    const p = this.pick();
-    return p?.t === 'surface' ? (this.ed.draft().surfaces?.[p.i] ?? null) : null;
-  });
-  protected readonly waterSel = computed(() => {
-    const p = this.pick();
-    return p?.t === 'water' ? (this.ed.draft().waters?.[p.i] ?? null) : null;
-  });
-  protected isPicked = (t: 'road' | 'surface' | 'water', i: number): boolean => {
-    const p = this.pick();
-    return p?.t === t && p.i === i;
-  };
-  /** Edit the selected road / surface / water (one undo step). */
-  protected setLayer(patch: { kind?: RoadKind | SurfaceKind; width?: number; surface?: SurfaceKind; depth?: number; level?: number }): void {
-    const p = this.pick();
-    if (p?.t !== 'road' && p?.t !== 'surface' && p?.t !== 'water') return;
-    this.ed.commitSite((s) => {
-      const list: object[] | undefined = p.t === 'road' ? s.roads : p.t === 'surface' ? s.surfaces : s.waters;
-      const x = list?.[p.i] as Record<string, unknown> | undefined;
-      if (!x) return;
-      for (const [k, v] of Object.entries(patch)) {
-        if (v === undefined) delete x[k];
-        else x[k] = v;
-      }
-    });
-    this.applyNow();
-  }
-  protected layerDown(e: PointerEvent, t: 'road' | 'surface' | 'water', i: number): void {
-    const tool = this.tool();
-    if (tool !== 'select') return this.bgDown(e);
-    e.stopPropagation();
-    this.capture(e);
-    this.pick.set({ t, i });
-  }
-  protected roadLen = (r: RoadSpec): number => r.pts.slice(1).reduce((a, q, i) => a + Math.hypot(q.x - r.pts[i]!.x, q.z - r.pts[i]!.z), 0);
-
-  // ---- underground: tunnels and rooms ----
-  protected readonly underKind = signal<'tunnel' | 'room'>('tunnel');
-  protected readonly underWidth = signal(4);
-  protected readonly underHeight = signal(3.5);
-  protected readonly underDepth = signal(1);
-  protected readonly underShape = signal<UndergroundSpec['shape']>('box');
-  protected readonly underKindOptions: readonly PickOption[] = [
-    { id: 'tunnel', label: 'Tunnel', icon: 'tunnel', hint: 'Drag from end to end' },
-    { id: 'room', label: 'Room', icon: 'bunker', hint: 'Drag a rectangle (bunker, basement)' },
-  ];
-  protected readonly underShapeOptions: readonly PickOption[] = [
-    { id: 'box', label: 'Box', icon: 'culvertBox', hint: 'Concrete box section' },
-    { id: 'pipe', label: 'Pipe', icon: 'culvertPipe', hint: 'Round culvert' },
-    { id: 'vault', label: 'Vault', icon: 'culvertVault', hint: 'Brick vault' },
-  ];
-  protected asUnderShape = (v: string): UndergroundSpec['shape'] => (v === 'pipe' || v === 'vault' ? v : 'box');
-  /** The outline being dragged (site metres) as SVG points. */
-  protected readonly underPreview = computed(() => {
-    const d = this.drag();
-    if (d?.t !== 'under') return '';
-    return this.polyPts(this.underOutline(d.a, d.b));
-  });
-  private underOutline(a: Pt, b: Pt): Pt[] {
-    if (this.underKind() === 'tunnel') return tunnelOutline(a, b, this.underWidth());
-    return [a, { x: b.x, z: a.z }, b, { x: a.x, z: b.z }];
-  }
-  private commitUnder(a: Pt, b: Pt): void {
-    const room = this.underKind() === 'room';
-    if (room ? Math.abs(b.x - a.x) < 2 || Math.abs(b.z - a.z) < 2 : Math.hypot(b.x - a.x, b.z - a.z) < 3) return void this.toast.show(room ? 'Drag a rectangle at least 2 m each way.' : 'Drag from one end of the tunnel to the other.');
-    const n = (this.ed.draft().underground?.length ?? 0) + 1;
-    const g = this.ground();
-    const v: UndergroundSpec = room
-      ? { id: uid('ug'), name: `Room ${n}`, outline: this.underOutline(a, b), floor: Math.round((Math.min(g.at(a.x, a.z), g.at(b.x, b.z)) - this.underDepth() - this.underHeight()) * 10) / 10, ceiling: 0, shape: 'box', wall: 0.4 }
-      : newTunnel(g.grid, a, b, { width: this.underWidth(), height: this.underHeight(), depth: this.underDepth(), shape: this.underShape(), id: uid('ug'), name: `Tunnel ${n}` });
-    if (room) v.ceiling = v.floor + this.underHeight();
-    this.ed.commitSite((s) => {
-      s.terrain ??= defaultTerrain(s.extent); // the ground must be a terrain to be cut where the tunnel opens
-      (s.underground ??= []).push(v);
-    });
-    this.pick.set({ t: 'under', i: n - 1 });
-    this.applyNow();
-    this.toast.show(`${v.name}: floor ${v.floor} m, ceiling ${v.ceiling} m. It is open where the ground is between them (dark on the plan); deeper ground covers it.`, 4000);
-  }
-  protected readonly underSel = computed(() => {
-    const p = this.pick();
-    return p?.t === 'under' ? (this.ed.draft().underground?.[p.i] ?? null) : null;
-  });
-  /** The side view of the selected volume, scaled into a 260 × 96 drawing: ground line, and its inside as a box. */
-  protected readonly underSection = computed(() => {
-    const u = this.underSel();
-    if (!u) return null;
-    const p = sectionProfile(u, this.ground().at, 64);
-    const top = Math.max(...p.ground, p.ceiling + p.wall) + 1, bottom = Math.min(...p.ground, p.floor - p.wall) - 1;
-    const W = 252, H = 80, sx = W / p.len, sy = H / Math.max(1, top - bottom);
-    const X = (t: number): number => 4 + t * sx, Y = (h: number): number => 8 + (top - h) * sy;
-    const pts = p.ground.map((h, i) => `${X((p.len * i) / (p.ground.length - 1)).toFixed(1)},${Y(h).toFixed(1)}`);
-    const pad = (p.len - (tunnelAxis(u) ? Math.hypot(tunnelAxis(u)!.b.x - tunnelAxis(u)!.a.x, tunnelAxis(u)!.b.z - tunnelAxis(u)!.a.z) : p.len)) / 2;
-    return {
-      ground: 'M' + pts.join('L'),
-      groundFill: 'M' + pts.join('L') + `L${X(p.len)},${8 + H}L${X(0)},${8 + H}Z`,
-      x0: X(Math.max(0, pad)), x1: X(p.len - Math.max(0, pad)), ceil: Y(p.ceiling), floor: Y(p.floor), top, bottom, len: p.len,
-    };
-  });
-  protected setUnder(patch: Partial<UndergroundSpec>): void {
-    const p = this.pick();
-    if (p?.t !== 'under') return;
-    this.ed.commitSite((s) => {
-      const v = s.underground?.[p.i];
-      if (!v) return;
-      Object.assign(v, patch);
-      if (v.ceiling < v.floor + 0.8) v.ceiling = v.floor + 0.8;
-    });
-    this.applyNow();
-  }
-  protected underDown(e: PointerEvent, i: number): void {
-    if (this.tool() !== 'select') return this.bgDown(e);
-    e.stopPropagation();
-    this.capture(e);
-    this.pick.set({ t: 'under', i });
-  }
-  /** Where the ground is cut by underground volumes (the openings), as one SVG path of grid cells. */
-  protected readonly cutCells = computed(() => {
-    const g = this.ground();
-    if (!g.grid || !g.cut) return '';
-    const out: string[] = [];
-    const c = g.grid.cell;
-    for (let k = 0; k < g.cut.length; k++) {
-      if (!g.cut[k]) continue;
-      const i = k % g.grid.nx, j = (k - i) / g.grid.nx;
-      out.push(`M${g.grid.x0 + i * c - c / 2} ${g.grid.z0 + j * c - c / 2}h${c}v${c}h${-c}Z`);
-    }
-    return out.join('');
-  });
-
-  // ---- terrain brushes ----
-  /** How the terrain is drawn in 3D (and, as a height map, under the 2D plan). */
-  protected readonly groundStyle = signal<GroundStyle>('natural');
-  protected asGroundStyle = (e: Event): GroundStyle => {
-    const v = (e.target as HTMLSelectElement).value;
-    return v === 'height' || v === 'wire' ? v : 'natural';
-  };
-  /** The brush ring in the 3D view while a terrain tool is active. */
-  protected readonly cursor3d = computed(() => {
-    const h = this.hover();
-    if (!h || !this.view3d() || this.tool() !== 'terrain') return null;
-    return { x: h.x, z: h.z, r: this.terrainOp() === 'ramp' ? this.terrRadius() / 2 : this.terrRadius(), color: this.tc('terrain') };
-  });
-  /** The height map under the 2D plan: one pixel per two grid cells, as an image over the grid's extent. */
-  protected readonly heightImage = computed(() => {
-    const g = this.ground().grid;
-    if (!g || this.groundStyle() !== 'height') return null;
-    const step = 2, w = Math.ceil(g.nx / step), h = Math.ceil(g.nz / step);
-    const c = document.createElement('canvas');
-    c.width = w;
-    c.height = h;
-    const cx = c.getContext('2d');
-    if (!cx) return null;
-    const img = cx.createImageData(w, h);
-    const { lo, hi } = heightRange(g);
-    for (let j = 0; j < h; j++) {
-      for (let i = 0; i < w; i++) {
-        const [r, gg, b] = heightColor(g.h[Math.min(g.nz - 1, j * step) * g.nx + Math.min(g.nx - 1, i * step)]!, lo, hi);
-        const k = (j * w + i) * 4;
-        img.data[k] = r * 255;
-        img.data[k + 1] = gg * 255;
-        img.data[k + 2] = b * 255;
-        img.data[k + 3] = 170;
-      }
-    }
-    cx.putImageData(img, 0, 0);
-    return { href: c.toDataURL(), x: g.x0, z: g.z0, w: (g.nx - 1) * g.cell, d: (g.nz - 1) * g.cell };
-  });
-  protected readonly terrainOp = signal<TerrainOp>('raise');
-  protected readonly terrRadius = signal(8);
-  protected readonly terrStrength = signal(2);
-  protected readonly terrFalloff = signal<Falloff>('smooth');
-  protected readonly terrOpOptions: readonly PickOption[] = BandoEditor.TERRAIN.map((t) => ({ id: t.op, label: t.op[0]!.toUpperCase() + t.op.slice(1), icon: t.icon }));
-  protected readonly falloffOptions: readonly PickOption[] = [
-    { id: 'smooth', label: 'Soft edge', icon: 'terrainHill', hint: 'Rounded, natural' },
-    { id: 'linear', label: 'Straight edge', icon: 'ramp', hint: 'A steady slope to the rim' },
-    { id: 'flat', label: 'Hard edge', icon: 'terrainFlatten', hint: 'Full strength almost to the rim' },
-  ];
-  protected asOp = (v: string): TerrainOp => BandoEditor.TERRAIN.find((t) => t.op === v)?.op ?? 'raise';
-  protected asFalloff = (v: string): Falloff => (v === 'linear' || v === 'flat' ? v : 'smooth');
-  /** What "strength" means for the current operation, for its label. */
-  protected readonly terrStrengthLabel = computed(() => ({ raise: 'up', lower: 'down', smooth: 'amount %', flatten: '', hill: 'height', crater: 'depth', ramp: 'rise' })[this.terrainOp()]);
+  // ---- tool controllers: a tool's own options, previews and edits (editor/) ----
   /** The ground the editor shows (contours, the height under the pointer): the draft's terrain, same cache as the 3D model. */
   private readonly ground = computed(() => siteGround(this.ed.draft()));
-  private contourCache: { grid: unknown; out: { minor: string; major: string } } | null = null;
-  protected readonly contours = computed(() => {
-    const g = this.ground().grid;
-    if (!g) return null;
-    if (this.contourCache?.grid !== g) this.contourCache = { grid: g, out: contourPaths(g) };
-    return this.contourCache.out;
-  });
-  /** Height of the ground under the pointer while a terrain tool is active. */
-  protected readonly groundUnder = computed(() => {
-    const h = this.hover();
-    return this.tool() === 'terrain' && h ? this.ground().at(h.x, h.z) : null;
-  });
-  /** The stroke being painted, as an SVG path, and the brush footprint under the pointer. */
-  protected readonly terrPreview = computed(() => {
-    const d = this.drag();
-    const pts = d?.t === 'terrain' ? d.pts : [];
-    return pts.length > 1 ? 'M' + pts.map((q) => `${q.x} ${q.z}`).join('L') : '';
-  });
-  /** Turn a finished drag into a stroke on the spec (the terrain is created flat on first use). */
-  private commitTerrain(pts: Pt[], h0: number): void {
-    const op = this.terrainOp(), r = this.terrRadius(), k = this.terrStrength();
-    let stroke: TerrainStroke;
-    if (op === 'hill' || op === 'crater') stroke = { op, pts: [pts[0]!], radius: r, strength: Math.abs(k), falloff: this.terrFalloff() };
-    else if (op === 'ramp') {
-      if (pts.length < 2 || Math.hypot(pts[1]!.x - pts[0]!.x, pts[1]!.z - pts[0]!.z) < 2) {
-        this.toast.show('Drag from the foot of the ramp to its top.');
-        return;
-      }
-      stroke = { op, pts: [pts[0]!, pts[pts.length - 1]!], radius: r / 2, strength: k };
-    } else if (op === 'smooth') stroke = { op, pts, radius: r, strength: Math.min(1, Math.max(0.05, k / 100)), falloff: this.terrFalloff() };
-    else if (op === 'flatten') stroke = { op, pts, radius: r, strength: 1, height: Math.round(h0 * 10) / 10, falloff: this.terrFalloff() };
-    else stroke = { op, pts, radius: r, strength: Math.abs(k), falloff: this.terrFalloff() };
-    this.ed.commitSite((s) => {
-      s.terrain ??= defaultTerrain(s.extent);
-      s.terrain.strokes.push(stroke);
-    });
-    this.applyNow();
-  }
-  protected readonly loadingGround = signal(false);
-  protected async realGround(): Promise<void> {
-    this.loadingGround.set(true);
-    try {
-      await this.site.loadRealGround();
-    } finally {
-      this.loadingGround.set(false);
-    }
-  }
-  /** Back to flat ground (one undo step). */
-  protected clearTerrain(): void {
-    if (!this.ed.draft().terrain?.strokes.length) return;
-    this.ed.commitSite((s) => {
-      if (s.terrain) s.terrain.strokes = [];
-    });
-    this.applyNow();
-    this.toast.show('Terrain strokes removed. Undo brings them back.');
-  }
+  protected readonly polyPts = polyPts;
+
   protected readonly scatterMode = signal<ScatterMode>('pen');
   protected readonly scatterSpacing = signal(5);
   protected readonly scatterWidth = signal(10);
@@ -2238,42 +553,6 @@ export class BandoEditor {
     return poly.map((q) => `${q.x},${q.z}`).join(' ');
   });
   protected readonly pinMode = this.scene.pin;
-  /** Finished measures, the open end of the one being drawn (`a`) and where the chain began (`start`, to close a loop). */
-  protected readonly meas = signal<{ segs: Seg[]; a: Pt | null; start: Pt | null }>({ segs: [], a: null, start: null });
-  protected readonly measSel = signal<number | null>(null);
-  protected readonly measSelSeg = computed(() => (this.tool() === 'measure' && !this.meas().a ? (this.meas().segs[this.measSel() ?? -1] ?? null) : null));
-  /** Measure lines only take the pointer while no chain is open (then a click always adds a point). */
-  protected readonly measHit = computed(() => (this.tool() === 'measure' && !this.meas().a ? 'stroke' : 'none'));
-  /** What the pointer is magnetised to while measuring ('corner', 'tree' ...), or ''. */
-  protected readonly measSnap = signal('');
-  /** The angle arcs: radius 34 px, but never more than a third of the shorter arm. */
-  protected readonly measArcs = computed(() => {
-    const segs = this.meas().segs, r0 = 34 / Math.max(0.01, this.ppm());
-    return anglesAt(segs).map((a) => {
-      const arm = Math.min(Math.hypot(segs[a.i]!.b.x - segs[a.i]!.a.x, segs[a.i]!.b.z - segs[a.i]!.a.z), Math.hypot(segs[a.j]!.b.x - segs[a.j]!.a.x, segs[a.j]!.b.z - segs[a.j]!.a.z));
-      return { ...arcOf(a.at, a.d1, a.d2, Math.min(r0, arm / 3)), deg: a.deg };
-    });
-  });
-  /** A measure's label: its plan length, and on a terrain the height difference and the length along the ground. */
-  protected fmt = (m: Seg): string => {
-    const flat = lengthOf(m);
-    const g = this.ground();
-    if (!g.grid) return fmtLength(flat);
-    const p = groundProfile(m, g.at);
-    if (Math.abs(p.dh) < 0.05 && p.along - flat < 0.05) return fmtLength(flat);
-    return `${fmtLength(flat)} · ${p.dh >= 0 ? '↑' : '↓'}${Math.abs(p.dh).toFixed(1)} m · ${fmtLength(p.along)} on the ground`;
-  };
-  /** Where a measure click or hover lands: magnet to elements within ~10 px, else straightened against the building axes. */
-  private measPoint(raw: Pt): Pt {
-    const m = this.meas();
-    const snap = nearestSnap(snapTargets(this.ed.draft(), m.segs), raw, 10 / Math.max(0.01, this.ppm()));
-    if (snap) {
-      this.measSnap.set(snap.kind);
-      return snap.pt;
-    }
-    this.measSnap.set('');
-    return m.a ? orthoSnap(m.a, raw, this.b()?.rotDeg ?? 0, 2.5) : raw;
-  }
   protected query = '';
   protected readonly hits = signal<LocationInfo[]>([]);
   protected readonly searching = signal(false);
@@ -2561,11 +840,11 @@ export class BandoEditor {
     if (t === 'column') return 'Click inside the building to place a column on this floor; drag to move.';
     if (t === 'cut' || t === 'wing') return this.b() ? `Drag a rectangle over the selected building to ${t === 'cut' ? 'cut it out' : 'add it as a wing'}.` : 'Select a building first.';
     if (t === 'tree') return 'Click to plant trees; switch to ↖ to move or delete them.';
-    if (t === 'tunnel') return (this.underKind() === 'tunnel' ? 'Drag from one end of the tunnel to the other.' : 'Drag a rectangle: a room under the ground (a bunker, a basement).') + ' It opens where the ground is between its floor and ceiling: lower the ground at its ends with Terrain to make the mouths.';
+    if (t === 'tunnel') return (this.under.kind() === 'tunnel' ? 'Drag from one end of the tunnel to the other.' : 'Drag a rectangle: a room under the ground (a bunker, a basement).') + ' It opens where the ground is between its floor and ceiling: lower the ground at its ends with Terrain to make the mouths.';
     if (t === 'road') return 'Drag along the way. Select a road to change its kind, width or surface.';
-    if (t === 'water' && this.waterMode() === 'line') return 'Drag along the course of a canal or ditch: the water follows the line at the width above. Select it (click its edge) to change it.';
+    if (t === 'water' && this.layers.waterMode() === 'line') return 'Drag along the course of a canal or ditch: the water follows the line at the width above. Select it (click its edge) to change it.';
     if (t === 'surface' || t === 'water') return `Draw the outline by hand. Select it (click its edge, or in ☰ Elements) to change it or delete it.`;
-    if (t === 'terrain') return { raise: 'Drag to raise the ground along the stroke.', lower: 'Drag to dig along the stroke.', smooth: 'Drag to soften bumps and steps.', flatten: 'Drag from a point: the ground around the stroke goes to that point\'s height.', hill: 'Click to put a hill there.', crater: 'Click to dig a crater (with a little rim).', ramp: 'Drag from the foot of the ramp to its top.' }[this.terrainOp()] + ' One stroke = one undo step.';
+    if (t === 'terrain') return { raise: 'Drag to raise the ground along the stroke.', lower: 'Drag to dig along the stroke.', smooth: 'Drag to soften bumps and steps.', flatten: 'Drag from a point: the ground around the stroke goes to that point\'s height.', hill: 'Click to put a hill there.', crater: 'Click to dig a crater (with a little rim).', ramp: 'Drag from the foot of the ramp to its top.' }[this.terrain.op()] + ' One stroke = one undo step.';
     if (t === 'scatter') return { pen: 'Drag along a path: trees are planted randomly in a strip around it.', rect: 'Drag a square: it is filled with random trees.', circle: 'Drag from the centre: a circle is filled with random trees.', lasso: 'Draw a loop freehand: it is filled with random trees.' }[this.scatterMode()];
     if (t === 'door' || t === 'window') return this.b() ? `Click a wall of “${this.b()!.name}” to add a ${t}.` : 'Select a building first.';
     if (t === 'wall') return this.b() ? 'Drag inside the building to draw an interior wall.' : 'Select a building first.';
@@ -2573,6 +852,30 @@ export class BandoEditor {
     if (this.indoor()) return `Floor ${this.levelName(this.level())}: roof off in 3D. Doors, windows, walls, voids and columns are edited here, per floor. Delete removes the selection.`;
     return 'Drag a building to move it, corners / edge squares to resize or reshape, the yellow knob to rotate. Drag the map to pan.';
   });
+
+  // the tool controllers (editor/), last so that everything they are handed exists
+  private readonly host: EditorHost = {
+    ed: this.ed,
+    site: this.site,
+    toast: this.toast,
+    pick: this.pick,
+    drag: this.drag,
+    tool: this.tool,
+    ppm: this.ppm,
+    ground: this.ground,
+    hover: this.hover,
+    view3d: this.view3d,
+    building: this.b,
+    tc: (id) => this.tc(id),
+    applyNow: () => this.applyNow(),
+    capture: (e) => this.capture(e),
+    toWorld: (e) => this.toWorld(e),
+    bgDown: (e) => this.bgDown(e),
+  };
+  protected readonly layers = new LayerTool(this.host);
+  protected readonly under = new UndergroundTool(this.host);
+  protected readonly terrain = new TerrainTool(this.host);
+  protected readonly measure = new MeasureTool(this.host);
 
   constructor() {
     afterNextRender(() => this.init());
@@ -2872,10 +1175,10 @@ export class BandoEditor {
     this.tool.set(t);
     if (t === 'wall' && this.b()) this.enterIndoor();
     if (t !== 'measure') {
-      this.meas.update((m) => ({ ...m, a: null, start: null }));
-      this.measSel.set(null);
+      this.measure.chain.update((m) => ({ ...m, a: null, start: null }));
+      this.measure.sel.set(null);
     }
-    this.measHover.set(null);
+    this.measure.hover.set(null);
   }
 
   protected toggleIndoor(): void {
@@ -2989,74 +1292,13 @@ export class BandoEditor {
     else if (t === 'tree') {
       this.ed.addTree(snap(p.x, 0.5), snap(p.z, 0.5), this.newTreeKind());
       this.applyNow();
-    } else if (t === 'measure') {
-      // click, click, click: every new point continues the chain (B of one is A of the next); the same point twice, a loop closed on its start, Esc or a right click end it
-      const m = this.meas();
-      const q = this.measPoint(p);
-      if (!m.a) {
-        this.measSel.set(null);
-        this.meas.set({ segs: m.segs, a: q, start: q });
-      } else if (Math.hypot(q.x - m.a.x, q.z - m.a.z) <= 0.05) {
-        this.meas.set({ ...m, a: null, start: null });
-        this.measHover.set(null);
-      } else {
-        const segs = [...m.segs, { a: m.a, b: q }];
-        const closed = !!m.start && segs.length > 1 && Math.hypot(q.x - m.start.x, q.z - m.start.z) <= 0.05;
-        this.meas.set({ segs, a: closed ? null : q, start: closed ? null : m.start });
-        if (closed) this.measHover.set(null);
-      }
-    } else if ((t === 'cut' || t === 'wing') && bd) {
+    } else if (t === 'measure') this.measure.click(p);
+    else if ((t === 'cut' || t === 'wing') && bd) {    } else if ((t === 'cut' || t === 'wing') && bd) {
       const l = this.toLocal(bd, p);
       const a = { x: snap(l.x, 0.5), z: snap(l.z, 0.5) };
       this.drag.set({ t: 'shape', op: t === 'cut' ? 'cut' : 'add', a, b: { ...a } });
     } else if (t === 'wall' && bd) this.startWall(bd, p);
     else if ((t === 'door' || t === 'window') && bd) this.addOpeningAt(bd, p, t);
-  }
-
-  /** A press on a measure: near an end it starts a new measure from there (to read the angle); on the line it selects it and drags it along. */
-  protected measureLineDown(e: PointerEvent, i: number): void {
-    e.stopPropagation();
-    const m = this.meas().segs[i];
-    if (!m) return;
-    const p = this.toWorld(e);
-    const r = 10 / Math.max(0.01, this.ppm());
-    if (Math.hypot(p.x - m.a.x, p.z - m.a.z) < r || Math.hypot(p.x - m.b.x, p.z - m.b.z) < r) {
-      this.measSel.set(null);
-      return this.bgDown(e);
-    }
-    this.capture(e);
-    this.measSel.set(i);
-    this.drag.set({ t: 'measMove', i, last: p });
-  }
-
-  /** The white knob of the selected measure: drag one end (other measures ending on the same point follow). */
-  protected measEndDown(e: PointerEvent, end: 0 | 1): void {
-    e.stopPropagation();
-    const i = this.measSel();
-    const m = i === null ? undefined : this.meas().segs[i];
-    if (i === null || !m) return;
-    this.capture(e);
-    this.drag.set({ t: 'measEnd', i, end, old: end ? m.b : m.a });
-  }
-
-  /** Move every measure end that sits on one of `pts` by (dx, dz): measures chained through a point stay joined. */
-  private shiftMeas(pts: Pt[], dx: number, dz: number): void {
-    const hit = (q: Pt): boolean => pts.some((o) => Math.hypot(o.x - q.x, o.z - q.z) < 0.05);
-    const mv = (q: Pt): Pt => (hit(q) ? { x: q.x + dx, z: q.z + dz } : q);
-    this.meas.update((m) => ({ ...m, segs: m.segs.map((g) => ({ a: mv(g.a), b: mv(g.b) })) }));
-  }
-
-  protected deleteMeasure(): void {
-    const i = this.measSel();
-    if (i === null) return;
-    this.meas.update((m) => ({ segs: m.segs.filter((_, k) => k !== i), a: null, start: null }));
-    this.measSel.set(null);
-  }
-
-  protected clearMeasures(): void {
-    this.meas.set({ segs: [], a: null, start: null });
-    this.measSel.set(null);
-    this.measHover.set(null);
   }
 
   protected bldDown(e: PointerEvent, bd: BuildingSpec): void {
@@ -3280,7 +1522,7 @@ export class BandoEditor {
 
   protected setView3d(): void {
     this.view3d.set(true);
-    this.measHover.set(null);
+    this.measure.hover.set(null);
   }
 
 
@@ -3554,7 +1796,7 @@ export class BandoEditor {
     if (!d) {
       if (this.placing() || this.tool() === 'terrain' || this.armed()) this.hover.set(this.toWorld(e)); // the ghost (and its guides) follow the pointer
       // measuring: after the first point, a live line follows the pointer
-      if (this.tool() === 'measure') this.measHover.set(this.measPoint(this.toWorld(e)));
+      if (this.tool() === 'measure') this.measure.hover.set(this.measure.point(this.toWorld(e)));
       return;
     }
     // a drag whose button was released elsewhere (a right-click menu, a lost pointer-up) must not keep following the pointer
@@ -3567,22 +1809,10 @@ export class BandoEditor {
     const bd = this.b();
     const li = bd ? Math.min(this.level(), bd.levels.length - 1) : 0;
     switch (d.t) {
-      case 'measMove': {
-        const g = this.meas().segs[d.i];
-        if (g) this.shiftMeas([g.a, g.b], p.x - d.last.x, p.z - d.last.z);
-        this.drag.set({ ...d, last: p });
+      case 'measMove':
+      case 'measEnd':
+        this.measure.dragTo(d, p);
         break;
-      }
-      case 'measEnd': {
-        const others = this.meas().segs.filter((g) => Math.hypot(g.a.x - d.old.x, g.a.z - d.old.z) > 0.05 && Math.hypot(g.b.x - d.old.x, g.b.z - d.old.z) > 0.05);
-        const sn = nearestSnap(snapTargets(this.ed.draft(), others), p, 10 / Math.max(0.01, this.ppm()));
-        const q = sn ? sn.pt : p;
-        this.measSnap.set(sn?.kind ?? '');
-        this.measHover.set(sn ? q : null);
-        this.shiftMeas([d.old], q.x - d.old.x, q.z - d.old.z);
-        this.drag.set({ ...d, old: q });
-        break;
-      }
       case 'frame': {
         // only the dragged edge / corner moves: the opposite side stays where it is on the map
         const host = this.wrapEl().nativeElement.getBoundingClientRect();
@@ -3730,12 +1960,12 @@ export class BandoEditor {
         break;
       }
       case 'terrain': {
-        const op = this.terrainOp();
+        const op = this.terrain.op();
         this.hover.set(p);
         if (op === 'hill' || op === 'crater') break;
         const last = d.pts[d.pts.length - 1]!;
         if (op === 'ramp') this.drag.set({ ...d, pts: [d.pts[0]!, p] });
-        else if (Math.hypot(p.x - last.x, p.z - last.z) >= Math.max(0.5, this.terrRadius() / 4)) this.drag.set({ ...d, pts: [...d.pts, p] });
+        else if (Math.hypot(p.x - last.x, p.z - last.z) >= Math.max(0.5, this.terrain.radius() / 4)) this.drag.set({ ...d, pts: [...d.pts, p] });
         break;
       }
       case 'scatter': {
@@ -3866,11 +2096,11 @@ export class BandoEditor {
     } else if (d.t === 'selArea') {
       this.finishSelArea(d, e.shiftKey);
     } else if (d.t === 'layer') {
-      this.commitLayer(d.pts);
+      this.layers.commit(d.pts);
     } else if (d.t === 'under') {
-      this.commitUnder(d.a, d.b);
+      this.under.commit(d.a, d.b);
     } else if (d.t === 'terrain') {
-      this.commitTerrain(d.pts, d.h0);
+      this.terrain.commit(d.pts, d.h0);
     } else if (d.t === 'scatter') {
       const poly = areaOf(this.scatterMode(), d.pts, this.scatterWidth());
       const live = this.ed.draft();
@@ -3980,10 +2210,9 @@ export class BandoEditor {
     const t = e.target as Element;
     if (t.closest('.palette, .ctx, .opts, app-float-box')) return;
     this.fly.set(null);
-    if (this.tool() === 'measure' && this.meas().a) {
+    if (this.tool() === 'measure' && this.measure.chain().a) {
       // a right click while measuring just ends the chain
-      this.meas.update((m) => ({ ...m, a: null, start: null }));
-      this.measHover.set(null);
+      this.measure.endChain();
       return;
     }
     const items = this.ctxItems(t.closest('[data-pk]')?.getAttribute('data-pk') ?? '', this.toWorld(e));
@@ -4062,8 +2291,8 @@ export class BandoEditor {
           del,
         ];
       case 'meas':
-        this.measSel.set(n);
-        return [head('Measure'), { label: 'Delete this measure', danger: true, act: () => this.deleteMeasure() }, { label: 'Clear all measures', act: () => this.clearMeasures() }];
+        this.measure.sel.set(n);
+        return [head('Measure'), { label: 'Delete this measure', danger: true, act: () => this.measure.delete() }, { label: 'Clear all measures', act: () => this.measure.clear() }];
       default: {
         const tool = (label: string, t: Tool): CtxItem => ({ label, act: () => this.setTool(t) });
         if (this.indoor()) {
@@ -4076,7 +2305,7 @@ export class BandoEditor {
           { label: 'Plant a tree here', act: () => { this.ed.addTree(snap(p.x, 0.5), snap(p.z, 0.5), this.newTreeKind()); this.applyNow(); } },
           tool('Scatter trees…', 'scatter'),
           tool('Draw a fence', 'fence'),
-          { label: 'Measure from here', act: () => { this.setTool('measure'); this.meas.update((m) => ({ ...m, a: p, start: p })); } },
+          { label: 'Measure from here', act: () => { this.setTool('measure'); this.measure.startAt(p); } },
           sep,
           tool('Select tool', 'select'),
         ];
@@ -4100,7 +2329,7 @@ export class BandoEditor {
     if (['INPUT', 'SELECT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
     if ((e.key === 'Delete' || e.key === 'Backspace') && this.tool() === 'measure') {
       e.preventDefault();
-      this.deleteMeasure();
+      this.measure.delete();
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault();
       this.deleteSel();
@@ -4111,7 +2340,7 @@ export class BandoEditor {
       this.scene.pin.set(null);
       this.drag.set(null);
       this.zoneSel.set(null);
-      this.meas.update((m) => ({ ...m, a: null, start: null }));
+      this.measure.chain.update((m) => ({ ...m, a: null, start: null }));
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       e.preventDefault();
       if (e.shiftKey) this.redo();

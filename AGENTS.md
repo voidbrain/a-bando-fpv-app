@@ -83,7 +83,7 @@ You are an expert in TypeScript, Angular, and scalable web application developme
 ### Adding things
 
 - **A structure kind**: add it to `StructureKind` and `STRUCTURE_DEFAULTS` / `RECT_KINDS` (`three/structures.ts`), build it
-  in `buildStructure` (geometry + collider), list it in `structKinds` and the plan symbol in `ui/studio/bando-editor.ts`,
+  in `buildStructure` (geometry + collider), list it in `structKinds` (`ui/studio/bando-editor.ts`) and draw its plan symbol in `bando-editor.html`,
   add it to `STRUCTURE_KINDS` in `core/ai-commands.ts` if the assistant may place it, optionally map an OSM tag in
   `GeoService.areaData`. Add a case to `three/structures.spec.ts`.
 - **An AI command**: add the op to `OPS`, fields to `AiCommand` + `normalizeCommands` (clamp every number), a `case` in
@@ -117,6 +117,10 @@ npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
   therefore lives in `SiteSpec.calibration`; an effect in `SiteService` copies live changes into the spec. Do not set the
   calibration anywhere without going through the store, or it will be undone on the next edit.
 - Meshes that can be clicked in the 3D editor carry `userData.pick` (`{ kind, id | i }`); keep it when adding a new builder.
+
+## Editor layout
+- `ui/studio/bando-editor.ts` is the shell (selection, pointer gestures, map, context menu); its template and styles are `bando-editor.html` / `.scss`.
+- Tool controllers live in `ui/studio/editor/`: plain classes handed an `EditorHost` (the draft, pick, drag, scale, ground and a few actions). `LayerTool` (Road / Surface / Water), `UndergroundTool` (Tunnel), `TerrainTool` (brushes, contours, height map), `MeasureTool`. The template reaches them as `layers.…`, `under.…`, `terrain.…`, `measure.…`. Their pure parts are in `core/` (`layerShape`, `pathLength`, `newRoom`, `sectionDrawing`, `cutCellsPath`, `brushStroke`, `heightPixels`, `chainClick`, `shiftEnds`, `measureLabel`) and tested. A new tool with its own options gets a controller there.
 
 ## Modules and the tree brush
 - `core/modules.ts`: façade patterns (`doors` / `panels` / `store` = 2 lower-panel bays + 1 full-height door, repeated), column rows and the "industrial store" preset. They only write ordinary openings and columns, and replace what was there, so applying twice never stacks. AI ops: `set_facade`, `set_columns`, `industrial_store`.

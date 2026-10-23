@@ -128,3 +128,41 @@ export function sectionProfile(v: UndergroundSpec, at: (x: number, z: number) =>
   }
   return { len: len + 2 * pad, ground, floor: v.floor, ceiling: v.ceiling, wall: v.wall };
 }
+
+/** A room (bunker, basement) over the rectangle a–b, its ceiling `depth` under the lower ground corner. */
+export function newRoom(a: Vec2, b: Vec2, at: (x: number, z: number) => number, o: { height: number; depth: number; id: string; name: string }): UndergroundSpec {
+  const floor = Math.round((Math.min(at(a.x, a.z), at(b.x, b.z)) - o.depth - o.height) * 10) / 10;
+  return { id: o.id, name: o.name, outline: [a, { x: b.x, z: a.z }, b, { x: a.x, z: b.z }], floor, ceiling: floor + o.height, shape: 'box', wall: 0.4 };
+}
+
+/**
+ * The inspector's side view of a volume, scaled into a `W` × `H` drawing (4 px margin left, 8 px on top): the ground line
+ * and its fill as SVG paths, the inside as a box from `x0` to `x1` between `ceil` and `floor`, and the heights shown.
+ */
+export function sectionDrawing(v: UndergroundSpec, at: (x: number, z: number) => number, W = 252, H = 80): { ground: string; groundFill: string; x0: number; x1: number; ceil: number; floor: number; top: number; bottom: number; len: number } {
+  const p = sectionProfile(v, at, 64);
+  const top = Math.max(...p.ground, p.ceiling + p.wall) + 1, bottom = Math.min(...p.ground, p.floor - p.wall) - 1;
+  const sx = W / p.len, sy = H / Math.max(1, top - bottom);
+  const X = (t: number): number => 4 + t * sx, Y = (h: number): number => 8 + (top - h) * sy;
+  const pts = p.ground.map((h, i) => `${X((p.len * i) / (p.ground.length - 1)).toFixed(1)},${Y(h).toFixed(1)}`);
+  const ax = tunnelAxis(v);
+  const pad = (p.len - (ax ? Math.hypot(ax.b.x - ax.a.x, ax.b.z - ax.a.z) : p.len)) / 2;
+  return {
+    ground: 'M' + pts.join('L'),
+    groundFill: 'M' + pts.join('L') + `L${X(p.len)},${8 + H}L${X(0)},${8 + H}Z`,
+    x0: X(Math.max(0, pad)), x1: X(p.len - Math.max(0, pad)), ceil: Y(p.ceiling), floor: Y(p.floor), top, bottom, len: p.len,
+  };
+}
+
+/** The grid cells where the ground is cut (the openings of underground volumes), as one SVG path; '' when nothing is cut. */
+export function cutCellsPath(g: HeightGrid | null, cut: Uint8Array | null): string {
+  if (!g || !cut) return '';
+  const out: string[] = [];
+  const c = g.cell;
+  for (let k = 0; k < cut.length; k++) {
+    if (!cut[k]) continue;
+    const i = k % g.nx, j = (k - i) / g.nx;
+    out.push(`M${g.x0 + i * c - c / 2} ${g.z0 + j * c - c / 2}h${c}v${c}h${-c}Z`);
+  }
+  return out.join('');
+}

@@ -10,4 +10,4 @@ Spinner is the 11px ring shown inline while something loads (map data, a model, 
 
 The label next to it.
 
-Source: `src/app/ui/studio/bando-editor.ts (.spin)`.
+Source: `src/app/ui/studio/bando-editor.scss (.spin)`.

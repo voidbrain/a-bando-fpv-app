@@ -375,3 +375,37 @@ export function heightRange(g: HeightGrid): { lo: number; hi: number } {
   }
   return { lo, hi };
 }
+
+/**
+ * The stroke a finished brush drag makes (`h0`: the ground height where it started, the level of a flatten). Hills and
+ * craters are stamped at the first point; a ramp runs from the first point to the last, and is null when shorter than 2 m.
+ */
+export function brushStroke(op: TerrainOp, pts: readonly Vec2[], h0: number, o: { radius: number; strength: number; falloff: Falloff }): TerrainStroke | null {
+  const { radius, strength: k, falloff } = o;
+  if (op === 'hill' || op === 'crater') return { op, pts: [pts[0]!], radius, strength: Math.abs(k), falloff };
+  if (op === 'ramp') {
+    if (pts.length < 2 || Math.hypot(pts[1]!.x - pts[0]!.x, pts[1]!.z - pts[0]!.z) < 2) return null;
+    return { op, pts: [pts[0]!, pts[pts.length - 1]!], radius: radius / 2, strength: k };
+  }
+  if (op === 'smooth') return { op, pts: [...pts], radius, strength: Math.min(1, Math.max(0.05, k / 100)), falloff };
+  if (op === 'flatten') return { op, pts: [...pts], radius, strength: 1, height: Math.round(h0 * 10) / 10, falloff };
+  return { op, pts: [...pts], radius, strength: Math.abs(k), falloff };
+}
+
+/** A height map of the grid as RGBA pixels (alpha 170), one pixel every `step` grid cells: for the plan under the 2D editor. */
+export function heightPixels(g: HeightGrid, step = 2): { w: number; h: number; data: Uint8ClampedArray<ArrayBuffer> } {
+  const w = Math.ceil(g.nx / step), h = Math.ceil(g.nz / step);
+  const data = new Uint8ClampedArray(w * h * 4);
+  const { lo, hi } = heightRange(g);
+  for (let j = 0; j < h; j++) {
+    for (let i = 0; i < w; i++) {
+      const [r, gg, b] = heightColor(g.h[Math.min(g.nz - 1, j * step) * g.nx + Math.min(g.nx - 1, i * step)]!, lo, hi);
+      const k = (j * w + i) * 4;
+      data[k] = r * 255;
+      data[k + 1] = gg * 255;
+      data[k + 2] = b * 255;
+      data[k + 3] = 170;
+    }
+  }
+  return { w, h, data };
+}

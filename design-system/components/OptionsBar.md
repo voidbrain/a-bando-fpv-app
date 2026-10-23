@@ -16,4 +16,4 @@ OptionsBar is the chip bar beside the palette holding the active tool's options.
 
 The options of the active tool and their bindings.
 
-Source: `src/app/ui/studio/bando-editor.ts (.opts)`.
+Source: `src/app/ui/studio/bando-editor.scss (.opts)`.

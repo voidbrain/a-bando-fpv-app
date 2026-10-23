@@ -12,4 +12,4 @@ SegmentedControl switches between two to five exclusive views or modes (`.seg`);
 
 The options, the selected one (`.on`), and the change handler. Mark it up as buttons with `aria-pressed` (or a `role="tablist"` for `.tabs`).
 
-Source: `src/app/ui/studio/bando-editor.ts (.seg), elements-box.ts (.tabs)`.
+Source: `src/app/ui/studio/bando-editor.scss (.seg), elements-box.ts (.tabs)`.

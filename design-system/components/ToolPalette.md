@@ -20,4 +20,4 @@ ToolPalette is the editor's vertical tool strip: one 32px icon button per tool g
 
 The tool list (id, icon, name, colour, hint, group), the active tool, and a `title` on each button with the tool's name and hint.
 
-Source: `src/app/ui/studio/bando-editor.ts (.palette, .pbtn, .fly), tool-icon.ts`.
+Source: `src/app/ui/studio/bando-editor.scss (.palette, .pbtn, .fly), tool-icon.ts`.
