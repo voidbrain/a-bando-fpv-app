@@ -274,6 +274,8 @@ export interface SiteSpec {
   zone?: ZoneSpec;
   /** A bando shared without its place ('hidden'); absent = the exact place. Copies, duplicates and exports keep it. */
   privacy?: 'hidden';
+  /** Copied from an example: which one (its file) and its release then; the Bandos list says when a newer one is out. */
+  derivedFrom?: { example: string; release: number };
   /** When several map areas were combined: each of them (`zone` then covers them all); `fillGaps` kept what lies between. */
   areas?: ZoneSpec[];
   fillGaps?: boolean;
@@ -434,6 +436,7 @@ export function sanitizeSpec(raw: unknown): SiteSpec | null {
     fillGaps: typeof s.fillGaps === 'boolean' ? s.fillGaps : undefined,
     // 'rounded' (place ~1 km) is no longer offered: files saved with it open as hidden
     privacy: (s.privacy as string) === 'hidden' || (s.privacy as string) === 'rounded' ? 'hidden' : undefined,
+    derivedFrom: sanitizeDerived(s.derivedFrom),
     bearingDeg: typeof s.bearingDeg === 'number' ? s.bearingDeg : 0,
     genScale: typeof s.genScale === 'number' ? s.genScale : 1,
     groundColor: typeof s.groundColor === 'string' ? s.groundColor : '#789b52',
@@ -459,4 +462,11 @@ export function sanitizeSpec(raw: unknown): SiteSpec | null {
 /** Deep copy of a spec (the editor mutates a draft; commit replaces the active spec with a clone). */
 export function cloneSpec(spec: SiteSpec): SiteSpec {
   return JSON.parse(JSON.stringify(spec)) as SiteSpec;
+}
+
+/** A spec's `derivedFrom`, checked (absent when it is not well formed). */
+function sanitizeDerived(raw: unknown): SiteSpec['derivedFrom'] {
+  const d = raw as { example?: unknown; release?: unknown } | null | undefined;
+  if (!d || typeof d.example !== 'string' || !/^bandos\/[a-z0-9-]{1,64}\.json$/.test(d.example)) return undefined;
+  return { example: d.example, release: typeof d.release === 'number' && isFinite(d.release) ? Math.max(1, Math.round(d.release)) : 1 };
 }

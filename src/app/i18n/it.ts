@@ -999,6 +999,8 @@ export const IT: Readonly<Record<string, string>> = {
   'whole building': 'edificio intero',
   // ---- Welcome and the welcome tour (showcase)
   'Welcome': 'Benvenuto',
+  'A newer release of “{0}” is out.': 'È uscita una versione più nuova di “{0}”.',
+  'Open a fresh copy': 'Apri una copia nuova',
   'Connect a model in the AI assistant first': 'Prima collega un modello nell’assistente AI',
   'Open the AI assistant to connect a model': 'Apri l’assistente AI per collegare un modello',
   'Sync again': 'Sincronizza di nuovo',

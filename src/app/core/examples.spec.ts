@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sanitizeExamples } from './examples';
+import { newerExample, sanitizeExamples } from './examples';
 import { sanitizeSpec } from './site-spec';
 import index from '../../../public/library/bandos.json';
 import chiari from '../../../public/library/bandos/chiari-e-forti.json';
@@ -48,3 +48,22 @@ describe('example bandos', () => {
     expect(JSON.stringify(hidden)).not.toMatch(/"(lat|lon)": *[1-9]/);
   });
 });
+
+describe('example releases', () => {
+  const ex = sanitizeExamples({ bandos: [{ file: 'bandos/a.json', name: 'A', origin: { lat: 0, lon: 0 }, release: 3 }, { file: 'bandos/b.json', name: 'B', origin: { lat: 0, lon: 0 } }] });
+  it('reads the release (1 when absent)', () => {
+    expect(ex.map((e) => e.release)).toEqual([3, 1]);
+  });
+  it('a copy hears of a newer release of its example, not of an equal one or a missing example', () => {
+    expect(newerExample({ derivedFrom: { example: 'bandos/a.json', release: 2 } }, ex)?.name).toBe('A');
+    expect(newerExample({ derivedFrom: { example: 'bandos/a.json', release: 3 } }, ex)).toBeNull();
+    expect(newerExample({ derivedFrom: { example: 'bandos/gone.json', release: 1 } }, ex)).toBeNull();
+    expect(newerExample({}, ex)).toBeNull();
+  });
+  it('a spec keeps where it came from, checked', () => {
+    const base = { ...emptySpecLike(), derivedFrom: { example: 'bandos/a.json', release: 2.4 } };
+    expect(sanitizeSpec(base)!.derivedFrom).toEqual({ example: 'bandos/a.json', release: 2 });
+    expect(sanitizeSpec({ ...base, derivedFrom: { example: '../x', release: 1 } })!.derivedFrom).toBeUndefined();
+  });
+});
+const emptySpecLike = () => JSON.parse(JSON.stringify(chiari)) as Record<string, unknown>;

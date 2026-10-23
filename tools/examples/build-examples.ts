@@ -44,7 +44,8 @@ function stableIds<T>(value: T, prefix: string): T {
     return v;
   });
 }
-function finish(spec: SiteSpec, id: string, name: string, file: string, about: string): SiteSpec {
+/** Write one example; `release` goes up whenever it changes in a way its copies should hear about. */
+function finish(spec: SiteSpec, id: string, name: string, file: string, about: string, release = 1): SiteSpec {
   spec.id = id;
   spec.name = name;
   spec.createdAt = Date.UTC(2026, 9, 23);
@@ -52,7 +53,7 @@ function finish(spec: SiteSpec, id: string, name: string, file: string, about: s
   if (t) delete (t as { fetchedAt?: number }).fetchedAt;
   const ok = sanitizeSpec(stableIds(round(spec), id));
   if (!ok) throw new Error(name + ' does not pass sanitizeSpec');
-  writeFileSync(file, JSON.stringify({ about, ...ok }, null, 1) + '\n');
+  writeFileSync(file, JSON.stringify({ about, release, ...ok }, null, 1) + '\n');
   console.log(name, ok.buildings.length, 'buildings', ok.structures?.length, 'structures', ok.trees.length, 'trees');
   return ok;
 }
