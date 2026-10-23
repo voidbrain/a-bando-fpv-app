@@ -3,7 +3,8 @@
 A browser tool for **FPV drone pilots who fly in abandoned places** ("bandos"): replay your flights from Betaflight / Blackbox
 logs in a 3D model of the place, practise in a simulator, and build that model yourself from the map.
 
-Everything runs in the browser (Angular 22, Three.js, signals). There is no backend. Data stays in `localStorage`.
+Everything runs in the browser (Angular 22, Three.js, signals). There is no backend. Bandos, blocks and the cached real ground
+stay in the browser (IndexedDB); videos and logs are read from your disk and never uploaded.
 
 ## What it does
 
@@ -21,8 +22,21 @@ Everything runs in the browser (Angular 22, Three.js, signals). There is no back
      other columns (same line, equal spacing, rhythm) and distances to walls and neighbours. Only the tools that make sense
      are shown: outdoor tools while outdoors, floor tools while editing a floor. The palette groups related tools Photoshop-style (hold or use the corner mark for the others) and a right click offers what can be done with whatever is under the pointer. 2D / 3D switch (3D: click to select, draw and place on the ground, roofs on / off), compass, chained measures with angle arcs (select, move, delete), the flight path with start / end markers,
      flight-path start / end pins, floating inspector with a 3D preview of the selection.
+- **Terrain**: the real ground (AWS Terrain Tiles) under every bando, shaped with brushes (raise, lower, smooth, flatten,
+  hill, crater, ramp); roads, surfaces and water (drawn as an outline or along a canal's centre line); tunnels and basements.
+- **Library**: ready-made blocks (objects, buildings, façade and column patterns, FPV gates) from an online catalogue that
+  works offline, plus your own blocks made from a selection.
+- **Ruins**: any building can be ruined (holes in the roof, then walls broken along their top), an open shell, or carry
+  battlements; one wall at a time if needed.
+- **Examples**: ready bandos to open as a copy (Bando Villetta, Chiari e Forti, and Villetta without its place).
+- **Sharing**: export a bando with its exact place, rounded to ~1 km, or hidden (no coordinates, no map names; its real
+  ground travels inside the file). Flights on a bando without its place start on its take-off pad; pins fit them.
+- **Video**: load the flight's video, sync it with the log automatically, replay both together, render an MP4.
 - **AI assistant** (optional): a chat that turns sentences like "3 rooms with doors, close the north windows, add a crane"
   into editor commands. See *AI assistant* below.
+- **Guide me**: animated tours that use the real interface, every step on its own too, hover tips; help pages in
+  `docs/guide/`.
+- **Languages**: English and Italian (the flag next to the version); the AI answers in the chosen language.
 
 ## Structure types
 
@@ -34,7 +48,8 @@ Everything runs in the browser (Angular 22, Three.js, signals). There is no back
 | Bridge | beam on piers or arch, you can fly under it |
 | Stairs, ramp | optionally raised (`y`), e.g. on a floor |
 | Container, car, truck, excavator | stackable with `y` |
-| Fence | free-standing wall |
+| Fence | free-standing wall (masonry, concrete, brick, wood, metal, chain-link) |
+| Fixture | a structure that belongs to a building (a roof ladder): moves and turns with it |
 
 Collision uses axis-aligned boxes and vertical cylinders only; long or rotated parts are cut into short boxes.
 
@@ -58,6 +73,10 @@ src/app/
   state/       signal stores (layout, view, calibration, playback, flights, radio)
   services/    services: SiteService (generate / library), GeoService (Overpass), AiService, StudioService, SceneService ...
   ui/          panels and widgets; ui/studio is the Bandos editor
+  i18n/        translations (Italian), applied by services/i18n.service.ts
+library/       the online catalogue: blocks/*.json and example bandos/*.json (built by tools/build-catalog.mjs)
+docs/guide/    help pages, written from the guided tour by tools/build-guide.mjs
+design-system/ colours, type, spacing and component guidelines (read before UI changes)
 ```
 
 Key files: `core/site-spec.ts` (the data model), `three/site-model.ts` (spec to 3D + colliders), `ui/studio/bando-editor.ts`

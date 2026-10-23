@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { siteGround, siteOutline } from './site-ground';
 import { emptySpec, sanitizeSpec, type BuildingSpec } from './site-spec';
-import { applyStroke, buildHeights, contourPaths, heightColor, heightRange, defaultTerrain, emptyGrid, flattenPad, heightAt, rangeUnder, rayGround, sanitizeTerrain, setTerrainBase, type TerrainSpec } from './terrain';
+import { applyStroke, buildHeights, contourPaths, heightColor, heightRange, defaultTerrain, emptyGrid, flattenPad, heightAt, rayGround, sanitizeTerrain, setTerrainBase, type TerrainSpec } from './terrain';
 
 const flat = (half = 50): TerrainSpec => ({ cell: 1, half: { e: half, n: half }, strokes: [] });
 const bld = (x: number, z: number, l: number, w: number, rot = 0): BuildingSpec => ({ id: `b${x}`, name: 'b', pos: { x, z }, rotDeg: rot, length: l, width: w, levels: [] });
@@ -84,8 +84,7 @@ describe('buildHeights', () => {
     const y = flattenPad(slope, { poly: [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 5 }, { x: 0, z: 5 }] });
     expect(y).toBeGreaterThan(5.3);
     expect(y).toBeLessThan(5.7);
-    const r = rangeUnder(slope, [{ x: 1, z: 1 }, { x: 9, z: 1 }, { x: 9, z: 4 }, { x: 1, z: 4 }]);
-    expect(r.max - r.min).toBeLessThan(1e-6);
+    for (const [x, z] of [[1, 1], [9, 1], [5, 2.5], [9, 4], [1, 4]] as const) expect(heightAt(slope, x, z)).toBeCloseTo(y, 6); // level inside
     expect(Math.abs(heightAt(slope, 11.5, 2.5) - y)).toBeLessThan(Math.abs(before - y)); // just outside, closer to the pad than before
   });
 

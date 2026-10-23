@@ -134,26 +134,6 @@ export function heightAt(g: HeightGrid | null | undefined, x: number, z: number)
   return (h[k]! * (1 - u) + h[k + 1]! * u) * (1 - v) + (h[k + g.nx]! * (1 - u) + h[k + g.nx + 1]! * u) * v;
 }
 
-/** Lowest and highest ground inside a polygon (and at its corners). */
-export function rangeUnder(g: HeightGrid | null | undefined, poly: readonly Vec2[]): { min: number; max: number } {
-  if (!g || poly.length < 3) {
-    const ys = poly.map((p) => heightAt(g, p.x, p.z));
-    return { min: ys.length ? Math.min(...ys) : 0, max: ys.length ? Math.max(...ys) : 0 };
-  }
-  let min = Infinity, max = -Infinity;
-  for (const p of poly) {
-    const y = heightAt(g, p.x, p.z);
-    min = Math.min(min, y);
-    max = Math.max(max, y);
-  }
-  forCells(g, bbox(poly, 0), (k, x, z) => {
-    if (!insidePoly(poly, x, z)) return;
-    min = Math.min(min, g.h[k]!);
-    max = Math.max(max, g.h[k]!);
-  });
-  return { min, max };
-}
-
 function bbox(pts: readonly Vec2[], r: number): { x0: number; z0: number; x1: number; z1: number } {
   let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
   for (const p of pts) {

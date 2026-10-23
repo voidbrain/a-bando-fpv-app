@@ -1,4 +1,5 @@
 import { Injectable, computed, effect, inject, signal, untracked, type WritableSignal } from '@angular/core';
+import { ELEVATION_ATTRIBUTION } from '../core/elevation';
 import type { Calibration, GeoPoint } from '../core/models';
 import { setSiteOrigin } from '../core/constants';
 import { solveCalibration, toGeo } from '../core/geo';
@@ -502,7 +503,7 @@ export class SiteService {
         s.terrain = { cell: r.dims.cell, half: r.dims.half, base: r.base, strokes: s.terrain?.strokes ?? [] };
       });
       this.applyDraft();
-      this.toast.show(`Real ground loaded (${r.base.datum} m above sea level at the centre).`);
+      this.toast.show(`Real ground loaded (${r.base.datum} m above sea level at the centre). ${ELEVATION_ATTRIBUTION}.`);
       return true;
     } catch (e) {
       this.toast.show(`Could not load the real ground: ${e instanceof Error ? e.message : 'network error'}.`);
