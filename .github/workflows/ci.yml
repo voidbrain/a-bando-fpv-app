@@ -32,8 +32,11 @@ jobs:
       - name: Test
         run: npx ng test --watch=false
 
+      - name: Every UI text has its Italian
+        run: npm run check:i18n
+
       - name: Type check
-        run: npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters && npx tsc -p tools/examples/tsconfig.json
+        run: npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters && npx tsc -p tools/examples/tsconfig.json && npx tsc -p tools/i18n/tsconfig.json
 
       - name: Build
         run: npm run build
