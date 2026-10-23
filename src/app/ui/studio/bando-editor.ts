@@ -1,7 +1,6 @@
 import { Component, DestroyRef, ElementRef, afterNextRender, afterRenderEffect, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { tr } from '../../services/i18n.service';
 import { uiResets } from '../../state/layout.store';
-import { raiseZ } from '../stacking';
 import { FormsModule } from '@angular/forms';
 import * as L from 'leaflet';
 import { contains, edgesOf, type Pt, type Rect } from '../../core/footprint';
@@ -16,10 +15,9 @@ import { roadDef, surfaceDef } from '../../core/layers';
 import type { TerrainOp } from '../../core/terrain';
 import { siteGround } from '../../core/site-ground';
 import { PickMenu, type PickOption } from './pick-menu';
-import { BlocksBox, type BlockArm } from './blocks-box';
-import { applyPattern, detachInstance, paramValues, placeBlock, removeInstance, updateInstance, type BlockSpec, type ParamValue } from '../../core/blocks';
+import { BlocksBox } from './blocks-box';
+import { paramValues, type BlockSpec, type ParamValue } from '../../core/blocks';
 import { BlockLibraryService } from '../../services/block-library.service';
-import { expandShapes, shapesFootprint } from '../../core/shapes';
 import { areaOf, nearBuilding, scatterTrees, type ScatterMode } from '../../core/scatter';
 import { placeColumn, type Placement } from '../../core/placement';
 import { RECT_KINDS, STRUCTURE_DEFAULTS } from '../../three/structures';
@@ -46,6 +44,8 @@ import type { PreviewTarget } from '../../three/element-preview';
 import { polyPts, type Drag, type EditorHost, type Handle, type Pick, type Tool } from './editor/editor-host';
 import { LayerTool } from './editor/layer-tool';
 import { MeasureTool } from './editor/measure-tool';
+import { BlockTool } from './editor/block-tool';
+import { ToolbarDock } from './editor/toolbar-dock';
 import { TerrainTool, TERRAIN_OPS } from './editor/terrain-tool';
 import { UndergroundTool } from './editor/underground-tool';
 
@@ -57,8 +57,6 @@ const PLACE: readonly Tool[] = ['door', 'window', 'wall', 'void', 'column', 'sta
 const MIN_HALF = 20;
 const M_LAT = 111132;
 const snap = (v: number, step: number): number => Math.round(v / step) * step;
-/** A screen position inside the editor, pixels from its top-left corner. */
-type XY = { x: number; y: number };
 
 const clampHalf = (v: number): number => Math.min(MAX_HALF_EXTENT, Math.max(MIN_HALF, v));
 const STREET = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -96,6 +94,7 @@ export class BandoEditor {
   private readonly flightStore = inject(FlightStore);
   private readonly toast = inject(ToastService);
   protected readonly view = inject(ViewStore);
+  private readonly blockLib = inject(BlockLibraryService);
   protected readonly ed = this.site.editor;
   private readonly destroyRef = inject(DestroyRef);
   private readonly mapEl = viewChild.required<ElementRef<HTMLElement>>('el');
@@ -168,91 +167,6 @@ export class BandoEditor {
   /** `data-tour` marks of a palette button: every tool of its group (the guided tour and the hover tips find them). */
   protected toolMarks = (items: readonly Entry[]): string => [...new Set(items.map((i) => `tool-${i.tool}`))].join(' ');
 
-  // ---- stacking: the toolbars share one order with the float boxes; the last opened or clicked is on top ----
-  protected readonly palOwner = {};
-  protected readonly optsOwner = {};
-  protected readonly palZ = signal(raiseZ(this.palOwner));
-  protected readonly optsZ = signal(raiseZ(this.optsOwner));
-  protected readonly raiseZ = raiseZ;
-
-  // ---- movable toolbars: the palette and the options bar remember where they were dragged ----
-  private readonly palEl = viewChild<ElementRef<HTMLElement>>('pal');
-  /** Where the palette was dragged (null = top-left corner) and where the options bar was (null = beside the active tool). */
-  private readonly palPos = signal<XY | null>(BandoEditor.loadXY('palette'));
-  private readonly optsPos = signal<XY | null>(BandoEditor.loadXY('opts'));
-  /** The active tool button inside the palette, measured after every render: the options bar lines up with it. */
-  private readonly toolBtn = signal<{ top: number; palW: number }>({ top: 0, palW: 46 });
-  private tb: { which: 'pal' | 'opts'; dx: number; dy: number } | null = null;
-  protected readonly palXY = computed(() => {
-    const p = this.palPos(), { w, h } = this.size();
-    return p ? { x: Math.max(0, Math.min(w - 46, p.x)), y: Math.max(0, Math.min(h - 60, p.y)) } : { x: 8, y: 8 };
-  });
-  /** Beside the active tool, on the side of the palette with more room (right by default); or where it was dragged. */
-  protected readonly optsXY = computed<{ left: number | null; right: number | null; top: number; max: number }>(() => {
-    const { w, h } = this.size();
-    const o = this.optsPos();
-    if (o) return { left: Math.max(0, Math.min(w - 120, o.x)), right: null, top: Math.max(0, Math.min(h - 36, o.y)), max: w - Math.max(0, Math.min(w - 120, o.x)) - 8 };
-    const pal = this.palXY(), btn = this.toolBtn();
-    const top = Math.max(0, Math.min(h - 36, pal.y + btn.top));
-    const onRight = pal.x + btn.palW / 2 < w / 2;
-    return onRight
-      ? { left: pal.x + btn.palW + 6, right: null, top, max: w - (pal.x + btn.palW + 6) - 8 }
-      : { left: null, right: w - pal.x + 6, top, max: pal.x - 14 };
-  });
-  private static loadXY(k: string): XY | null {
-    try {
-      const v = JSON.parse(localStorage.getItem(`abando-float-${k}`) ?? 'null') as XY | null;
-      return v && isFinite(v.x) && isFinite(v.y) ? v : null;
-    } catch {
-      return null;
-    }
-  }
-  private static saveXY(k: string, v: XY | null): void {
-    try {
-      if (v) localStorage.setItem(`abando-float-${k}`, JSON.stringify(v));
-      else localStorage.removeItem(`abando-float-${k}`);
-    } catch {
-      /* no storage */
-    }
-  }
-  protected tbDown(e: PointerEvent, which: 'pal' | 'opts'): void {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const el = (e.currentTarget as HTMLElement).parentElement!;
-    const box = el.getBoundingClientRect(), host = this.wrapEl().nativeElement.getBoundingClientRect();
-    this.tb = { which, dx: e.clientX - box.left, dy: e.clientY - box.top };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    // the bar is about to be placed by hand: start from where it is drawn now
-    const at = { x: box.left - host.left, y: box.top - host.top };
-    if (which === 'pal') this.palPos.set(at);
-    else this.optsPos.set(at);
-  }
-  protected tbMove(e: PointerEvent): void {
-    const t = this.tb;
-    if (!t) return;
-    const host = this.wrapEl().nativeElement.getBoundingClientRect();
-    const at = { x: e.clientX - host.left - t.dx, y: e.clientY - host.top - t.dy };
-    if (t.which === 'pal') this.palPos.set(at);
-    else this.optsPos.set(at);
-  }
-  protected tbUp(e: PointerEvent): void {
-    const t = this.tb;
-    this.tb = null;
-    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
-    if (!t) return;
-    if (t.which === 'pal') BandoEditor.saveXY('palette', this.palPos());
-    else BandoEditor.saveXY('opts', this.optsPos());
-  }
-  protected tbReset(which: 'pal' | 'opts'): void {
-    if (which === 'pal') {
-      this.palPos.set(null);
-      BandoEditor.saveXY('palette', null);
-    } else {
-      this.optsPos.set(null);
-      BandoEditor.saveXY('opts', null);
-    }
-  }
   /** The group whose flyout is open. */
   protected readonly fly = signal<string | null>(null);
   private pressT: ReturnType<typeof setTimeout> | undefined;
@@ -423,87 +337,6 @@ export class BandoEditor {
   /** A bando shared without its place: no map under it (it would show the sea at 0°, 0°), no area to regenerate. */
   protected readonly placeHidden = computed(() => this.ed.draft().privacy === 'hidden');
 
-  // ---- blocks: placing from the library ----
-  private readonly shapeBoxes = new WeakMap<object, { x0: number; z0: number; x1: number; z1: number }>();
-  /** The plan footprint of an object made of shapes (remembered per shapes list). */
-  protected shapesBox(st: StructureSpec): { x0: number; z0: number; x1: number; z1: number } {
-    const key = st.shapes ?? st;
-    let b = this.shapeBoxes.get(key);
-    if (!b) this.shapeBoxes.set(key, (b = shapesFootprint(expandShapes(st.shapes ?? []))));
-    return b;
-  }
-  protected readonly blocksOpen = signal(false);
-  /** The block waiting for a click on the map. */
-  protected readonly armed = signal<BlockArm | null>(null);
-  private readonly blockLib = inject(BlockLibraryService);
-  protected armBlock(a: BlockArm): void {
-    this.setTool('select');
-    this.armed.set(a);
-    this.view3d.set(false);
-    this.toast.show(`Click the map to place “${a.block.name}”. Esc stops.`);
-  }
-  private placeArmed(a: BlockArm, p: Pt): void {
-    let r = { placed: 0, inst: '' };
-    this.ed.commitSite((s) => {
-      r = placeBlock(s, a.block, a.params, { x: snap(p.x, 0.5), z: snap(p.z, 0.5) }, a.rot);
-    });
-    if (!r.placed) {
-      this.ed.undo();
-      this.toast.show('Nothing could be placed from that block.');
-      return;
-    }
-    const st = this.ed.draft().structures ?? [];
-    const bi = this.ed.draft().buildings.findIndex((x) => x.block?.inst === r.inst);
-    if (bi >= 0) {
-      this.ed.select(this.ed.draft().buildings[bi]!.id);
-      this.pick.set({ t: 'building' });
-    } else {
-      const si = st.findIndex((x) => x.block?.inst === r.inst);
-      if (si >= 0) this.pick.set({ t: 'structure', i: si });
-    }
-    this.applyNow();
-  }
-  protected applyBlockPattern(a: BlockArm): void {
-    const id = this.ed.selectedId();
-    if (!id) return void this.toast.show('Select a building first.');
-    let done: string[] = [];
-    this.ed.commitSite((s) => {
-      const x = this.index(s, id);
-      if (x) done = applyPattern(x, Math.min(this.level(), x.levels.length - 1), a.block, a.params);
-    });
-    this.colSet.set([]);
-    this.applyNow();
-    this.toast.show(done.length ? `“${a.block.name}” on floor ${this.levelName(this.level())}: ${done.join(', ')}.` : 'That pattern changed nothing here.');
-  }
-  /** The block a selected building or structure was placed from, and whether a newer version exists. */
-  protected readonly selBlock = computed(() => {
-    const p = this.pick();
-    const ref = p?.t === 'structure' ? this.structSel()?.block : p?.t === 'building' || !p ? this.b()?.block : undefined;
-    if (!ref) return null;
-    const lib = this.blockLib.get(ref.id);
-    return { ref, name: lib?.name ?? ref.id, latest: lib && lib.version > ref.v ? lib.version : null };
-  });
-  protected updateSelBlock(): void {
-    const sb = this.selBlock(), lib = sb ? this.blockLib.get(sb.ref.id) : null;
-    if (!sb || !lib) return;
-    this.ed.commitSite((s) => void updateInstance(s, sb.ref.inst, lib));
-    this.applyNow();
-    this.toast.show(`Updated to v${lib.version}.`);
-  }
-  protected detachSelBlock(): void {
-    const sb = this.selBlock();
-    if (!sb) return;
-    this.ed.commitSite((s) => detachInstance(s, sb.ref.inst));
-    this.applyNow();
-  }
-  protected removeSelBlock(): void {
-    const sb = this.selBlock();
-    if (!sb) return;
-    this.ed.commitSite((s) => removeInstance(s, sb.ref.inst));
-    this.pick.set(null);
-    this.applyNow();
-  }
-
   // ---- tool controllers: a tool's own options, previews and edits (editor/) ----
   /** The ground the editor shows (contours, the height under the pointer): the draft's terrain, same cache as the 3D model. */
   private readonly ground = computed(() => siteGround(this.ed.draft()));
@@ -581,7 +414,7 @@ export class BandoEditor {
   protected readonly b = this.ed.building;
   protected readonly hasModel = computed(() => !this.studio.isNew() && this.ed.draft().buildings.length + this.ed.draft().trees.length > 0);
   protected readonly overlayOn = computed(() => this.mode() === 'model' && this.hasModel() && this.ed.draft().bearingDeg === 0);
-  protected readonly captures = computed(() => this.tool() !== 'select' || this.pinMode() !== null || this.indoor() || this.shiftHeld() || !!this.armed());
+  protected readonly captures = computed(() => this.tool() !== 'select' || this.pinMode() !== null || this.indoor() || this.shiftHeld() || !!this.blocks.armed());
   protected readonly hasPath = computed(() => !!this.flights.active);
   protected readonly atMax = computed(() => this.half().e >= MAX_HALF_EXTENT || this.half().n >= MAX_HALF_EXTENT);
 
@@ -830,7 +663,7 @@ export class BandoEditor {
     if (this.mode() === 'area') return 'Pan and zoom the map to place the area, drag the frame\'s edges and corners to size it, then Generate.';
     const t = this.tool();
     if (this.pinMode()) return 'Click the map where the flight ' + (this.pinMode() === 's' ? 'started' : 'ended') + '. Esc cancels.';
-    const arm = this.armed();
+    const arm = this.blocks.armed();
     if (arm) return `Click the map to place “${arm.block.name}” (again for another one). Esc stops.`;
     if (t === 'structure') return this.structKind() === 'bridge' ? 'Drag from one end of the bridge to the other. Select it to change height, width, style.' : 'Click to place it. Select it to change height and size; drag to move.';
     if (t === 'building') return this.buildKind() === 'greenhouse' ? 'Drag a rectangle: the long side is the tunnel, the short side the arch span.' : 'Drag a rectangle to add a building (it cannot overlap another).';
@@ -865,6 +698,11 @@ export class BandoEditor {
     ground: this.ground,
     hover: this.hover,
     view3d: this.view3d,
+    level: this.level,
+    levelName: (i) => this.levelName(i),
+    colSet: this.colSet,
+    structSel: this.structSel,
+    setTool: (t) => this.setTool(t),
     building: this.b,
     tc: (id) => this.tc(id),
     applyNow: () => this.applyNow(),
@@ -876,6 +714,10 @@ export class BandoEditor {
   protected readonly under = new UndergroundTool(this.host);
   protected readonly terrain = new TerrainTool(this.host);
   protected readonly measure = new MeasureTool(this.host);
+  protected readonly blocks = new BlockTool(this.host, this.blockLib);
+  /** The palette and the options bar: dragged places and stacking. */
+  protected readonly dock = new ToolbarDock(this.size, () => this.wrapEl().nativeElement);
+  private readonly palEl = viewChild<ElementRef<HTMLElement>>('pal');
 
   constructor() {
     afterNextRender(() => this.init());
@@ -895,8 +737,8 @@ export class BandoEditor {
       state: () => ({ mode: this.mode(), view3d: this.view3d() }),
       view2d: () => this.view3d.set(false),
       closeBoxes: () => {
-        this.armed.set(null);
-        this.blocksOpen.set(false);
+        this.blocks.armed.set(null);
+        this.blocks.open.set(false);
         this.elementsOpen.set(false);
         this.ai.open.set(false);
       },
@@ -906,7 +748,7 @@ export class BandoEditor {
     });
     effect(() => {
       this.tool(); // a new tool's options come on top
-      untracked(() => this.optsZ.set(raiseZ(this.optsOwner)));
+      untracked(() => this.dock.raise('opts'));
     });
     effect(() => {
       // pinned areas: dashed yellow outlines on the map, numbered like their chips in the footer
@@ -926,20 +768,13 @@ export class BandoEditor {
     afterRenderEffect(() => {
       // line the options bar up with the active tool's button (measured, so separators and the grip count)
       this.groups();
-      this.palXY();
+      this.dock.palXY();
       const pal = this.palEl()?.nativeElement;
-      const btn = pal?.querySelector<HTMLElement>('.pbtn.on');
-      if (!pal) return;
-      const next = { top: btn ? btn.getBoundingClientRect().top - pal.getBoundingClientRect().top : 0, palW: pal.offsetWidth };
-      const cur = untracked(() => this.toolBtn());
-      if (Math.abs(cur.top - next.top) > 0.5 || Math.abs(cur.palW - next.palW) > 0.5) this.toolBtn.set(next);
+      untracked(() => this.dock.measure(pal));
     });
     effect(() => {
       if (uiResets() === 0) return;
-      untracked(() => {
-        this.palPos.set(null);
-        this.optsPos.set(null);
-      });
+      untracked(() => this.dock.resetAll());
     });
     effect(() => {
       // a multi-selection of trees only lives while a tree is selected and the trees stay the same list
@@ -1245,9 +1080,9 @@ export class BandoEditor {
     // only reached while the overlay captures (a drawing tool or a pin is armed)
     const p = this.toWorld(e);
     this.capture(e);
-    const armed = this.armed();
+    const armed = this.blocks.armed();
     if (armed && !this.pinMode()) {
-      this.placeArmed(armed, p);
+      this.blocks.place(armed, p);
       return;
     }
     if (!this.pinMode() && this.tool() === 'select' && this.indoor()) {
@@ -1794,7 +1629,7 @@ export class BandoEditor {
   protected move(e: PointerEvent): void {
     const d = this.drag();
     if (!d) {
-      if (this.placing() || this.tool() === 'terrain' || this.armed()) this.hover.set(this.toWorld(e)); // the ghost (and its guides) follow the pointer
+      if (this.placing() || this.tool() === 'terrain' || this.blocks.armed()) this.hover.set(this.toWorld(e)); // the ghost (and its guides) follow the pointer
       // measuring: after the first point, a live line follows the pointer
       if (this.tool() === 'measure') this.measure.hover.set(this.measure.point(this.toWorld(e)));
       return;
@@ -2333,8 +2168,8 @@ export class BandoEditor {
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault();
       this.deleteSel();
-    } else if (e.key === 'Escape' && this.armed()) {
-      this.armed.set(null);
+    } else if (e.key === 'Escape' && this.blocks.armed()) {
+      this.blocks.armed.set(null);
     } else if (e.key === 'Escape') {
       this.tool.set('select');
       this.scene.pin.set(null);

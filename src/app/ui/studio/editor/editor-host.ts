@@ -2,7 +2,7 @@ import type { Signal, WritableSignal } from '@angular/core';
 import type { Pt } from '../../../core/footprint';
 import type { SiteEditor } from '../../../core/site-editor';
 import type { SiteGround } from '../../../core/site-ground';
-import type { BuildingSpec } from '../../../core/site-spec';
+import type { BuildingSpec, StructureSpec } from '../../../core/site-spec';
 import type { SiteService } from '../../../services/site.service';
 import type { ToastService } from '../../../services/toast.service';
 
@@ -56,9 +56,17 @@ export interface EditorHost {
   readonly ground: Signal<SiteGround>;
   /** The site point under the pointer. */
   readonly hover: Signal<Pt | null>;
-  readonly view3d: Signal<boolean>;
+  readonly view3d: WritableSignal<boolean>;
+  /** The floor being edited, and how it is labelled (G, L1 ...). */
+  readonly level: Signal<number>;
+  levelName(i: number): string;
+  /** The column multi-selection. */
+  readonly colSet: WritableSignal<number[]>;
+  /** The selected structure. */
+  readonly structSel: Signal<StructureSpec | null>;
   /** The selected building. */
   readonly building: Signal<BuildingSpec | null>;
+  setTool(t: Tool): void;
   /** A tool's colour. */
   tc(id: Tool): string;
   /** Rebuild the 3D model from the draft now. */
