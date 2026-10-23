@@ -78,6 +78,7 @@ export const TOOL_ICONS: Readonly<Record<string, readonly Stroke[]>> = {
   // ---- terrain ----
   terrainRaise: [{ p: 'M2 20 C7 20 8 11 12 11 S17 20 22 20' }, { p: 'M12 8 V2 M9 5 L12 2 L15 5' }],
   terrainLower: [{ p: 'M2 10 C7 10 8 19 12 19 S17 10 22 10' }, { p: 'M12 3 V9 M9 6 L12 9 L15 6' }],
+  terrainSculpt: [{ p: 'M2 20 C6 20 7 14 10 14 S14 20 22 20' }, { p: 'M16 4 V11 M13 7 L16 4 L19 7' }, { p: 'M7 6 V11 M5 9 L7 11 L9 9' }],
   terrainSmooth: [{ p: 'M2 15 L5 10 L8 16 L11 9 L14 15', d: true }, { p: 'M2 19 C8 19 10 14 14 14 S20 19 22 19' }],
   terrainFlatten: [{ p: 'M2 20 L7 11 H17 L22 20' }, { p: 'M5 8 H19', d: true }],
   terrainHill: [{ p: 'M2 19 Q12 1 22 19' }, { p: 'M2 19 H22', d: true }],

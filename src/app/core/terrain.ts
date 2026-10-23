@@ -409,3 +409,33 @@ export function heightPixels(g: HeightGrid, step = 2): { w: number; h: number; d
   }
   return { w, h, data };
 }
+
+/**
+ * Populous-style sculpting: a press held `held` seconds at `at` raises the ground (or lowers it, the right button),
+ * higher and wider the longer it is held: `rate` metres a second, the radius growing by a third of itself a second
+ * (up to four times). Rounded, so the saved stroke stays short.
+ */
+export function sculptStroke(at: Vec2, held: number, lower: boolean, o: { radius: number; rate: number }): TerrainStroke {
+  const t = Math.max(0, Math.min(held, 20));
+  return {
+    op: lower ? 'lower' : 'raise',
+    pts: [{ x: Math.round(at.x * 10) / 10, z: Math.round(at.z * 10) / 10 }],
+    radius: Math.round(Math.min(o.radius * 4, o.radius * (1 + t / 3)) * 10) / 10,
+    strength: Math.round(Math.abs(o.rate) * t * 100) / 100,
+    falloff: 'smooth',
+  };
+}
+
+/** The construction lines of a ramp being drawn from `a` (foot) to `b` (top), `half` metres either side, rising `rise`. */
+export function rampGuide(a: Vec2, b: Vec2, half: number, rise: number): { outline: Vec2[]; len: number; slope: number; arrow: Vec2[] } {
+  const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
+  const ux = len ? dx / len : 1, uz = len ? dz / len : 0, nx = -uz * half, nz = ux * half;
+  const tip = { x: b.x, z: b.z }, back = Math.min(len / 3, Math.max(1.5, half));
+  return {
+    outline: [{ x: a.x + nx, z: a.z + nz }, { x: b.x + nx, z: b.z + nz }, { x: b.x - nx, z: b.z - nz }, { x: a.x - nx, z: a.z - nz }],
+    len,
+    slope: len ? (rise / len) * 100 : 0,
+    // an arrowhead at the top end, pointing uphill
+    arrow: [{ x: tip.x - ux * back + nx * 0.6, z: tip.z - uz * back + nz * 0.6 }, tip, { x: tip.x - ux * back - nx * 0.6, z: tip.z - uz * back - nz * 0.6 }],
+  };
+}

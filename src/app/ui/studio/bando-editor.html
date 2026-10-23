@@ -353,6 +353,16 @@
         @if (hover(); as hv) {
           <circle [attr.cx]="hv.x" [attr.cy]="hv.z" [attr.r]="terrain.ring()" fill="none" [attr.stroke]="tc('terrain')" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke" pointer-events="none" />
         }
+        <!-- construction lines of the stroke being drawn -->
+        @if (terrain.guide(); as gd) {
+          @if (gd.kind === 'ramp') {
+            <polygon [attr.points]="gd.outline" fill="none" stroke="#fff" stroke-width="1.5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+            <polyline [attr.points]="gd.arrow" fill="none" stroke="#fff" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none" />
+          } @else {
+            <circle [attr.cx]="gd.at.x" [attr.cy]="gd.at.z" [attr.r]="gd.r" [attr.fill]="tc('terrain')" fill-opacity="0.15" stroke="#fff" stroke-width="1.5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+          }
+          <text [attr.x]="gd.at.x + 10 / ppm()" [attr.y]="gd.at.z - 10 / ppm()" [attr.font-size]="13 / ppm()" fill="#fff" stroke="#222" stroke-width="0.5" paint-order="stroke" pointer-events="none">{{ gd.label }}</text>
+        }
       }
       @if (blocks.armed(); as am) {
         @if (hover(); as hv) {
@@ -483,7 +493,7 @@
                 <app-pick-menu label="Shape the ground" [options]="terrain.opOptions" [value]="terrain.op()" (valueChange)="terrain.op.set(terrain.asOp($event))" />
                 <label class="lay" title="Brush radius (ramp: its width)">⌀ <input class="mini" type="number" min="1" max="100" step="1" [value]="terrain.radius()" (change)="terrain.radius.set(Math.max(1, num($event)))" /> m</label>
                 @if (terrain.op() !== 'flatten') {
-                  <label class="lay" [title]="terrain.op() === 'smooth' ? 'How much to soften (percent)' : 'Metres'">{{ terrain.strengthLabel() }} <input class="mini" type="number" [min]="terrain.op() === 'smooth' ? 5 : 0.1" [max]="terrain.op() === 'smooth' ? 100 : 60" step="0.5" [value]="terrain.strength()" (change)="terrain.strength.set(Math.max(0.1, num($event)))" />{{ terrain.op() === 'smooth' ? '' : ' m' }}</label>
+                  <label class="lay" [title]="terrain.op() === 'smooth' ? 'How much to soften (percent)' : terrain.op() === 'sculpt' ? 'How fast the ground grows while the button is held (metres a second)' : 'Metres'">{{ terrain.strengthLabel() }} <input class="mini" type="number" [min]="terrain.op() === 'smooth' ? 5 : 0.1" [max]="terrain.op() === 'smooth' ? 100 : 60" step="0.5" [value]="terrain.strength()" (change)="terrain.strength.set(Math.max(0.1, num($event)))" />{{ terrain.op() === 'smooth' ? '' : terrain.op() === 'sculpt' ? ' m/s' : ' m' }}</label>
                 }
                 @if (terrain.op() !== 'ramp') {
                   <app-pick-menu label="Edge" [compact]="true" [options]="terrain.falloffOptions" [value]="terrain.falloff()" (valueChange)="terrain.falloff.set(terrain.asFalloff($event))" />
