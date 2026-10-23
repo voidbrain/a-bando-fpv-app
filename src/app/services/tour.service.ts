@@ -42,7 +42,7 @@ export interface TourState {
 /** The copy of the Chiari e Forti example the tour builds and edits (replaced on every run: the pilot's own copies stay untouched). */
 const TOUR_BANDO = { id: 'tour-chiari', name: 'Chiari e Forti (tour)', file: 'library/bandos/chiari-e-forti.json' };
 /** Where the demo flight is replayed: a copy of the example without its place (the flight starts on its take-off pad). */
-const FLIGHT_BANDO = { id: 'tour-flight', name: 'Villetta (tour)', file: 'library/bandos/villetta-no-place.json' };
+const FLIGHT_BANDO = { id: 'tour-flight', name: 'Villetta (place hidden)', file: 'library/bandos/villetta-no-place.json' };
 /** A short cut of a real flight (log thinned to ~100 Hz, its GPS moved to 0, 0; video 480p): published with the app for the guide. */
 /** The video offset Auto-sync finds for the demo flight (the showcase uses it instead of scanning a minute of video). */
 const DEMO_OFFSET = -0.54;
@@ -102,13 +102,29 @@ export class TourService {
 
 
 
+  /** Stop the guide; a replay it was running stops with it (the guide's controls win over the timeline). */
   end(): void {
+    if (this.state()) this.haltReplay();
     this.stop = true;
   }
 
+  /** Pause or resume the guide, and the replay with it. */
   togglePause(): void {
     this.paused = !this.paused;
     this.state.update((s) => (s ? { ...s, paused: this.paused } : s));
+    if (this.paused) this.haltReplay();
+    else if (this.heldReplay) {
+      this.heldReplay = false;
+      this.playback.play();
+    }
+  }
+
+  /** A replay paused by the guide, to resume with it. */
+  private heldReplay = false;
+  private haltReplay(): void {
+    if (!this.playback.transport.playing()) return;
+    this.playback.pause();
+    this.heldReplay = true;
   }
 
   next(): void {
@@ -121,6 +137,8 @@ export class TourService {
     const s = this.state();
     if (!s) return;
     this.jump = backTarget(this.firsts, s.index - 1);
+    this.haltReplay();
+    this.heldReplay = false; // the step plays again from its start, and starts the replay itself if it does
     this.next();
   }
   private firsts: boolean[] = [];
@@ -386,7 +404,8 @@ export class TourService {
         this.editor?.closeBoxes();
         return;
       case 'layoutReset':
-        // a clean screen: only Welcome over the empty world (a showcase may run on a visit that moved things)
+        // a clean screen: only Welcome over the empty world, turning (a showcase may run on a visit with a bando open)
+        this.site.showVoid();
         this.layout.reset();
         for (const id of Object.keys(this.layout.panels()) as PanelId[]) if (id !== 'welcome') this.layout.setVisible(id, false);
         this.layout.setVisible('welcome', true);
@@ -397,6 +416,13 @@ export class TourService {
         return;
       case 'flightSite':
         return this.flightSite();
+      case 'show':
+        // shown where it belongs (the timeline at the bottom), on top: not moved to the middle like 'panel'
+        for (const id of (arg ?? '').split(',') as PanelId[]) {
+          this.layout.setVisible(id, true);
+          this.layout.raise(id);
+        }
+        return this.sleep(250);
       case 'hide':
         for (const id of (arg ?? '').split(',')) this.layout.setVisible(id as PanelId, false);
         return this.sleep(250);
@@ -407,14 +433,9 @@ export class TourService {
         return this.fakeSync();
       case 'arrange':
         return this.arrange(arg === 'cameras' ? 'cameras' : 'replay');
-      case 'ghostAll':
-        // one panel after the other turns to glass
-        for (const [id, p] of Object.entries(this.layout.panels()) as [PanelId, { visible: boolean; ghost: boolean }][]) {
-          if (!p.visible || p.ghost) continue;
-          this.layout.toggleGhost(id);
-          await this.sleep(180);
-        }
-        return;
+      case 'ghost':
+        for (const id of (arg ?? '').split(',') as PanelId[]) if (!this.layout.panels()[id].ghost) this.layout.toggleGhost(id);
+        return this.sleep(300);
 
       case 'fakeGenerate':
         return this.fakeGenerate();
@@ -493,8 +514,18 @@ export class TourService {
   private async flightSite(): Promise<void> {
     if (this.site.active().id === FLIGHT_BANDO.id) return;
     this.flights.clear();
-    if (this.site.peek(FLIGHT_BANDO.id)) this.studio.open(FLIGHT_BANDO.id);
-    else await this.copyExample(FLIGHT_BANDO);
+    // shown, not saved: the guide must not add bandos to the pilot's list (older versions saved a "Villetta (tour)")
+    if (this.site.peek(FLIGHT_BANDO.id)) this.site.remove(FLIGHT_BANDO.id);
+    try {
+      const res = await fetch(new URL(FLIGHT_BANDO.file, document.baseURI).toString());
+      const spec = sanitizeSpec(await res.json());
+      if (!spec) throw new Error('example');
+      spec.id = FLIGHT_BANDO.id;
+      spec.name = FLIGHT_BANDO.name;
+      this.site.showTemporary(spec);
+    } catch {
+      this.toast.show('The example could not be downloaded; the tour goes on without it.');
+    }
     await this.sleep(600);
   }
 
@@ -519,42 +550,42 @@ export class TourService {
   }
 
   /**
-   * Place the panels of a showcase screen, measured against the window. `replay`: the video on the left, the instruments
-   * in the top-right corner, the path under them, the timeline at the bottom, everything else hidden. `cameras`: the
-   * four camera views in the free middle, appearing one after the other.
+   * Place the panels of a showcase screen, measured against the window (the timeline keeps its own place). `replay`:
+   * the video top-left, speed and attitude in the top-right corner, the path and the Blackbox under them, everything
+   * else hidden. `cameras`: the chase and FPV views under the video, smaller than it, appearing one after the other.
    */
   private async arrange(what: 'replay' | 'cameras'): Promise<void> {
     const W = innerWidth, H = innerHeight, m = 14, gap = 8;
     const box = (id: PanelId): DOMRect | undefined => document.querySelector<HTMLElement>(`app-panel[data-id="${id}"]`)?.getBoundingClientRect();
     if (what === 'replay') {
-      const keep: PanelId[] = ['video', 'timeline', 'speed', 'attitude', 'path'];
+      const keep: PanelId[] = ['video', 'timeline', 'speed', 'attitude', 'path', 'blackbox'];
       for (const [id, p] of Object.entries(this.layout.panels()) as [PanelId, { visible: boolean }][]) if (p.visible && !keep.includes(id)) this.layout.setVisible(id, false);
       for (const id of keep) this.layout.setVisible(id, true);
-      this.layout.setWidth('video', Math.round(Math.min(560, W * 0.36)));
-      this.layout.setWidth('timeline', Math.min(620, W - 2 * m));
+      this.layout.setWidth('video', Math.round(Math.min(520, W * 0.34)));
       await this.sleep(150);
-      const att = box('attitude'), spd = box('speed'), tl = box('timeline');
-      const aw = att?.width ?? 270, ah = att?.height ?? 160, th = tl?.height ?? 110;
+      const att = box('attitude'), spd = box('speed');
+      const aw = att?.width ?? 270, ah = att?.height ?? 160;
       this.layout.moveTo('video', m, m);
       this.layout.moveTo('attitude', W - m - aw, m);
       this.layout.moveTo('speed', W - m - aw - gap - (spd?.width ?? 170), m);
-      this.layout.resizeTo('path', 330, Math.max(180, Math.min(300, H - ah - th - 4 * m)));
+      const pathH = Math.max(170, Math.min(260, Math.round((H - ah - 3 * gap - 2 * m) * 0.45)));
+      this.layout.resizeTo('path', 330, pathH);
       this.layout.moveTo('path', W - m - 330, m + ah + gap);
-      this.layout.moveTo('timeline', Math.round((W - (tl?.width ?? 620)) / 2), H - m - th);
+      this.layout.moveTo('blackbox', W - m - (box('blackbox')?.width ?? 360), m + ah + gap + pathH + gap);
       return this.sleep(300);
     }
-    // the free middle: between the video and the instruments, above the timeline
-    const vid = box('video'), spd = box('speed'), tl = box('timeline');
-    const x0 = (vid?.right ?? W * 0.38) + gap, x1 = (spd?.left ?? W * 0.62) - gap;
-    const y1 = (tl?.top ?? H - 120) - gap;
-    const w = Math.max(220, Math.floor((x1 - x0 - gap) / 2)), h = Math.max(140, Math.min(Math.floor((y1 - m - gap) / 2), Math.round(w * 0.62)));
-    for (const [k, id] of (['vpChase', 'vpFpv', 'vpTop', 'vpOrbit'] as PanelId[]).entries()) {
+    // under the video, above the timeline (it keeps its place)
+    const vid = box('video'), tl = box('timeline');
+    const x0 = vid?.left ?? m, top = (vid?.bottom ?? 300) + gap, bottom = Math.min(H - m, (tl && tl.left < (vid?.right ?? 0) ? tl.top : H) - gap);
+    const w = Math.round((vid?.width ?? 400) * 0.8), h = Math.max(110, Math.min(Math.round(w * 0.6), Math.floor((bottom - top - gap) / 2)));
+    for (const [k, id] of (['vpChase', 'vpFpv'] as PanelId[]).entries()) {
       this.layout.resizeTo(id, w, h);
-      this.layout.moveTo(id, Math.round(x0 + (k % 2) * (w + gap)), Math.round(m + Math.floor(k / 2) * (h + gap)));
+      this.layout.moveTo(id, x0, top + k * (h + gap));
       this.layout.setVisible(id, true);
       await this.sleep(650);
     }
   }
+
 
   /** Stand-in for generating from map data: the ready Chiari e Forti example, opened in the editor like a fresh model. */
   private async fakeGenerate(): Promise<void> {

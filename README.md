@@ -7,7 +7,7 @@ share it, with or without its address.
 Everything runs in the browser (Angular 22, Three.js, signals). There is no backend. Bandos, blocks and the cached real ground
 stay in the browser (IndexedDB); videos and logs are read from your disk and never uploaded.
 
-**The one-minute tour**, played by itself (for people who have a minute): 
+**The welcome tour**, a minute, played by itself: 
 [English](https://voidbrain.github.io/a-bando-fpv-app/?tour=showcase&lang=en) ·
 [Italiano](https://voidbrain.github.io/a-bando-fpv-app/?tour=showcase&lang=it). Any address of the app takes
 `?tour=showcase` and `lang=en` / `lang=it`.
@@ -42,7 +42,7 @@ stay in the browser (IndexedDB); videos and logs are read from your disk and nev
 - **AI assistant** (optional): a chat that turns sentences like "3 rooms with doors, close the north windows, add a crane"
   into editor commands. See *AI assistant* below.
 - **Welcome**: a first visit opens on the empty world turning slowly, with Build / Fly / Share and their short films
-  (`public/welcome/`, recorded by `npm run films`), and the one-minute tour.
+  (`public/welcome/`, recorded by `npm run films`), and the welcome tour.
 - **Guide me**: animated tours that use the real interface, every step on its own too, hover tips; help pages and clips in
   `docs/guide/` (`npm run clips`).
 - **Languages**: English and Italian (the flag next to the version); the AI answers in the chosen language.

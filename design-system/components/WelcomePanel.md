@@ -11,7 +11,7 @@ The first thing a visitor sees, over the empty world turning slowly: what OpenBa
   (muted, looped, no controls; dimmed until its column is in focus), a 17 px title, two or three lines of text, and
   link buttons ("Open the bandos →") that open the panels for that job and close Welcome. The column under the pointer
   or the keyboard focus gets an `accent` border and plays its film.
-- Footer: the primary `▶ Watch the one-minute tour`, `Guide me`, and a `dim` note on privacy.
+- Footer: the primary `▶ Watch the welcome tour`, `Guide me`, and a `dim` note on privacy.
 - Closing it shows Views.
 
 ## Voice

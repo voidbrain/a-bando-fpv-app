@@ -1,4 +1,5 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, effect, inject, signal, untracked } from '@angular/core';
+import { LayoutStore } from '../../state/layout.store';
 import type { Privacy } from '../../core/share';
 import { BackupService } from '../../services/backup.service';
 import { DownloadService } from '../../services/download.service';
@@ -93,7 +94,8 @@ import { BandoEditor } from './bando-editor';
       display: flex;
       flex-direction: column;
       flex: 1 1 auto;
-      min-height: 0;
+      /* the panel's height follows its content on the list: the editor needs room of its own */
+      min-height: min(540px, calc(100vh - 120px));
     }
     .name {
       width: 180px;
@@ -157,6 +159,7 @@ export class StudioPanel {
   protected readonly studio = inject(StudioService);
   protected readonly site = inject(SiteService);
   private readonly toast = inject(ToastService);
+  private readonly layout = inject(LayoutStore);
   private readonly downloads = inject(DownloadService);
   private readonly backups = inject(BackupService);
   protected readonly examples = inject(ExampleBandosService);
@@ -165,6 +168,21 @@ export class StudioPanel {
 
   constructor() {
     void this.examples.load();
+    // the list is a narrow card; the editor gets more width while it is open (unless the pilot sized the panel)
+    let widened = false;
+    effect(() => {
+      const zone = this.studio.view() === 'zone';
+      untracked(() => {
+        const w = this.layout.panels().studio.w;
+        if (zone && w === null) {
+          this.layout.setWidth('studio', Math.min(900, innerWidth - 24));
+          widened = true;
+        } else if (!zone && widened) {
+          this.layout.restore({ studio: { w: null, h: null } });
+          widened = false;
+        }
+      });
+    });
   }
 
   protected async openExample(e: ExampleBando): Promise<void> {

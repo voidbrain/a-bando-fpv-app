@@ -9,7 +9,7 @@
  * Slow or online steps (generating from map data, the AI model) are stand-ins (`hook`) that show the real result.
  */
 
-/** `showcase`: the one-minute tour's own steps, not listed in the Guide panel or the help pages. */
+/** `showcase`: the welcome tour's own steps, not listed in the Guide panel or the help pages. */
 export type Section = 'bandos' | 'model' | 'ai' | 'flight' | 'showcase';
 
 export const SECTIONS: readonly { id: Section; title: string }[] = [
@@ -20,7 +20,7 @@ export const SECTIONS: readonly { id: Section; title: string }[] = [
 ];
 
 /** What the player can do besides moving the cursor; each one is implemented in the tour service. */
-export const HOOKS = ['panel', 'list', 'fakeGenerate', 'tool', 'select', 'view', 'ai', 'demoLog', 'demoVideo', 'autoSync', 'play', 'pause', 'closeBoxes', 'layoutReset', 'orbit', 'flightSite', 'hide', 'camera', 'fakeSync', 'arrange', 'ghostAll'] as const;
+export const HOOKS = ['panel', 'list', 'fakeGenerate', 'tool', 'select', 'view', 'ai', 'demoLog', 'demoVideo', 'autoSync', 'play', 'pause', 'closeBoxes', 'layoutReset', 'orbit', 'flightSite', 'hide', 'camera', 'fakeSync', 'arrange', 'ghost', 'show'] as const;
 export type Hook = (typeof HOOKS)[number];
 
 export type At = readonly [number, number];
@@ -216,7 +216,7 @@ export const SNIPPETS: readonly Snippet[] = [
     beats: [{ say: 'Play: the drone flies its real path through the model, with the video in step.', actions: [hook('panel', 'timeline'), click('play'), wait(6000), hook('pause')] }],
   },
 
-  // ---- the one-minute showcase (Welcome → a bando → a synced replay → every camera): plays by itself
+  // ---- the welcome tour (showcase) (Welcome → a bando → a synced replay → every camera): plays by itself
   {
     id: 'sc-welcome',
     section: 'showcase',
@@ -231,7 +231,7 @@ export const SNIPPETS: readonly Snippet[] = [
     section: 'showcase',
     title: 'Open a bando',
     beats: [
-      { say: 'Open a bando: this one is shared without its address. The model brings its own ground.', actions: [click('close-welcome'), hook('panel', 'studio'), hook('list'), wait(700), press('example-villetta-no-place'), hook('flightSite'), hook('orbit', 'off'), hook('camera', 'orbit'), wait(1200), hook('hide', 'studio'), wait(1600)] },
+      { say: 'Open a bando: public or hidden. A 3D model to explore.', actions: [click('close-welcome'), hook('panel', 'studio'), hook('list'), wait(700), press('example-villetta-no-place'), hook('flightSite'), hook('orbit', 'off'), hook('camera', 'orbit'), wait(1200), hook('hide', 'studio'), wait(1600)] },
     ],
   },
   {
@@ -239,8 +239,8 @@ export const SNIPPETS: readonly Snippet[] = [
     section: 'showcase',
     title: 'Load the flight',
     beats: [
-      { say: 'Drop the Blackbox log and the DVR of the same flight.', actions: [hook('panel', 'flights'), press('upload-log'), hook('demoLog'), wait(900), hook('panel', 'video'), press('load-video'), hook('demoVideo'), wait(900)] },
-      { say: 'Auto-sync matches the picture with the gyro: no clapperboard needed.', actions: [hook('panel', 'timeline'), press('auto-sync'), hook('fakeSync'), wait(900)] },
+      { say: 'Drop the Blackbox log and the DVR of the same flight.', actions: [hook('hide', 'studio'), hook('panel', 'flights'), press('upload-log'), hook('demoLog'), wait(900), hook('panel', 'video'), press('load-video'), hook('demoVideo'), wait(900)] },
+      { say: 'Auto-sync matches the picture with the gyro: no clapperboard needed.', actions: [hook('show', 'timeline'), press('auto-sync'), hook('fakeSync'), wait(900)] },
     ],
   },
   {
@@ -249,15 +249,15 @@ export const SNIPPETS: readonly Snippet[] = [
     title: 'Replay in sync',
     beats: [
       { say: 'Speed, attitude, sticks and the path: every number of the flight, in step with the video.', actions: [hook('arrange', 'replay'), hook('camera', 'chase'), click('play'), wait(8500)] },
-      { say: 'And every camera at once: chase, FPV, top and orbit.', actions: [hook('arrange', 'cameras'), wait(7000)] },
-      { say: 'Clear the glass: only the flight is left.', actions: [hook('ghostAll'), wait(6000)] },
+      { say: 'Ride along: the chase and the FPV camera, in step.', actions: [hook('arrange', 'cameras'), wait(7000)] },
+      { say: 'The video turns to glass: the model behind it, in step.', actions: [hook('ghost', 'video'), wait(6000)] },
       { say: 'OpenBando. Build, Fly, Share.', actions: [wait(3500)] },
     ],
   },
 ];
 
-/** The one-minute showcase: Welcome, a bando without its address, a log and its video synced, every camera. */
-export const SHOWCASE: Tour = { id: 'showcase', title: 'The one-minute tour', about: 'What OpenBando does, played by itself.', snippets: ['sc-welcome', 'sc-bando', 'sc-load', 'sc-replay'], keepLayout: true };
+/** The welcome tour (the showcase), about a minute: Welcome, a bando without its address, a log and its video synced, every camera. */
+export const SHOWCASE: Tour = { id: 'showcase', title: 'Welcome tour', about: 'What OpenBando does, in a minute, played by itself.', snippets: ['sc-welcome', 'sc-bando', 'sc-load', 'sc-replay'], keepLayout: true };
 
 export const TOURS: readonly Tour[] = [
   SHOWCASE,
@@ -305,21 +305,6 @@ export function backTarget(first: readonly boolean[], i: number): number {
   };
   const s = startOf(i);
   return s < i ? s : startOf(Math.max(0, s - 1));
-}
-
-/**
- * Where the caption bar goes (its top-left corner, px): just below the target the tour points at, or above it when
- * there is no room below, centred on it and kept 16 px inside the window; without a target, centred near the bottom.
- */
-export function captionPlace(target: { x: number; y: number; w: number; h: number } | null, view: { w: number; h: number }, bar: { w: number; h: number }): { left: number; top: number } {
-  const gap = 14, m = 16;
-  const clampX = (x: number): number => Math.max(m, Math.min(view.w - bar.w - m, x));
-  if (!target) return { left: clampX((view.w - bar.w) / 2), top: Math.max(m, view.h - bar.h - 48) };
-  const left = clampX(target.x + target.w / 2 - bar.w / 2);
-  if (target.y + target.h + gap + bar.h <= view.h - m) return { left, top: target.y + target.h + gap };
-  if (target.y - gap - bar.h >= m) return { left, top: target.y - gap - bar.h };
-  // a target as tall as the window (a panel): beside it, else over its lower part
-  return { left, top: Math.max(m, view.h - bar.h - 48) };
 }
 
 /** Roughly how long beats take to play, milliseconds (waits, drags, typing, cursor moves). */

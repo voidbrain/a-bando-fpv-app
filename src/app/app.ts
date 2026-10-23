@@ -74,7 +74,7 @@ export class App {
   private openedRadio = false;
 
   constructor() {
-    // a showcase link (?tour=showcase&lang=it): set the language, then the one-minute tour plays by itself
+    // a showcase link (?tour=showcase&lang=it): set the language, then the welcome tour plays by itself
     const link = showcaseLink(location.search, location.hash);
     if (link) {
       const i18n = inject(I18nService), tour = inject(TourService);

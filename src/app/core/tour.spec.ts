@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cloneSpec, emptySpec } from './site-spec';
 import { parseReply } from './ai-prompt';
 import { runCommands } from './ai-commands';
-import { backTarget, captionPlace, showcaseLink, SHOWCASE, AI_SCRIPTS, SNIPPETS, TOURS, checkGuide, playTime, snippetForMark, tourBeats } from './tour';
+import { backTarget, showcaseLink, SHOWCASE, AI_SCRIPTS, SNIPPETS, TOURS, checkGuide, playTime, snippetForMark, tourBeats } from './tour';
 
 describe('guided tour', () => {
   it('every tour uses known snippets, every snippet has captions and known hooks', () => {
@@ -52,17 +52,6 @@ describe('guide Back', () => {
   });
 });
 
-describe('guide caption place', () => {
-  const view = { w: 1200, h: 800 }, bar = { w: 500, h: 110 };
-  it('sits below the target, centred on it, inside the window', () => {
-    expect(captionPlace({ x: 100, y: 100, w: 40, h: 30 }, view, bar)).toEqual({ left: 16, top: 144 });
-    expect(captionPlace({ x: 600, y: 100, w: 100, h: 30 }, view, bar)).toEqual({ left: 400, top: 144 });
-  });
-  it('goes above a target near the bottom, and to the bottom without one', () => {
-    expect(captionPlace({ x: 600, y: 700, w: 100, h: 40 }, view, bar).top).toBe(576);
-    expect(captionPlace(null, view, bar)).toEqual({ left: 350, top: 642 });
-  });
-});
 
 describe('the showcase', () => {
   it('plays from a link, in the language it asks for', () => {

@@ -53,7 +53,7 @@ export class PathPanel {
     { mode: 'front', label: 'Front' },
     { mode: '3d', label: '3D' },
   ];
-  protected readonly mode = signal<PathViewMode>('top');
+  protected readonly mode = signal<PathViewMode>('3d');
   protected readonly caption = signal('');
   private readonly view = createPathView();
   private last: { x: number; y: number } | null = null;

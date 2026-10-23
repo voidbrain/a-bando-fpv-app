@@ -26,6 +26,7 @@ import { CASCADE_STEP, PANEL_BY_ID, cascadeIndex, type PanelId } from '../panel-
     // collapsed: drop the remembered height so the box hugs the title bar instead of staying big over the page;
     // expanded (or ghost-collapsed): exactly the remembered / default height — never the transient content height.
     '[style.height.px]': 'state().minimized ? null : panelHeight()',
+    '[style.max-height]': 'panelHeight() === null && def().maxHeight ? "min(" + def().maxHeight + "px, calc(100vh - 8px))" : null',
     '(pointerdown)': 'raise(); gripDown($event)',
     '(document:pointerup)': 'sizeCommit()',
     '(document:pointercancel)': 'sizeCommit()',
@@ -76,6 +77,19 @@ import { CASCADE_STEP, PANEL_BY_ID, cascadeIndex, type PanelId } from '../panel-
       max-width: calc(100vw - 8px);
       max-height: calc(100vh - 8px);
       min-width: 90px;
+      /* a panel that shows (again) eases in instead of popping */
+      animation: panel-in 0.22s ease-out;
+    }
+    @keyframes panel-in {
+      from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.98);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      :host {
+        animation: none;
+      }
     }
     :host([hidden]) {
       display: none;
