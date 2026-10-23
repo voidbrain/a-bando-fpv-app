@@ -101,6 +101,7 @@ npx tsc -p tsconfig.app.json --noEmit --noUnusedLocals --noUnusedParameters
 npx tsc -p tools/examples/tsconfig.json   # the example-bando script
 ```
 
+- `npm run e2e` (Playwright, also a CI job): every guide step plays alone in a headless browser without errors, and the first visit, the editor with the library and a running guide step pass axe (WCAG 2.1 A / AA). Locate panels by `app-panel[data-id=…]` or by role: component hosts have no box of their own. Software WebGL is slow there: keep the long timeouts.
 - A test that fails because the code changed is stale: fix the test deliberately and say why. Tests that encoded the old
   demo site now set their site up explicitly (origin, take-off pad).
 - UI code (templates, pointer handling) is not covered by tests; keep logic in `core/` so it is.

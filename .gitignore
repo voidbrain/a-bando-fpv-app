@@ -6,3 +6,7 @@ flight-data/*
 
 # full-size originals of the guide's demo flight (local only, never pushed; public/guide-demo/ is the published cut)
 public/demo/
+
+# end-to-end runs
+/test-results/
+/playwright-report/

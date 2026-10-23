@@ -22,7 +22,7 @@ import { Panel } from '../panel/panel';
         <button class="btn" (click)="playback.seekBy(-1)">−1s</button>
         <button class="btn" (click)="playback.seekBy(1)">+1s</button>
         <button class="btn" (click)="playback.seekBy(10)">+10s</button>
-        <select (change)="t.setSpeed(num($event))">
+        <select aria-label="Replay speed" (change)="t.setSpeed(num($event))">
           @for (s of speeds; track s) {
             <option [value]="s" [selected]="t.speed() === s">{{ s }}×</option>
           }

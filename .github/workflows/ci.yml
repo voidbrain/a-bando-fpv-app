@@ -37,3 +37,33 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  e2e:
+    # in a real (headless) browser: every guide step plays on its own, and the main screens pass axe (WCAG 2.1 A / AA)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build the block catalogue
+        run: node tools/build-catalog.mjs
+
+      - name: Install the browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Guide steps and accessibility
+        run: npm run e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
