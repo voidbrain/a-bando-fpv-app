@@ -251,3 +251,19 @@ describe('site model underground', () => {
     expect(m.collider.hit(new Vec3(0.3, 1.5, -60))).toBe(false); // its inside
   });
 });
+
+describe('site model basements', () => {
+  it('a basement cuts the ground under the building, has walls, and the drone inside stands on its floor', () => {
+    const s = spec();
+    s.structures = [];
+    s.terrain = { cell: 1, half: { e: 120, n: 120 }, strokes: [] };
+    s.buildings = [s.buildings[0]!];
+    s.buildings[0]!.basement = { height: 3 };
+    const m = buildSiteFromSpec(s);
+    expect(m.ground.cut?.some((v) => v === 1)).toBe(true);
+    expect(m.collider.groundAt(0, 0, -1)).toBeCloseTo(-3); // inside the basement
+    expect(m.collider.groundAt(60, 60, -1)).toBeCloseTo(0); // outside: the terrain
+    expect(m.collider.hit(new Vec3(19.9, -1.5, 0))).toBe(true); // its east wall (the building is 40 long)
+    expect(m.collider.hit(new Vec3(0, -1.5, 0))).toBe(false); // its inside
+  });
+});

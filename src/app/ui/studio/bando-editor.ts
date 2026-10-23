@@ -4,23 +4,23 @@ import { FormsModule } from '@angular/forms';
 import * as L from 'leaflet';
 import { contains, edgesOf, type Pt, type Rect } from '../../core/footprint';
 import { buildingsOverlap, stairsFor, columnGrid, columnRow, convertBuilding, duplicateColumn, duplicateColumns, fillModule, mergeBuildings, overlapsOthers, repeatOpening } from '../../core/building-ops';
-import { addOpening, insideBuilding, listOpenings, moveOpening, outlineOf, wallsOf, previewOpening, patchOpening, removeOpening, reshapeBuilding, resetToRect, resizeOpening, type OpenSeg } from '../../core/openings';
+import { addOpening, insideBuilding, listOpenings, moveOpening, outlineOf, previewOpening, patchOpening, removeOpening, reshapeBuilding, resetToRect, resizeOpening, type OpenSeg } from '../../core/openings';
 import { cloneSpec, uid, type BuildingSpec, type LevelSpec, type LocationInfo, type RoadKind, type RoadSpec, type SiteSpec, type StructureKind, type StructureSpec, type SurfaceKind, type UndergroundSpec } from '../../core/site-spec';
 import { autoAlign, magnetAngle } from '../../core/align';
 import { columnsInLine, pointsInside, treeZones } from '../../core/elements';
 import { FENCES, fenceDef, newFence, setFenceMaterial, type FenceMaterial } from '../../core/fences';
 import { areaCorners } from '../../core/areas';
 import { ROADS, SURFACES, WATER_COLOR, roadDef, simplifyPath, surfaceDef } from '../../core/layers';
-import { newTunnel, tunnelOutline } from '../../core/underground';
-import { contourPaths, defaultTerrain, type Falloff, type TerrainOp, type TerrainStroke } from '../../core/terrain';
+import { newTunnel, sectionProfile, tunnelAxis, tunnelOutline } from '../../core/underground';
+import type { GroundStyle } from '../../three/site-model';
+import { contourPaths, defaultTerrain, heightColor, heightRange, type Falloff, type TerrainOp, type TerrainStroke } from '../../core/terrain';
 import { siteGround } from '../../core/site-ground';
 import { PickMenu, type PickOption } from './pick-menu';
 import { BlocksBox, type BlockArm } from './blocks-box';
-import { applyPattern, detachInstance, placeBlock, removeInstance, updateInstance } from '../../core/blocks';
+import { applyPattern, detachInstance, paramValues, placeBlock, removeInstance, updateInstance, type BlockSpec, type ParamValue } from '../../core/blocks';
 import { BlockLibraryService } from '../../services/block-library.service';
 import { expandShapes, shapesFootprint } from '../../core/shapes';
-import { anglesAt, arcOf, fmtLength, lengthOf, nearestSnap, orthoSnap, snapTargets, type Seg } from '../../core/measure';
-import { applyStore, setColumnRows, setFacade, type FacadePattern } from '../../core/modules';
+import { anglesAt, arcOf, fmtLength, groundProfile, lengthOf, nearestSnap, orthoSnap, snapTargets, type Seg } from '../../core/measure';
 import { areaOf, nearBuilding, scatterTrees, type ScatterMode } from '../../core/scatter';
 import { placeColumn, type Placement } from '../../core/placement';
 import { RECT_KINDS, STRUCTURE_DEFAULTS } from '../../three/structures';
@@ -116,7 +116,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
     <div class="bar">
       <ng-content />
       <div class="seg">
-        <button [class.on]="mode() === 'area'" (click)="setMode('area')">1 · Area</button>
+        <button [class.on]="mode() === 'area'" [disabled]="placeHidden()" (click)="setMode('area')" [title]="placeHidden() ? 'This bando was shared without its place: there is no map area to edit' : ''">1 · Area</button>
         <button [class.on]="mode() === 'model'" [disabled]="!hasModel()" (click)="setMode('model')" [title]="hasModel() ? '' : 'Generate the model first'">2 · Model</button>
       </div>
       @if (mode() === 'model') {
@@ -126,6 +126,15 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
         </div>
         @if (view3d()) {
           <label class="lay" title="Show the roofs in the 3D view"><input type="checkbox" [checked]="roofs3d()" (change)="roofs3d.set(checked($event))" /> roofs</label>
+        }
+        @if (ed.draft().terrain) {
+          <label class="lay" title="How the ground is drawn: its own colours, coloured by height (also under the 2D plan), or as a wireframe (3D)">ground
+            <select [value]="groundStyle()" (change)="groundStyle.set(asGroundStyle($event))">
+              <option value="natural" [selected]="groundStyle() === 'natural'">natural</option>
+              <option value="height" [selected]="groundStyle() === 'height'">height map</option>
+              <option value="wire" [selected]="groundStyle() === 'wire'">wireframe</option>
+            </select>
+          </label>
         }
         @if (!view3d()) {
           <button class="btn" [class.on]="indoor()" [disabled]="!b() || !!b()!.frame" (click)="toggleIndoor()" title="Take the roof off and edit one floor of the selected building: walls, doors, windows, voids, columns, stairs">{{ indoor() ? '✓ Indoors' : 'Indoors' }}</button>
@@ -180,6 +189,9 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
         >
           @for (p of ed.draft().pads; track $index) {
             <rect [attr.x]="p.x - p.w / 2" [attr.y]="p.z - p.d / 2" [attr.width]="p.w" [attr.height]="p.d" [attr.transform]="'rotate(' + (p.rotDeg ?? 0) + ' ' + p.x + ' ' + p.z + ')'" [attr.fill]="p.color ?? '#888'" opacity="0.55" />
+          }
+          @if (heightImage(); as hi) {
+            <image [attr.href]="hi.href" [attr.x]="hi.x" [attr.y]="hi.z" [attr.width]="hi.w" [attr.height]="hi.d" preserveAspectRatio="none" style="image-rendering: pixelated" pointer-events="none" />
           }
           @if (contours(); as ct) {
             <path [attr.d]="ct.minor" fill="none" stroke="#3a2a14" stroke-opacity="0.35" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none" />
@@ -459,6 +471,8 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
           [speedMax]="flights.speedMax"
           (picked)="onPick3d($event)"
           (ground)="onGround3d($event)"
+          [groundStyle]="groundStyle()"
+          [cursor]="cursor3d()"
         />
       }
       @if (!(overlayOn() && view3d())) {
@@ -501,7 +515,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
             <div class="pg"><button class="pbtn" [class.on]="pinMode() === 'e'" style="--tc: #ff6b6b" (click)="armPin('e')" title="Pin end · click where the loaded flight ended"><app-tool-icon name="pinEnd" /></button></div>
           }
         </div>
-        @if (!view3d()) {
+        @if (!view3d() || tool() !== 'select') {
           <div class="opts" role="toolbar" [attr.aria-label]="toolName() + ' options'" [style.left.px]="optsXY().left" [style.right.px]="optsXY().right" [style.top.px]="optsXY().top" [style.max-width.px]="optsXY().max" (pointerdown)="$event.stopPropagation()">
             <span class="tgrip" title="Drag to move the options · double-click to put them back beside the tool" (pointerdown)="tbDown($event, 'opts')" (pointermove)="tbMove($event)" (pointerup)="tbUp($event)" (pointercancel)="tbUp($event)" (dblclick)="tbReset('opts')" aria-hidden="true">⠿</span>
             <b [style.color]="toolColor()">{{ toolName() }}</b>
@@ -707,6 +721,16 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                 <div class="f"><app-pick-menu label="Section" [options]="underShapeOptions" [value]="u.shape" (valueChange)="setUnder({ shape: asUnderShape($event) })" />
                 <label>walls <input type="number" min="0.1" max="3" step="0.1" [value]="u.wall" (change)="setUnder({ wall: Math.max(0.1, num($event)) })" /> m</label></div>
                 <div class="f"><label>water in it <input type="number" min="0" step="0.1" [value]="u.water ?? 0" (change)="setUnder({ water: Math.max(0, num($event)) || undefined })" /> m</label></div>
+                @if (underSection(); as sec) {
+                  <svg class="section" viewBox="0 0 260 96" role="img" [attr.aria-label]="'Side view along ' + u.name + ': ground, ceiling and floor'">
+                    <rect [attr.x]="sec.x0" [attr.y]="sec.ceil" [attr.width]="sec.x1 - sec.x0" [attr.height]="sec.floor - sec.ceil" fill="#101410" fill-opacity="0.85" stroke="#9b5de5" stroke-width="1.5" />
+                    <path [attr.d]="sec.groundFill" fill="#7d6a4f" fill-opacity="0.55" />
+                    <path [attr.d]="sec.ground" fill="none" stroke="#c49a6c" stroke-width="1.5" />
+                    <text x="4" y="10" font-size="9" fill="#aab9af">{{ sec.top.toFixed(1) }} m</text>
+                    <text x="4" y="92" font-size="9" fill="#aab9af">{{ sec.bottom.toFixed(1) }} m</text>
+                    <text x="256" y="92" font-size="9" fill="#aab9af" text-anchor="end">{{ sec.len.toFixed(0) }} m</text>
+                  </svg>
+                }
                 <div class="f"><span class="dim">Heights are metres from the bando's zero. It opens where the ground is between floor and ceiling: dashed = covered, dark = open.</span></div>
                 <div class="f"><button class="btn danger" (click)="deleteSel()">Delete</button></div>
               }
@@ -805,6 +829,7 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                       <button class="btn" (click)="addLevel()" title="Add a floor on top (a copy of the last one; the roof moves up)">＋</button>
                       <button class="btn" [disabled]="bd.levels.length < 2" (click)="removeFloor()" title="Remove the selected floor">－</button>
                     </div>
+                    <label class="fld" title="A basement under the ground floor: the ground is cut under the building; reach it through a void in the ground floor">basement m <input type="number" min="0" max="12" step="0.5" [value]="bd.basement?.height ?? 0" (change)="mutate(setBasement, num($event))" /></label>
                   </div>
                   @if (topLevel(); as tl) {
                     <div class="sec">
@@ -820,31 +845,25 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
                   }
                   <details class="sec mods">
                     <summary>Modules · repeatable blocks <span class="dim small">(floor {{ levelName(level()) }})</span></summary>
-                    <div class="row">
-                      <b>Façade</b>
-                      <select (change)="modSide.set(selVal($event))" title="Which wall">
-                        <option value="all" [selected]="modSide() === 'all'">all walls</option>
-                        <option value="n" [selected]="modSide() === 'n'">north</option><option value="s" [selected]="modSide() === 's'">south</option>
-                        <option value="e" [selected]="modSide() === 'e'">east</option><option value="w" [selected]="modSide() === 'w'">west</option>
-                      </select>
-                      <select (change)="modPattern.set(selVal($event))" title="What each bay is">
-                        <option value="store" [selected]="modPattern() === 'store'">2 panels + 1 door</option>
-                        <option value="panels" [selected]="modPattern() === 'panels'">all lower panels</option>
-                        <option value="doors" [selected]="modPattern() === 'doors'">all full-height doors</option>
-                      </select>
-                      <label title="Distance between piers">bay <input type="number" min="2" max="20" step="0.5" [value]="modBay()" (change)="modBay.set(num($event))" /> m</label>
-                      <button class="btn" (click)="applyFacade()" [disabled]="!!bd.footprint" title="Replace the openings of the wall(s): piers, bays, lintel above. Editable afterwards">Apply</button>
-                    </div>
-                    <div class="row">
-                      <b>Columns</b>
-                      <label>rows <input type="number" min="1" max="8" step="1" [value]="modRows()" (change)="modRows.set(num($event))" /></label>
-                      <label>every <input type="number" min="2" max="40" step="1" [value]="modStep()" (change)="modStep.set(num($event))" /> m</label>
-                      <label title="Edge rows from the long walls">edge <input type="number" min="1" max="30" step="0.5" [value]="modInset()" (change)="modInset.set(num($event))" /> m</label>
-                      <button class="btn" (click)="applyColumnRows()" title="Replace this floor's columns with rows along the hall (4 rows = 1 - 2 - 1)">Apply</button>
-                    </div>
-                    <div class="row">
-                      <button class="btn" (click)="storeShell()" [disabled]="!!bd.footprint" title="The main store in one go: long walls 2 panels + 1 door, one end all doors, the other all panels, 4 rows of columns. Only for this building.">▦ Main store preset</button>
-                    </div>
+                    @for (pb of patternBlocks(); track pb.id) {
+                      <div class="row">
+                        <b [title]="pb.description ?? ''">{{ pb.name }}</b>
+                        @for (p of pb.params; track p.key) {
+                          @if (p.type === 'choice') {
+                            <select (change)="setModValue(pb.id, p.key, selValue($event))" [title]="p.label" [attr.aria-label]="p.label">
+                              @for (o of p.options ?? []; track o) {
+                                <option [value]="o" [selected]="modValue(pb, p.key) === o">{{ sideLabel(o) }}</option>
+                              }
+                            </select>
+                          } @else if (p.type !== 'bool') {
+                            <label [title]="p.label">{{ p.label.toLowerCase() }} <input type="number" [min]="p.min ?? null" [max]="p.max ?? null" [step]="p.step ?? (p.type === 'int' ? 1 : 0.5)" [value]="modValue(pb, p.key)" (change)="setModValue(pb.id, p.key, num($event))" /></label>
+                          }
+                        }
+                        <button class="btn" (click)="applyBlockPattern({ block: pb, params: modValues()[pb.id] ?? {}, rot: 0 })" [disabled]="!!bd.footprint && needsRect(pb)" [title]="(pb.description ?? '') + ' Replaces what was there; still editable one by one.'">Apply</button>
+                      </div>
+                    } @empty {
+                      <div class="dim small">No pattern blocks yet: open ▦ Blocks to fetch the catalogue.</div>
+                    }
                   </details>
                 }
                 @if (selBlock(); as sb) {
@@ -1155,6 +1174,14 @@ const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: '
     }
     .ov .rotk {
       cursor: grab;
+    }
+    .section {
+      flex: 1 1 100%;
+      width: 100%;
+      height: auto;
+      background: #0a0f0c;
+      border: 1px solid var(--line);
+      border-radius: 6px;
     }
     /* surfaces and water are picked by their edge only: a click inside them still pans the map or selects what is on them */
     .ov .hit.edge {
@@ -1730,6 +1757,9 @@ export class BandoEditor {
     this.colSet.set(set);
     this.toast.show(`${set.length} columns selected (${along === 'x' ? 'row' : along === 'z' ? 'line' : 'all alike'}).`);
   }
+  /** A bando shared without its place: no map under it (it would show the sea at 0°, 0°), no area to regenerate. */
+  protected readonly placeHidden = computed(() => this.ed.draft().privacy === 'hidden');
+
   // ---- blocks: placing from the library ----
   private readonly shapeBoxes = new WeakMap<object, { x0: number; z0: number; x1: number; z1: number }>();
   /** The plan footprint of an object made of shapes (remembered per shapes list). */
@@ -1778,6 +1808,7 @@ export class BandoEditor {
       const x = this.index(s, id);
       if (x) done = applyPattern(x, Math.min(this.level(), x.levels.length - 1), a.block, a.params);
     });
+    this.colSet.set([]);
     this.applyNow();
     this.toast.show(done.length ? `“${a.block.name}” on floor ${this.levelName(this.level())}: ${done.join(', ')}.` : 'That pattern changed nothing here.');
   }
@@ -1943,6 +1974,22 @@ export class BandoEditor {
     const p = this.pick();
     return p?.t === 'under' ? (this.ed.draft().underground?.[p.i] ?? null) : null;
   });
+  /** The side view of the selected volume, scaled into a 260 × 96 drawing: ground line, and its inside as a box. */
+  protected readonly underSection = computed(() => {
+    const u = this.underSel();
+    if (!u) return null;
+    const p = sectionProfile(u, this.ground().at, 64);
+    const top = Math.max(...p.ground, p.ceiling + p.wall) + 1, bottom = Math.min(...p.ground, p.floor - p.wall) - 1;
+    const W = 252, H = 80, sx = W / p.len, sy = H / Math.max(1, top - bottom);
+    const X = (t: number): number => 4 + t * sx, Y = (h: number): number => 8 + (top - h) * sy;
+    const pts = p.ground.map((h, i) => `${X((p.len * i) / (p.ground.length - 1)).toFixed(1)},${Y(h).toFixed(1)}`);
+    const pad = (p.len - (tunnelAxis(u) ? Math.hypot(tunnelAxis(u)!.b.x - tunnelAxis(u)!.a.x, tunnelAxis(u)!.b.z - tunnelAxis(u)!.a.z) : p.len)) / 2;
+    return {
+      ground: 'M' + pts.join('L'),
+      groundFill: 'M' + pts.join('L') + `L${X(p.len)},${8 + H}L${X(0)},${8 + H}Z`,
+      x0: X(Math.max(0, pad)), x1: X(p.len - Math.max(0, pad)), ceil: Y(p.ceiling), floor: Y(p.floor), top, bottom, len: p.len,
+    };
+  });
   protected setUnder(patch: Partial<UndergroundSpec>): void {
     const p = this.pick();
     if (p?.t !== 'under') return;
@@ -1975,6 +2022,43 @@ export class BandoEditor {
   });
 
   // ---- terrain brushes ----
+  /** How the terrain is drawn in 3D (and, as a height map, under the 2D plan). */
+  protected readonly groundStyle = signal<GroundStyle>('natural');
+  protected asGroundStyle = (e: Event): GroundStyle => {
+    const v = (e.target as HTMLSelectElement).value;
+    return v === 'height' || v === 'wire' ? v : 'natural';
+  };
+  /** The brush ring in the 3D view while a terrain tool is active. */
+  protected readonly cursor3d = computed(() => {
+    const h = this.hover();
+    if (!h || !this.view3d() || this.tool() !== 'terrain') return null;
+    return { x: h.x, z: h.z, r: this.terrainOp() === 'ramp' ? this.terrRadius() / 2 : this.terrRadius(), color: this.tc('terrain') };
+  });
+  /** The height map under the 2D plan: one pixel per two grid cells, as an image over the grid's extent. */
+  protected readonly heightImage = computed(() => {
+    const g = this.ground().grid;
+    if (!g || this.groundStyle() !== 'height') return null;
+    const step = 2, w = Math.ceil(g.nx / step), h = Math.ceil(g.nz / step);
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const cx = c.getContext('2d');
+    if (!cx) return null;
+    const img = cx.createImageData(w, h);
+    const { lo, hi } = heightRange(g);
+    for (let j = 0; j < h; j++) {
+      for (let i = 0; i < w; i++) {
+        const [r, gg, b] = heightColor(g.h[Math.min(g.nz - 1, j * step) * g.nx + Math.min(g.nx - 1, i * step)]!, lo, hi);
+        const k = (j * w + i) * 4;
+        img.data[k] = r * 255;
+        img.data[k + 1] = gg * 255;
+        img.data[k + 2] = b * 255;
+        img.data[k + 3] = 170;
+      }
+    }
+    cx.putImageData(img, 0, 0);
+    return { href: c.toDataURL(), x: g.x0, z: g.z0, w: (g.nx - 1) * g.cell, d: (g.nz - 1) * g.cell };
+  });
   protected readonly terrainOp = signal<TerrainOp>('raise');
   protected readonly terrRadius = signal(8);
   protected readonly terrStrength = signal(2);
@@ -2107,7 +2191,15 @@ export class BandoEditor {
       return { ...arcOf(a.at, a.d1, a.d2, Math.min(r0, arm / 3)), deg: a.deg };
     });
   });
-  protected fmt = (m: Seg): string => fmtLength(lengthOf(m));
+  /** A measure's label: its plan length, and on a terrain the height difference and the length along the ground. */
+  protected fmt = (m: Seg): string => {
+    const flat = lengthOf(m);
+    const g = this.ground();
+    if (!g.grid) return fmtLength(flat);
+    const p = groundProfile(m, g.at);
+    if (Math.abs(p.dh) < 0.05 && p.along - flat < 0.05) return fmtLength(flat);
+    return `${fmtLength(flat)} · ${p.dh >= 0 ? '↑' : '↓'}${Math.abs(p.dh).toFixed(1)} m · ${fmtLength(p.along)} on the ground`;
+  };
   /** Where a measure click or hover lands: magnet to elements within ~10 px, else straightened against the building axes. */
   private measPoint(raw: Pt): Pt {
     const m = this.meas();
@@ -2294,7 +2386,7 @@ export class BandoEditor {
         (t.where === 'both' || (t.where === 'in') === this.indoor()) &&
         // cut / wing / merge stay in the palette: without a selected building they ask for one (their hint says so)
 
-        (!this.view3d() || ['select', 'building', 'structure', 'tree', 'scatter', 'fence'].includes(t.id)), // on the ground in 3D: what a click can place
+        (!this.view3d() || ['select', 'building', 'structure', 'tree', 'scatter', 'fence', 'terrain', 'tunnel', 'road', 'surface', 'water'].includes(t.id)), // on the ground in 3D: what a click can place or paint
     ),
   );
   protected readonly placing = computed(() => PLACE.includes(this.tool()));
@@ -2475,7 +2567,7 @@ export class BandoEditor {
       this.ed.selectedId(); // another building: back to the whole building
       untracked(() => this.floorFocus.set(false));
     });
-    effect(() => this.applyBase(this.studio.basemap(), this.studio.mapOpacity()));
+    effect(() => this.applyBase(this.placeHidden() ? 'off' : this.studio.basemap(), this.studio.mapOpacity()));
     effect(() => {
       // a tool that is no longer offered (nothing selected, left the floor ...) falls back to Select
       const t = this.tool(), visible = this.visibleTools();
@@ -2532,7 +2624,7 @@ export class BandoEditor {
       if (ev.button === 2 && !this.view3d()) ev.stopPropagation();
     }, true);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
-    this.applyBase(this.studio.basemap(), this.studio.mapOpacity());
+    this.applyBase(this.placeHidden() ? 'off' : this.studio.basemap(), this.studio.mapOpacity());
     const sync = (): void => {
       const c = map.getCenter();
       this.center.set({ lat: c.lat, lon: c.lng });
@@ -2555,7 +2647,7 @@ export class BandoEditor {
     const mpp = this.mpp();
     this.rot.set(sh?.rot ?? 0);
     this.half.set(sh ? { e: clampHalf(sh.e), n: clampHalf(sh.n) } : { e: clampHalf(this.size().w * 0.35 * mpp), n: clampHalf(this.size().h * 0.35 * mpp) });
-    this.mode.set(this.studio.initialMode() === 'model' && this.hasModel() ? 'model' : 'area');
+    this.mode.set((this.studio.initialMode() === 'model' || this.placeHidden()) && this.hasModel() ? 'model' : 'area');
     this.destroyRef.onDestroy(() => {
       ro.disconnect();
       if (this.indoor()) this.view.setRoofHidden(this.roofBefore);
@@ -3072,7 +3164,11 @@ export class BandoEditor {
   }
 
   /** A drag / click on the ground in 3D with a tool active: the same code path as in 2D, with the ground point as the pointer. */
-  protected onGround3d(g: { phase: 'down' | 'move' | 'up'; x: number; z: number }): void {
+  protected onGround3d(g: { phase: 'down' | 'move' | 'up' | 'hover'; x: number; z: number }): void {
+    if (g.phase === 'hover') {
+      this.hover.set({ x: g.x, z: g.z }); // the height readout and the brush ring follow the pointer
+      return;
+    }
     const fake = { clientX: 0, clientY: 0, pointerId: 1, shiftKey: false, button: 0, currentTarget: null, stopPropagation: () => undefined, preventDefault: () => undefined } as unknown as PointerEvent;
     if (Number.isNaN(g.x) && g.phase === 'up') {
       this.world3d = null;
@@ -3983,40 +4079,27 @@ export class BandoEditor {
     this.applyNow();
   }
 
-  protected readonly modSide = signal('all');
-  protected readonly modPattern = signal('store');
-  protected readonly modBay = signal(5);
-  protected readonly modRows = signal(4);
-  protected readonly modStep = signal(10);
-  protected readonly modInset = signal(4);
-  protected selVal = (e: Event): string => (e.target as HTMLSelectElement).value;
-  protected applyFacade(): void {
-    let n = 0;
-    this.mutate((b) => {
-      const li = Math.min(this.level(), b.levels.length - 1);
-      for (const w of wallsOf(b)) if (this.modSide() === 'all' || w.key === this.modSide()) n += setFacade(b, li, w, this.modPattern() as FacadePattern, { bay: this.modBay() });
-    }, 0);
-    this.toast.show(n ? `${n} bays made.` : 'No wall long enough for that bay size.');
+  /** The Modules section: every pattern block of the library (catalogue and own), with its values per block. */
+  protected readonly patternBlocks = computed(() => this.blockLib.all().filter((b) => b.kind === 'pattern'));
+  protected readonly modValues = signal<Record<string, Record<string, ParamValue>>>({});
+  protected modValue = (b: BlockSpec, key: string): ParamValue => paramValues(b, this.modValues()[b.id])[key]!;
+  protected setModValue(id: string, key: string, v: ParamValue): void {
+    this.modValues.update((m) => ({ ...m, [id]: { ...m[id], [key]: v } }));
   }
-  protected applyColumnRows(): void {
-    let n = 0;
-    this.mutate((b) => {
-      n = setColumnRows(b, Math.min(this.level(), b.levels.length - 1), { rows: this.modRows(), step: this.modStep(), inset: this.modInset() });
-    }, 0);
-    this.colSet.set([]);
-    this.toast.show(n ? `${n} columns placed.` : 'No room for columns.');
-  }
-  protected storeShell(): void {
-    this.mutate((b) => {
-      applyStore(b, Math.min(this.level(), b.levels.length - 1), { bay: this.modBay(), step: this.modStep(), rows: this.modRows(), inset: this.modInset() });
-    }, 0);
-    this.toast.show('Store shell applied to this floor. Doors, panels and columns are still editable one by one.');
-  }
+  protected selValue = (e: Event): string => (e.target as HTMLSelectElement).value;
+  /** Façade and store patterns work on rectangular buildings only. */
+  protected needsRect = (b: BlockSpec): boolean => !!(b.content.pattern?.facade || b.content.pattern?.store);
+  protected sideLabel = (o: string): string => ({ all: 'all walls', n: 'north', s: 'south', e: 'east', w: 'west' })[o] ?? o;
 
   protected readonly setName = (b: BuildingSpec, v: string): void => { b.name = v; };
   protected readonly setLength = (b: BuildingSpec, v: number): void => { b.length = Math.max(2, v); };
   protected readonly setWidth = (b: BuildingSpec, v: number): void => { b.width = Math.max(2, v); };
   protected readonly setRot = (b: BuildingSpec, v: number): void => { b.rotDeg = v; };
+  /** 0 removes the basement; otherwise its inside height (2 – 12 m). */
+  protected readonly setBasement = (b: BuildingSpec, v: number): void => {
+    if (v > 0) b.basement = { height: Math.min(12, Math.max(2, v)) };
+    else delete b.basement;
+  };
   protected readonly toRectangle = (b: BuildingSpec): void => resetToRect(b);
 
   protected setOpening(patch: Partial<{ kind: 'door' | 'window'; w: number; h: number; sill: number; c: number; closed: boolean }>): void {

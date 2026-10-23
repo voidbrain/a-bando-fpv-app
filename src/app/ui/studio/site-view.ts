@@ -2,6 +2,7 @@ import { Component, DestroyRef, ElementRef, afterNextRender, effect, inject, inp
 import type { Flight } from '../../core/models';
 import type { SiteSpec } from '../../core/site-spec';
 import { SiteViewRenderer, type SitePick } from '../../three/site-view';
+import type { GroundStyle } from '../../three/site-model';
 
 /** The editor's 3D mode: the whole bando, orbit with the mouse. Editing happens in 2D; this is for looking. */
 @Component({
@@ -57,7 +58,11 @@ export class SiteView {
   readonly flights = input<Flight[]>([]);
   readonly speedMax = input(10);
   readonly picked = output<SitePick | null>();
-  readonly ground = output<{ phase: 'down' | 'move' | 'up'; x: number; z: number }>();
+  readonly ground = output<{ phase: 'down' | 'move' | 'up' | 'hover'; x: number; z: number }>();
+  /** How the terrain is drawn. */
+  readonly groundStyle = input<GroundStyle>('natural');
+  /** A brush ring on the ground (terrain tools), or none. */
+  readonly cursor = input<{ x: number; z: number; r: number; color: string } | null>(null);
   protected readonly failed = signal(false);
   private readonly cv = viewChild.required<ElementRef<HTMLCanvasElement>>('cv');
   private r: SiteViewRenderer | null = null;
@@ -72,6 +77,7 @@ export class SiteView {
         return;
       }
       this.r.mode = this.mode();
+      this.r.groundStyle = untracked(() => this.groundStyle());
       this.r.onPick = (p) => this.picked.emit(p);
       this.r.onGround = (phase, x, z) => this.ground.emit({ phase, x, z });
       this.schedule(0);
@@ -79,6 +85,14 @@ export class SiteView {
     effect(() => {
       const m = this.mode();
       if (this.r) this.r.mode = m;
+    });
+    effect(() => {
+      const st = this.groundStyle();
+      this.r?.setGroundStyle(st);
+    });
+    effect(() => {
+      const c = this.cursor();
+      this.r?.setCursor(c);
     });
     effect(() => {
       const sel = this.selection();

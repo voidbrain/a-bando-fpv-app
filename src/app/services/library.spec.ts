@@ -93,3 +93,36 @@ describe('the block library', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('sharing a bando without its place', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('imports a hidden copy: the carried ground is registered and leaves the spec, the id is fresh, flights snap to the pad', async () => {
+    const { SiteService } = await import('./site.service');
+    const { FlightService } = await import('./flight.service');
+    const { shareCopy } = await import('../core/share');
+    const { getTerrainBase, setTerrainBase, emptyGrid } = await import('../core/terrain');
+    const { autoAlignFlights, takeoffSpot } = await import('../core/takeoff');
+    const site = TestBed.inject(SiteService);
+    const spec = emptySpec({ lat: 45.6, lon: 12.2 }, 'Mill');
+    spec.id = 'mill';
+    spec.terrain = { cell: 1, half: { e: 20, n: 20 }, base: { source: 'aws-terrarium', key: 'k-mill', fetchedAt: 1, datum: 18 }, strokes: [] };
+    setTerrainBase('k-mill', new Float32Array(emptyGrid(spec.terrain).h.length).fill(2));
+    TestBed.inject(SiteLibraryService).save(spec);
+    const file = JSON.stringify(shareCopy(spec, 'hidden', getTerrainBase('k-mill')));
+    expect(site.importJson(file)).toBe(true);
+    const got = site.active();
+    expect(got.id).not.toBe('mill'); // the original stays
+    expect(got.privacy).toBe('hidden');
+    expect(got.terrain!.base!.data).toBeUndefined();
+    expect(getTerrainBase(got.terrain!.base!.key)![0]).toBeCloseTo(2);
+    expect(autoAlignFlights()).toBe(true);
+    const f = TestBed.inject(FlightService).add('log', [
+      { lat: 10, lon: 10, alt: 50, t: 0 },
+      { lat: 10.0001, lon: 10, alt: 55, t: 1 },
+    ]);
+    expect(f.loc[0]!.x).toBeCloseTo(takeoffSpot().x, 3);
+    expect(f.loc[0]!.z).toBeCloseTo(takeoffSpot().z, 3);
+    expect(autoAlignFlights()).toBe(false);
+  });
+});

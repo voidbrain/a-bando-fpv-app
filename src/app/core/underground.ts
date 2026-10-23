@@ -4,7 +4,7 @@
  * point, and the collision boxes of the walls and slabs.
  */
 import { insidePolygon } from './layers';
-import type { UndergroundSpec, Vec2 } from './site-spec';
+import type { BuildingSpec, UndergroundSpec, Vec2 } from './site-spec';
 import { heightAt, type HeightGrid } from './terrain';
 import type { SolidBox } from './sim/collider';
 
@@ -84,11 +84,52 @@ export function volumeSolids(v: UndergroundSpec): SolidBox[] {
 export function tunnelAxis(v: UndergroundSpec): { a: Vec2; b: Vec2; width: number } | null {
   if (v.outline.length !== 4) return null;
   const [p0, p1, p2, p3] = v.outline as [Vec2, Vec2, Vec2, Vec2];
-  return { a: { x: (p0.x + p3.x) / 2, z: (p0.z + p3.z) / 2 }, b: { x: (p1.x + p2.x) / 2, z: (p1.z + p2.z) / 2 }, width: Math.hypot(p3.x - p0.x, p3.z - p0.z) };
+  const mid = (p: Vec2, q: Vec2): Vec2 => ({ x: (p.x + q.x) / 2, z: (p.z + q.z) / 2 });
+  const d01 = Math.hypot(p1.x - p0.x, p1.z - p0.z), d03 = Math.hypot(p3.x - p0.x, p3.z - p0.z);
+  // the axis runs along the longer side (a tunnel is longer than wide; a room drawn either way)
+  return d01 >= d03 ? { a: mid(p0, p3), b: mid(p1, p2), width: d03 } : { a: mid(p0, p1), b: mid(p3, p2), width: d01 };
 }
 
 /** A new tunnel `depth` metres below the ground at its start, `height` metres tall inside. */
 export function newTunnel(g: HeightGrid | null, a: Vec2, b: Vec2, o: { width: number; height: number; depth: number; shape: UndergroundSpec['shape']; id: string; name: string }): UndergroundSpec {
   const floor = Math.round((heightAt(g, a.x, a.z) - o.depth) * 10) / 10;
   return { id: o.id, name: o.name, outline: tunnelOutline(a, b, o.width), floor, ceiling: floor + o.height, shape: o.shape, wall: 0.4 };
+}
+
+/** Wall and slab thickness of basements. */
+export const BASEMENT_WALL = 0.3;
+
+/**
+ * A building's basement as an underground volume under its outline (`outline` in site metres, `ground` = the height of
+ * its levelled pad): the terrain inside is cut, the drone inside stands on the basement floor. Null without a basement.
+ */
+export function basementVolume(b: BuildingSpec, outline: Vec2[], ground: number): UndergroundSpec | null {
+  if (!b.basement || b.frame) return null;
+  const h = Math.min(12, Math.max(2, b.basement.height));
+  return { id: `basement-${b.id}`, name: `${b.name} basement`, outline, floor: ground - h, ceiling: ground, shape: 'box', wall: BASEMENT_WALL };
+}
+
+/**
+ * The side view along a volume: its axis (a straight tunnel's centre line, else the long middle line of its outline),
+ * the ground height every few metres along it, and its floor / ceiling. For the inspector's section drawing.
+ */
+export function sectionProfile(v: UndergroundSpec, at: (x: number, z: number) => number, samples = 60): { len: number; ground: number[]; floor: number; ceiling: number; wall: number } {
+  let a: Vec2, b: Vec2;
+  const ax = tunnelAxis(v);
+  if (ax) ({ a, b } = ax);
+  else {
+    const xs = v.outline.map((p) => p.x), zs = v.outline.map((p) => p.z);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+    if (x1 - x0 >= z1 - z0) [a, b] = [{ x: x0, z: (z0 + z1) / 2 }, { x: x1, z: (z0 + z1) / 2 }];
+    else [a, b] = [{ x: (x0 + x1) / 2, z: z0 }, { x: (x0 + x1) / 2, z: z1 }];
+  }
+  const len = Math.hypot(b.x - a.x, b.z - a.z);
+  // a little ground either side of the ends, so the mouths show
+  const pad = Math.min(15, len * 0.2), ux = (b.x - a.x) / (len || 1), uz = (b.z - a.z) / (len || 1);
+  const ground: number[] = [];
+  for (let i = 0; i <= samples; i++) {
+    const t = -pad + ((len + 2 * pad) * i) / samples;
+    ground.push(at(a.x + ux * t, a.z + uz * t));
+  }
+  return { len: len + 2 * pad, ground, floor: v.floor, ceiling: v.ceiling, wall: v.wall };
 }

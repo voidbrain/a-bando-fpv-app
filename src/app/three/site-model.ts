@@ -2,12 +2,12 @@ import { cutRect, edgesOf, slabs } from '../core/footprint';
 import { buildStructure } from './structures';
 import { fenceDef, postsAlong } from '../core/fences';
 import { WATER_COLOR, insidePolygon, roadDef, surfaceDef } from '../core/layers';
-import { tunnelAxis, volumeSolids } from '../core/underground';
+import { BASEMENT_WALL, tunnelAxis, volumeSolids } from '../core/underground';
 import * as THREE from 'three';
 import { type BuildingSpec, type LevelSpec, type RoadSpec, type SiteSpec, type SurfaceSpec, type TreeSpec, type UndergroundSpec, createRandom } from '../core/site-spec';
 import { SiteCollider, type SolidBox, type TreeCylinder } from '../core/sim/collider';
 import { siteGround, type SiteGround } from '../core/site-ground';
-import type { HeightGrid } from '../core/terrain';
+import { heightColor, heightRange, type HeightGrid } from '../core/terrain';
 
 export type TreeKind = 'd' | 'c';
 
@@ -25,7 +25,11 @@ export interface SiteModel {
   occluders: THREE.Mesh[];
   setScale(k: number): void;
   setRoofHidden(hidden: boolean): void;
+  /** How the terrain is drawn: its natural colours, coloured by height, or as a wireframe. */
+  setGroundStyle(style: GroundStyle): void;
 }
+
+export type GroundStyle = 'natural' | 'height' | 'wire';
 
 /** Instanced trees (trunks + crowns) with per-tree hide, used by the x-ray. */
 export class TreeField {
@@ -553,6 +557,25 @@ function buildUnderground(v: UndergroundSpec): THREE.Group {
   return out;
 }
 
+/**
+ * A basement: walls along every edge of the outline from the ground floor slab down `height` metres, and a floor slab.
+ * Building-local (the group carries the position, turn and pad height); the outline's edges are axis-aligned there.
+ */
+function buildBasement(ctx: Ctx, b: BuildingSpec, target: THREE.Object3D, floorMat: THREE.Material): void {
+  const h = Math.min(12, Math.max(2, b.basement!.height)), t = BASEMENT_WALL;
+  const poly = b.footprint ?? [{ x: -b.length / 2, z: -b.width / 2 }, { x: b.length / 2, z: -b.width / 2 }, { x: b.length / 2, z: b.width / 2 }, { x: -b.length / 2, z: b.width / 2 }];
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i]!, q = poly[(i + 1) % poly.length]!;
+    const along = Math.abs(q.x - p.x) > Math.abs(q.z - p.z);
+    const len = along ? Math.abs(q.x - p.x) : Math.abs(q.z - p.z);
+    if (len < 0.05) continue;
+    ctx.addBox(target, (p.x + q.x) / 2, -h / 2, (p.z + q.z) / 2, along ? len + t : t, h, along ? t : len + t, ctx.mat.conc, true, false);
+  }
+  for (const r of b.footprint ? slabs(b.footprint) : [{ x0: -b.length / 2, z0: -b.width / 2, x1: b.length / 2, z1: b.width / 2 }]) {
+    ctx.addBox(target, (r.x0 + r.x1) / 2, -h - t / 2, (r.z0 + r.z1) / 2, r.x1 - r.x0, t, r.z1 - r.z0, floorMat, true, false);
+  }
+}
+
 /** Build the whole site from a {@link SiteSpec}. Deterministic: the same spec always produces the same scene. */
 export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {}): SiteModel {
   const group = new THREE.Group();
@@ -563,6 +586,7 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
   const occluders: THREE.Mesh[] = [];
   const rnd = createRandom(spec.seed);
   const ground = opts.bare ? siteGround({ ...spec, terrain: undefined }) : siteGround(spec);
+  let terrain: THREE.Mesh | null = null;
 
   const mats: Record<string, THREE.MeshStandardMaterial> = {};
   const ctx: Ctx = {
@@ -603,7 +627,8 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
   if (!opts.bare && ground.grid) {
     // ---- terrain: the height grid, flat ground around it, roads laid on it
     const g = ground.grid;
-    group.add(terrainMesh(g, spec.groundColor, rnd, spec.surfaces, ground.cut));
+    terrain = terrainMesh(g, spec.groundColor, rnd, spec.surfaces, ground.cut);
+    group.add(terrain);
     const outer = spec.extent * 1.1, gx = -g.x0, gz = -g.z0;
     const grass = material(spec.groundColor);
     if (outer > Math.min(gx, gz)) {
@@ -711,6 +736,7 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
       buildWalls(ctx, b, l, inner);
       buildRoof(ctx, b, l, localRoof);
     }
+    if (b.basement && !b.frame) buildBasement(ctx, b, inner, floorMat);
     // roofs live under the building but belong to the global roof group for hide/show
     roof.attach(localRoof);
     liftSolids(solids, firstSolid, by);
@@ -804,7 +830,7 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     group.add(m);
   }
 
-  const collider = new SiteCollider(solids, treeSolids, ground.grid, opts.bare ? [] : (spec.waters ?? []).map((w, i) => ({ pts: w.pts, level: ground.grid ? (ground.water[i] ?? 0) : 0.03 })), opts.bare ? [] : (spec.underground ?? []));
+  const collider = new SiteCollider(solids, treeSolids, ground.grid, opts.bare ? [] : (spec.waters ?? []).map((w, i) => ({ pts: w.pts, level: ground.grid ? (ground.water[i] ?? 0) : 0.03 })), opts.bare ? [] : ground.vols);
   return {
     group,
     roof,
@@ -819,6 +845,18 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     setRoofHidden(hidden: boolean): void {
       roof.visible = !hidden;
       collider.roofHidden = hidden;
+    },
+    setGroundStyle(style: GroundStyle): void {
+      if (!terrain || !ground.grid) return;
+      const col = terrain.geometry.getAttribute('color') as THREE.BufferAttribute;
+      const pos = terrain.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const natural = (terrain.userData['natural'] ??= (col.array as Float32Array).slice()) as Float32Array;
+      if (style === 'height') {
+        const { lo, hi } = heightRange(ground.grid);
+        for (let i = 0; i < pos.count; i++) col.setXYZ(i, ...heightColor(pos.getY(i), lo, hi));
+      } else (col.array as Float32Array).set(natural);
+      col.needsUpdate = true;
+      (terrain.material as THREE.MeshStandardMaterial).wireframe = style === 'wire';
     },
   };
 }

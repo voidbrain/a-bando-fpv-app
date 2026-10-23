@@ -25,11 +25,14 @@ export interface TerrainStroke {
 
 /** Where the real ground came from; the heights are in the registry under `key`. */
 export interface TerrainBase {
-  source: 'aws-terrarium' | 'flat';
+  /** `embedded`: the heights came inside a shared file (its place may be hidden): kept in the local cache only. */
+  source: 'aws-terrarium' | 'flat' | 'embedded';
   key: string;
   fetchedAt: number;
-  /** Real elevation (m above sea level) that maps to y = 0. */
+  /** Real elevation (m above sea level) that maps to y = 0 (0 when the place is hidden). */
   datum: number;
+  /** Only in a shared file: the heights themselves (see core/share.ts); moved to the cache on import. */
+  data?: string;
 }
 
 export interface TerrainSpec {
@@ -75,8 +78,8 @@ export function sanitizeTerrain(raw: unknown): TerrainSpec | undefined {
   const half = { e: num(t.half?.e, 200, 20, MAX_HALF), n: num(t.half?.n, 200, 20, MAX_HALF) };
   const b = t.base;
   const base: TerrainBase | undefined =
-    b && typeof b.key === 'string' && (b.source === 'aws-terrarium' || b.source === 'flat')
-      ? { source: b.source, key: b.key, fetchedAt: num(b.fetchedAt, 0, 0, 1e15), datum: num(b.datum, 0, -500, 9000) }
+    b && typeof b.key === 'string' && (b.source === 'aws-terrarium' || b.source === 'flat' || b.source === 'embedded')
+      ? { source: b.source, key: b.key.slice(0, 120), fetchedAt: num(b.fetchedAt, 0, 0, 1e15), datum: num(b.datum, 0, -500, 9000), ...(typeof b.data === 'string' && b.data.length < 4_000_000 ? { data: b.data } : {}) }
       : undefined;
   const strokes = (Array.isArray(t.strokes) ? t.strokes : [])
     .filter((s): s is TerrainStroke => !!s && OPS.includes(s.op) && Array.isArray(s.pts))
@@ -104,6 +107,11 @@ export function setTerrainBase(key: string, h: Float32Array): void {
 
 export function hasTerrainBase(key: string): boolean {
   return bases.has(key);
+}
+
+/** The registered real-ground heights under `key` (to pack them into a shared file), or null. */
+export function getTerrainBase(key: string): Float32Array | null {
+  return bases.get(key) ?? null;
 }
 
 // ---- grid -------------------------------------------------------------------------------------------
@@ -349,4 +357,32 @@ export function contourPaths(g: HeightGrid, step = 1, stride = g.nx * g.nz > 90_
     }
   }
   return { minor: minor.join(''), major: major.join('') };
+}
+
+/** Height-map colours, low to high: dark green, green, yellow, brown, snow white (blue would read as water). */
+const RAMP: readonly [number, number, number][] = [
+  [0.12, 0.33, 0.24],
+  [0.25, 0.62, 0.35],
+  [0.85, 0.76, 0.42],
+  [0.66, 0.4, 0.23],
+  [0.95, 0.95, 0.95],
+];
+
+/** The colour (r, g, b in 0..1) of a height `h` on a map whose heights run from `lo` to `hi`; flat ground is green. */
+export function heightColor(h: number, lo: number, hi: number): [number, number, number] {
+  if (hi - lo < 0.5) return RAMP[1]!;
+  const t = Math.min(1, Math.max(0, (h - lo) / (hi - lo))) * (RAMP.length - 1);
+  const i = Math.min(RAMP.length - 2, Math.floor(t)), f = t - i;
+  const a = RAMP[i]!, b = RAMP[i + 1]!;
+  return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+}
+
+/** Lowest and highest height of a grid. */
+export function heightRange(g: HeightGrid): { lo: number; hi: number } {
+  let lo = Infinity, hi = -Infinity;
+  for (let k = 0; k < g.h.length; k++) {
+    lo = Math.min(lo, g.h[k]!);
+    hi = Math.max(hi, g.h[k]!);
+  }
+  return { lo, hi };
 }

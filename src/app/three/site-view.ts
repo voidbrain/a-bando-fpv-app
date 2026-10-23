@@ -3,7 +3,7 @@ import type { Flight } from '../core/models';
 import { emptySpec, type SiteSpec } from '../core/site-spec';
 import { ghost, levelOnly } from './element-preview';
 import { PathRenderer } from './path-renderer';
-import { buildSiteFromSpec, type SiteModel } from './site-model';
+import { buildSiteFromSpec, type GroundStyle, type SiteModel } from './site-model';
 import { rayGround } from '../core/terrain';
 
 /** What a click on the 3D model selects. */
@@ -35,7 +35,11 @@ export class SiteViewRenderer {
   /** 'select': drag orbits and a click selects. 'draw': left-drag reports ground points instead (right-drag / Shift still orbit). */
   mode: 'select' | 'draw' = 'select';
   onPick: (p: SitePick | null) => void = () => undefined;
-  onGround: (phase: 'down' | 'move' | 'up', x: number, z: number) => void = () => undefined;
+  onGround: (phase: 'down' | 'move' | 'up' | 'hover', x: number, z: number) => void = () => undefined;
+  /** How the terrain is drawn (natural, height map, wireframe). */
+  groundStyle: GroundStyle = 'natural';
+  /** A ring on the ground under the pointer (a terrain brush), or none. */
+  private cursor: THREE.LineLoop | null = null;
   private press: { x: number; y: number; moved: boolean; ground: boolean } | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -69,6 +73,11 @@ export class SiteViewRenderer {
         const g = this.groundPoint(e);
         if (g) this.onGround('move', g.x, g.z);
         return;
+      }
+      if (!this.press && this.mode === 'draw') {
+        // drawing tools: where the pointer is on the ground (the height readout, the brush ring)
+        const g = this.groundPoint(e);
+        if (g) this.onGround('hover', g.x, g.z);
       }
       const d = this.drag;
       if (!d) return;
@@ -105,6 +114,32 @@ export class SiteViewRenderer {
     this.raf = requestAnimationFrame(this.tick);
   }
 
+  setGroundStyle(style: GroundStyle): void {
+    this.groundStyle = style;
+    this.model?.setGroundStyle(style);
+  }
+
+  /** A dashed ring of radius `r` lying on the ground at (x, z), or none (null). */
+  setCursor(c: { x: number; z: number; r: number; color: string } | null): void {
+    if (!c || !this.model) {
+      if (this.cursor) this.cursor.visible = false;
+      return;
+    }
+    if (!this.cursor) {
+      this.cursor = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: c.color, depthTest: false, transparent: true }));
+      this.cursor.renderOrder = 10;
+      this.scene.add(this.cursor);
+    }
+    const pts: number[] = [];
+    for (let i = 0; i < 64; i++) {
+      const a = (i / 64) * Math.PI * 2, x = c.x + Math.cos(a) * c.r, z = c.z + Math.sin(a) * c.r;
+      pts.push(x, this.model.ground.at(x, z) + 0.3, z);
+    }
+    this.cursor.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    (this.cursor.material as THREE.LineBasicMaterial).color.set(c.color);
+    this.cursor.visible = true;
+  }
+
   /** Rebuild from the spec. The camera re-frames only when `frameKey` changes (a different bando). */
   show(spec: SiteSpec, roofHidden: boolean, frameKey: string, focus: { id: string; li: number } | null = null): void {
     if (this.model) {
@@ -114,6 +149,7 @@ export class SiteViewRenderer {
     this.spec = spec;
     this.model = buildSiteFromSpec(spec);
     this.model.setRoofHidden?.(roofHidden);
+    this.model.setGroundStyle(this.groundStyle);
     if (focus) this.focusFloor(spec, focus);
     this.scene.add(this.model.group);
     this.refreshSelection();
