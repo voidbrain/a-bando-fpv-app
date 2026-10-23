@@ -270,6 +270,14 @@ export function blockInstances(spec: SiteSpec): { ref: BlockRef; count: number }
   return [...m.values()];
 }
 
+/** What a placement made that the editor should select: its building, else its first structure (null: neither). */
+export function placedHead(spec: SiteSpec, inst: string): { building: string } | { structure: number } | null {
+  const b = spec.buildings.find((x) => x.block?.inst === inst);
+  if (b) return { building: b.id };
+  const i = (spec.structures ?? []).findIndex((x) => x.block?.inst === inst);
+  return i >= 0 ? { structure: i } : null;
+}
+
 /** Placements whose block has a newer version in `latest` (block id → version). */
 export function outdated(spec: SiteSpec, latest: ReadonlyMap<string, number>): { ref: BlockRef; count: number; latest: number }[] {
   return blockInstances(spec).flatMap((i) => {

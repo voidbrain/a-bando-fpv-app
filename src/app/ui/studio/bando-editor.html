@@ -38,7 +38,7 @@
   @if (mode() === 'model') {
     <button class="btn" [disabled]="!ed.canUndo()" (click)="undo()" title="Undo (Ctrl+Z)">↶</button>
     <button class="btn" [disabled]="!ed.canRedo()" (click)="redo()" title="Redo">↷</button>
-    <button class="btn" [class.on]="blocksOpen()" (click)="blocksOpen.set(!blocksOpen())" data-tour="library" title="Library: ready-made objects, buildings and patterns, yours and from the online catalogue">▦ Library</button>
+    <button class="btn" [class.on]="blocks.open()" (click)="blocks.open.set(!blocks.open())" data-tour="library" title="Library: ready-made objects, buildings and patterns, yours and from the online catalogue">▦ Library</button>
     <button class="btn" [class.on]="elementsOpen()" (click)="elementsOpen.set(!elementsOpen())" title="Elements: list of all buildings, structures, walls and trees (grouped by area), with thumbnails and links">☰ Elements</button>
     <button class="btn" [class.on]="ai.open()" (click)="ai.open.set(!ai.open())" data-tour="ai" title="Chat with the AI assistant to edit buildings and interiors">💬 AI @if (ai.busy()) { <i class="spin"></i> }</button>
     <button class="btn primary" (click)="save()">Save</button>
@@ -143,7 +143,7 @@
               <line [attr.x1]="st.size" [attr.y1]="-st.size" [attr.x2]="-st.size" [attr.y2]="st.size" stroke="#4c5359" vector-effect="non-scaling-stroke" pointer-events="none" />
             }
             @case ('shapes') {
-              @if (shapesBox(st); as fb) {
+              @if (blocks.shapesBox(st); as fb) {
                 <rect [attr.x]="fb.x0" [attr.y]="fb.z0" [attr.width]="fb.x1 - fb.x0" [attr.height]="fb.z1 - fb.z0" fill="#c9c5b8" fill-opacity="0.75" [attr.stroke]="structI() === $index ? '#ffd166' : '#3a3a36'" [attr.stroke-width]="structI() === $index ? 3 : 1.5" stroke-dasharray="4 2" vector-effect="non-scaling-stroke" />
               }
             }
@@ -335,7 +335,7 @@
           <circle [attr.cx]="hv.x" [attr.cy]="hv.z" [attr.r]="terrain.ring()" fill="none" [attr.stroke]="tc('terrain')" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke" pointer-events="none" />
         }
       }
-      @if (armed(); as am) {
+      @if (blocks.armed(); as am) {
         @if (hover(); as hv) {
           <circle [attr.cx]="hv.x" [attr.cy]="hv.z" [attr.r]="10 / ppm()" fill="none" stroke="#b7ed83" stroke-width="2" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" pointer-events="none" />
           <text [attr.x]="hv.x + 12 / ppm()" [attr.y]="hv.z - 8 / ppm()" [attr.font-size]="11 / ppm()" fill="#eef4ed" stroke="#101410" stroke-width="0.4" paint-order="stroke" pointer-events="none">{{ am.block.name }}</text>
@@ -376,8 +376,8 @@
     </svg>
   }
   @if (mode() === 'model' && overlayOn()) {
-    <div #pal class="palette" role="toolbar" aria-label="Tools" aria-orientation="vertical" [style.left.px]="palXY().x" [style.top.px]="palXY().y" [style.z-index]="palZ()" (pointerdown)="$event.stopPropagation(); palZ.set(raiseZ(palOwner))">
-      <div class="tgrip" title="Drag to move the tools · double-click to put them back" (pointerdown)="tbDown($event, 'pal')" (pointermove)="tbMove($event)" (pointerup)="tbUp($event)" (pointercancel)="tbUp($event)" (dblclick)="tbReset('pal')" aria-hidden="true">⠿</div>
+    <div #pal class="palette" role="toolbar" aria-label="Tools" aria-orientation="vertical" [style.left.px]="dock.palXY().x" [style.top.px]="dock.palXY().y" [style.z-index]="dock.palZ()" (pointerdown)="$event.stopPropagation(); dock.raise('pal')">
+      <div class="tgrip" title="Drag to move the tools · double-click to put them back" (pointerdown)="dock.down($event, 'pal')" (pointermove)="dock.move($event)" (pointerup)="dock.up($event)" (pointercancel)="dock.up($event)" (dblclick)="dock.reset('pal')" aria-hidden="true">⠿</div>
       @for (g of groups(); track g.id) {
         @if (g.sep) {
           <i class="psep"></i>
@@ -405,8 +405,8 @@
       }
     </div>
     @if (!view3d() || tool() !== 'select') {
-      <div class="opts" role="toolbar" [attr.aria-label]="toolName() + ' options'" [style.left.px]="optsXY().left" [style.right.px]="optsXY().right" [style.top.px]="optsXY().top" [style.max-width.px]="optsXY().max" [style.z-index]="optsZ()" (pointerdown)="$event.stopPropagation(); optsZ.set(raiseZ(optsOwner))">
-        <span class="tgrip" title="Drag to move the options · double-click to put them back beside the tool" (pointerdown)="tbDown($event, 'opts')" (pointermove)="tbMove($event)" (pointerup)="tbUp($event)" (pointercancel)="tbUp($event)" (dblclick)="tbReset('opts')" aria-hidden="true">⠿</span>
+      <div class="opts" role="toolbar" [attr.aria-label]="toolName() + ' options'" [style.left.px]="dock.optsXY().left" [style.right.px]="dock.optsXY().right" [style.top.px]="dock.optsXY().top" [style.max-width.px]="dock.optsXY().max" [style.z-index]="dock.optsZ()" (pointerdown)="$event.stopPropagation(); dock.raise('opts')">
+        <span class="tgrip" title="Drag to move the options · double-click to put them back beside the tool" (pointerdown)="dock.down($event, 'opts')" (pointermove)="dock.move($event)" (pointerup)="dock.up($event)" (pointercancel)="dock.up($event)" (dblclick)="dock.reset('opts')" aria-hidden="true">⠿</span>
         <b [style.color]="toolColor()">{{ toolName() }}</b>
             @switch (tool()) {
               @case ('select') {
@@ -540,8 +540,8 @@
   @if (mode() === 'model' && overlayOn() && ai.open()) {
     <app-assistant-box />
   }
-  @if (mode() === 'model' && overlayOn() && blocksOpen()) {
-    <app-blocks-box [building]="b()" [structure]="structSel()" (arm)="armBlock($event)" (apply)="applyBlockPattern($event)" />
+  @if (mode() === 'model' && overlayOn() && blocks.open()) {
+    <app-blocks-box [building]="b()" [structure]="structSel()" (arm)="blocks.arm($event)" (apply)="blocks.applyPattern($event)" />
   }
   @if (mode() === 'model' && overlayOn() && elementsOpen()) {
     <app-elements-box [spec]="ed.draft()" [selectedId]="ed.selectedId()" (go)="goTo($event)" (hover)="zoneHover.set($event)" (zones)="zonesOn.set($event)" />
@@ -600,11 +600,11 @@
             @if (st.kind !== 'chimney' && st.kind !== 'silo' && st.kind !== 'tank' && st.kind !== 'water_tower') {
               <label>rotation° <input type="number" step="5" [value]="st.rotDeg.toFixed(0)" (change)="setStruct({ rotDeg: num($event) })" /></label>
             }</div>
-            @if (selBlock(); as sb) {
+            @if (blocks.sel(); as sb) {
               <div class="f"><span class="dim">From block “{{ sb.name }}” v{{ sb.ref.v }}</span>
-              @if (sb.latest) {<button class="btn" (click)="updateSelBlock()">Update to v{{ sb.latest }}</button>}
-              <button class="btn" (click)="detachSelBlock()" title="Keep it, forget the block">Detach</button>
-              <button class="btn danger" (click)="removeSelBlock()" title="Remove everything this placement made">Remove placement</button></div>
+              @if (sb.latest) {<button class="btn" (click)="blocks.update()">Update to v{{ sb.latest }}</button>}
+              <button class="btn" (click)="blocks.detach()" title="Keep it, forget the block">Detach</button>
+              <button class="btn danger" (click)="blocks.remove()" title="Remove everything this placement made">Remove placement</button></div>
             }
             <div class="f"><button class="btn" (click)="duplicateStruct()">⧉ Duplicate</button> <button class="btn danger" (click)="deleteSel()">Delete</button></div>
           }
@@ -769,19 +769,19 @@
                         <label [title]="p.label">{{ p.label.toLowerCase() }} <input type="number" [min]="p.min ?? null" [max]="p.max ?? null" [step]="p.step ?? (p.type === 'int' ? 1 : 0.5)" [value]="modValue(pb, p.key)" (change)="setModValue(pb.id, p.key, num($event))" /></label>
                       }
                     }
-                    <button class="btn" (click)="applyBlockPattern({ block: pb, params: modValues()[pb.id] ?? {}, rot: 0 })" [disabled]="!!bd.footprint && needsRect(pb)" [title]="(pb.description ?? '') + ' Replaces what was there; still editable one by one.'">Apply</button>
+                    <button class="btn" (click)="blocks.applyPattern({ block: pb, params: modValues()[pb.id] ?? {}, rot: 0 })" [disabled]="!!bd.footprint && needsRect(pb)" [title]="(pb.description ?? '') + ' Replaces what was there; still editable one by one.'">Apply</button>
                   </div>
                 } @empty {
                   <div class="dim small">No pattern blocks yet: open ▦ Library to fetch the catalogue.</div>
                 }
               </details>
             }
-            @if (selBlock(); as sb) {
+            @if (blocks.sel(); as sb) {
               <div class="sec acts">
                 <span class="dim small">From block “{{ sb.name }}” v{{ sb.ref.v }}</span>
-                @if (sb.latest) {<button class="btn" (click)="updateSelBlock()">Update to v{{ sb.latest }}</button>}
-                <button class="btn" (click)="detachSelBlock()" title="Keep it, forget the block">Detach</button>
-                <button class="btn danger" (click)="removeSelBlock()" title="Remove everything this placement made">Remove placement</button>
+                @if (sb.latest) {<button class="btn" (click)="blocks.update()">Update to v{{ sb.latest }}</button>}
+                <button class="btn" (click)="blocks.detach()" title="Keep it, forget the block">Detach</button>
+                <button class="btn danger" (click)="blocks.remove()" title="Remove everything this placement made">Remove placement</button>
               </div>
             }
             <div class="sec acts">

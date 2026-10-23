@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyPattern, blockFrom, blockInstances, detachInstance, forkBlock, outdated, paramValues, placeBlock, removeInstance, resolveParams, sanitizeBlock, updateInstance, type BlockSpec } from './blocks';
+import { applyPattern, placedHead, blockFrom, blockInstances, detachInstance, forkBlock, outdated, paramValues, placeBlock, removeInstance, resolveParams, sanitizeBlock, updateInstance, type BlockSpec } from './blocks';
 import { SiteCollider } from './sim/collider';
 import { Vec3 } from './math3d';
 import { MAX_PRIMS, expandShapes, sanitizeShapes, shapeSolids } from './shapes';
@@ -161,5 +161,16 @@ describe('a block from a selection', () => {
     expect(again.buildings[0]!.pos.x).toBeCloseTo(b.pos.x);
     expect(again.buildings[0]!.rotDeg).toBeCloseTo(b.rotDeg);
     expect(blockFrom('Nothing', 'me', {}, { x: 0, z: 0 })).toBeNull();
+  });
+});
+
+describe('what a placement selects', () => {
+  it('its building, else its first structure, else nothing', () => {
+    const s = emptySpec();
+    s.buildings.push({ id: 'b1', name: 'B', pos: { x: 0, z: 0 }, rotDeg: 0, length: 10, width: 8, levels: [], block: { id: 'x', v: 1, inst: 'i1', params: {}, at: { x: 0, z: 0 }, rot: 0 } });
+    s.structures = [{ kind: 'silo', x: 0, z: 0, rotDeg: 0, block: { id: 'y', v: 1, inst: 'i2', params: {}, at: { x: 0, z: 0 }, rot: 0 } } as never];
+    expect(placedHead(s, 'i1')).toEqual({ building: 'b1' });
+    expect(placedHead(s, 'i2')).toEqual({ structure: 0 });
+    expect(placedHead(s, 'zz')).toBeNull();
   });
 });
