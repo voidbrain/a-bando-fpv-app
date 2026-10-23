@@ -2584,6 +2584,8 @@ export class BandoEditor {
         return !!b;
       },
       model: () => this.setMode('model'),
+      state: () => ({ mode: this.mode(), view3d: this.view3d() }),
+      view2d: () => this.view3d.set(false),
       closeBoxes: () => {
         this.armed.set(null);
         this.blocksOpen.set(false);

@@ -43,9 +43,17 @@ export interface Beat {
   actions: TourAction[];
 }
 
+/**
+ * What a snippet expects to find before it starts, so it plays the same on its own as inside a tour: `zone` = the
+ * Bandos map of a new bando, `model` = a generated model open in the 2D editor (the tour's copy of the Villetta
+ * example), `log` / `video` = the demo flight and its video loaded.
+ */
+export type Need = 'zone' | 'model' | 'log' | 'video';
+
 export interface Snippet {
   id: string;
   section: Section;
+  needs?: Need[];
   /** Short title: the Guide panel, the help page heading, the hover tip. */
   title: string;
   beats: Beat[];
@@ -69,7 +77,7 @@ const drag = (at: string, from: At, to: At, ms = 900): TourAction => ({ do: 'dra
 const type = (at: string, text: string): TourAction => ({ do: 'type', at, text });
 
 /** The building the model snippets work on, in the Villetta example. */
-const SHED = 'Barrel-vault shed';
+const SHED = 'Main store';
 
 export const SNIPPETS: readonly Snippet[] = [
   {
@@ -97,6 +105,7 @@ export const SNIPPETS: readonly Snippet[] = [
   },
   {
     id: 'place',
+    needs: ['zone'],
     section: 'bandos',
     title: 'Place the area on the map',
     hover: ['search'],
@@ -107,6 +116,7 @@ export const SNIPPETS: readonly Snippet[] = [
   },
   {
     id: 'generate',
+    needs: ['zone'],
     section: 'bandos',
     title: 'Generate the 3D model',
     hover: ['generate'],
@@ -117,6 +127,7 @@ export const SNIPPETS: readonly Snippet[] = [
   },
   {
     id: 'look-3d',
+    needs: ['model'],
     section: 'model',
     title: 'Look around in 3D',
     hover: ['view-3d'],
@@ -127,6 +138,7 @@ export const SNIPPETS: readonly Snippet[] = [
   },
   {
     id: 'select',
+    needs: ['model'],
     section: 'model',
     title: 'Select a building',
     hover: ['tool-select'],
@@ -134,6 +146,7 @@ export const SNIPPETS: readonly Snippet[] = [
   },
   {
     id: 'adjust',
+    needs: ['model'],
     section: 'model',
     title: 'Change a building',
     hover: ['wall-height'],
@@ -144,6 +157,7 @@ export const SNIPPETS: readonly Snippet[] = [
   },
   {
     id: 'add-building',
+    needs: ['model'],
     section: 'model',
     title: 'Draw a building',
     hover: ['tool-building'],
@@ -154,6 +168,7 @@ export const SNIPPETS: readonly Snippet[] = [
   },
   {
     id: 'trees',
+    needs: ['model'],
     section: 'model',
     title: 'Plant trees with the brush',
     hover: ['tool-scatter'],
@@ -164,6 +179,7 @@ export const SNIPPETS: readonly Snippet[] = [
   },
   {
     id: 'library',
+    needs: ['model'],
     section: 'model',
     title: 'Place a block from the Library',
     hover: ['library'],
@@ -175,6 +191,7 @@ export const SNIPPETS: readonly Snippet[] = [
   },
   {
     id: 'ai',
+    needs: ['model'],
     section: 'ai',
     title: 'Edit with the AI assistant',
     hover: ['ai'],
@@ -200,6 +217,7 @@ export const SNIPPETS: readonly Snippet[] = [
   },
   {
     id: 'sync',
+    needs: ['log', 'video'],
     section: 'flight',
     title: 'Sync the video with the log',
     hover: ['auto-sync'],
@@ -207,6 +225,7 @@ export const SNIPPETS: readonly Snippet[] = [
   },
   {
     id: 'replay',
+    needs: ['log'],
     section: 'flight',
     title: 'Replay the flight',
     hover: ['play'],

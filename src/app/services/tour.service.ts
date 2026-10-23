@@ -1,5 +1,5 @@
 import { Service, inject, signal } from '@angular/core';
-import { AI_SCRIPTS, tourBeats, type At, type Beat, type Hook, type Snippet, type Tour, type TourAction } from '../core/tour';
+import { AI_SCRIPTS, SNIPPET_BY_ID, type At, type Beat, type Hook, type Need, type Snippet, type Tour, type TourAction } from '../core/tour';
 import { sanitizeSpec } from '../core/site-spec';
 import type { PanelId } from '../ui/panel-defs';
 import { LayoutStore } from '../state/layout.store';
@@ -19,6 +19,9 @@ export interface TourEditor {
   select(name: string): boolean;
   model(): void;
   closeBoxes(): void;
+  /** Which tab the editor shows, and whether its 3D view is on. */
+  state(): { mode: 'area' | 'model'; view3d: boolean };
+  view2d(): void;
 }
 
 export interface TourState {
@@ -78,11 +81,11 @@ export class TourService {
   }
 
   playTour(t: Tour): Promise<void> {
-    return this.run(t.title, tourBeats(t).map((b) => b.beat));
+    return this.run(t.title, t.snippets.map((id) => SNIPPET_BY_ID.get(id)).filter((s): s is Snippet => !!s));
   }
 
   playSnippet(s: Snippet): Promise<void> {
-    return this.run(s.title, s.beats);
+    return this.run(s.title, [s]);
   }
 
   /** Play a snippet while recording this tab, then save the clip (WebM). The browser asks which tab to share. */
@@ -100,7 +103,7 @@ export class TourService {
     const done = new Promise<void>((ok) => (rec.onstop = () => ok()));
     rec.start(250);
     await this.sleep(600).catch(() => undefined);
-    await this.run(s.title, s.beats, true);
+    await this.run(s.title, [s], true);
     rec.stop();
     stream.getTracks().forEach((t) => t.stop());
     await done;
@@ -121,16 +124,18 @@ export class TourService {
     if (this.paused) this.togglePause();
   }
 
-  private async run(title: string, beats: readonly Beat[], recording = false): Promise<void> {
+  private async run(title: string, snippets: readonly Snippet[], recording = false): Promise<void> {
+    const beats: { beat: Beat; snippet: Snippet; first: boolean }[] = snippets.flatMap((s) => s.beats.map((beat, k) => ({ beat, snippet: s, first: k === 0 })));
     if (this.state()) this.end();
     while (this.state()) await new Promise((r) => setTimeout(r, 50));
     this.stop = this.paused = this.skip = false;
     const c = this.cursor() ?? { x: innerWidth / 2, y: innerHeight / 2, down: false };
     this.cursor.set({ ...c, down: false });
     try {
-      for (const [i, b] of beats.entries()) {
+      for (const [i, { beat: b, snippet, first }] of beats.entries()) {
         this.state.set({ title, index: i + 1, total: beats.length, say: b.say ?? this.state()?.say ?? '', paused: this.paused, recording });
         this.skip = false;
+        if (first) await this.prepare(snippet.needs ?? []);
         for (const a of b.actions) {
           if (this.skip) break;
           await this.act(a);
@@ -145,6 +150,43 @@ export class TourService {
       this.cursor.set(null);
       this.focus.set(null);
       this.ring.set(null);
+    }
+  }
+
+  /**
+   * Make sure what a snippet needs is there before it plays (a no-op inside a tour, where the earlier steps did it):
+   * the map of a new bando, the tour's model open in the 2D editor, the demo flight and its video.
+   */
+  private async prepare(needs: readonly Need[]): Promise<void> {
+    if (needs.includes('zone')) {
+      this.layout.setVisible('studio', true);
+      this.layout.raise('studio');
+      if (this.studio.view() !== 'zone' || !this.studio.isNew()) this.studio.create();
+      await this.sleep(900);
+    }
+    if (needs.includes('model')) {
+      this.layout.setVisible('studio', true);
+      this.layout.raise('studio');
+      const open = this.studio.view() === 'zone' && this.site.active().id === TOUR_BANDO.id && this.editor?.state().mode === 'model';
+      if (!open) {
+        if (this.site.peek(TOUR_BANDO.id)) {
+          this.studio.edit(TOUR_BANDO.id);
+          await this.sleep(700);
+          this.editor?.model();
+          await this.sleep(500);
+        } else await this.fakeGenerate();
+      }
+      this.editor?.closeBoxes();
+      if (this.editor?.state().view3d) this.editor.view2d();
+      await this.sleep(300);
+      // the inspector may have been folded away: open it again, as the pilot would (its ▸ button)
+      document.querySelector<HTMLButtonElement>('app-float-box[data-tour~="inspector"].closed header button')?.click();
+      await this.sleep(200);
+    }
+    if (needs.includes('log') && !this.flights.all.length) await this.hook('demoLog');
+    if (needs.includes('video') && !this.video.loaded()) {
+      this.layout.setVisible('video', true);
+      await this.hook('demoVideo');
     }
   }
 
