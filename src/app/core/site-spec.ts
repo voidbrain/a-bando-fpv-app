@@ -160,6 +160,10 @@ export interface BuildingSpec {
   frame?: 'greenhouse';
   /** How ruined it is, 0 (intact, the default) to 1 (a shell): broken walls, no roof from 0.35 (see core/ruin.ts). */
   ruin?: number;
+  /** An open shell: no roof and no upper floors left, whatever `ruin` says about the walls. */
+  roofless?: boolean;
+  /** Battlements (merlons) along the top of the walls. */
+  crenels?: boolean;
   /** A basement under the ground floor, `height` metres deep inside (see core/underground.ts basementVolume). */
   basement?: { height: number };
   /** Placed from a library block. */

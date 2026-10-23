@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { emptySpec, type SiteSpec } from '../core/site-spec';
+import { emptySpec, type BuildingSpec, type SiteSpec } from '../core/site-spec';
 import { buildSiteFromSpec } from './site-model';
 import { Vec3 } from '../core/math3d';
 
@@ -300,5 +300,29 @@ describe('building colour', () => {
       if (o instanceof THREE.Mesh && o.material instanceof THREE.MeshStandardMaterial) colours.add(o.material.color.getHex());
     });
     expect(colours.has(new THREE.Color('#123456').getHex())).toBe(true);
+  });
+});
+
+describe('open shells and battlements', () => {
+  const build = (extra: Partial<BuildingSpec>) => {
+    const s = spec();
+    s.structures = [];
+    const b0 = s.buildings[0]!;
+    s.buildings = [{ ...b0, levels: [{ ...b0.levels[0]!, roof: 'none' }, { ...b0.levels[0]!, baseY: 4, roof: 'flat' }], ...extra }];
+    const m = buildSiteFromSpec(s);
+    let roofs = 0;
+    m.roof.traverse((o) => {
+      if (o instanceof THREE.Mesh) roofs++;
+    });
+    return { roofs, solids: m.collider.solids.length };
+  };
+  it('an open shell has no roof and no upper slab, but all its walls', () => {
+    const whole = build({}), shell = build({ roofless: true });
+    expect(whole.roofs).toBeGreaterThan(0);
+    expect(shell.roofs).toBe(0);
+    expect(shell.solids).toBe(whole.solids - 1); // only the roof's collider is gone
+  });
+  it('battlements add merlons on top of the walls', () => {
+    expect(build({ crenels: true }).solids).toBeGreaterThan(build({}).solids + 8);
   });
 });

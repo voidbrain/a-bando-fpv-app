@@ -89,6 +89,8 @@ const material = (color: string, o: THREE.MeshStandardMaterialParameters = {}): 
 interface Ctx {
   /** While a ruined building is built: its level, the floor being built, and its random source. */
   ruin: { level: number; li: number; floors: number; rnd: () => number } | null;
+  /** The building being built has lost its upper floor slabs (a deep ruin, or an open shell). */
+  noSlabs: boolean;
   /** Centre of the building currently being built, in site coordinates. */
   at: [number, number];
   /** Rotation of that building (degrees about Y), baked conservatively into the collider AABBs. */
@@ -227,6 +229,28 @@ function buildPolyWalls(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.O
   }
 }
 
+/** Battlements on top of the outer walls: merlons 0.7 m wide every 1.4 m, 0.9 m high, corners always filled. */
+function buildCrenels(ctx: Ctx, b: BuildingSpec, top: number, target: THREE.Object3D): void {
+  const L = b.length / 2, W = b.width / 2;
+  const edges = b.footprint
+    ? edgesOf(b.footprint)
+    : [
+        { axis: 'x' as const, at: -W, from: -L, to: L },
+        { axis: 'x' as const, at: W, from: -L, to: L },
+        { axis: 'z' as const, at: -L, from: -W, to: W },
+        { axis: 'z' as const, at: L, from: -W, to: W },
+      ];
+  const h = 0.9, y = top + h / 2, th = 0.55;
+  for (const e of edges) {
+    const len = e.to - e.from, n = Math.max(1, Math.round(len / 1.4));
+    for (let i = 0; i <= n; i++) {
+      const c = e.from + (len * i) / n;
+      if (e.axis === 'x') ctx.addBox(target, c, y, e.at, 0.7, h, th, ctx.mat.wall, true, true);
+      else ctx.addBox(target, e.at, y, c, th, h, 0.7, ctx.mat.wall, true, true);
+    }
+  }
+}
+
 /** Four walls of one level plus interior partitions (thin solid walls between their endpoints). */
 function buildWalls(ctx: Ctx, b: BuildingSpec, l: LevelSpec, target: THREE.Object3D): void {
   if (b.footprint) buildPolyWalls(ctx, b, l, target);
@@ -339,7 +363,7 @@ function buildFloorAndColumns(ctx: Ctx, b: BuildingSpec, l: LevelSpec, inner: TH
   for (const r of rects) {
     const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2, w = r.x1 - r.x0, d = r.z1 - r.z0;
     if (l.baseY === 0) ctx.addBox(inner, cx, 0.05, cz, w, 0.1, d, floorMat, false, false);
-    else if ((ctx.ruin?.level ?? 0) < NO_SLABS) ctx.addBox(inner, cx, l.baseY, cz, w, 0.2, d, floorMat, false, false); // a deep ruin has lost its upper floors
+    else if (!ctx.noSlabs) ctx.addBox(inner, cx, l.baseY, cz, w, 0.2, d, floorMat, false, false); // a deep ruin has lost its upper floors
   }
   if (l.baseY === 0) {
     const water = material('#3d86b6', { transparent: true, opacity: 0.78, roughness: 0.15 });
@@ -710,6 +734,7 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
   const mats: Record<string, THREE.MeshStandardMaterial> = {};
   const ctx: Ctx = {
     ruin: null,
+    noSlabs: false,
     at: [0, 0],
     rot: 0,
     solids,
@@ -836,6 +861,8 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
     const baseWall = ctx.mat.wall;
     if (b.color) ctx.mat.wall = ctx.matFor(b.color); // the building's own wall colour
     const ruin = Math.min(1, Math.max(0, b.ruin ?? 0));
+    const open = !b.frame && (!!b.roofless || ruin >= ROOFLESS); // no roof left
+    ctx.noSlabs = !b.frame && (!!b.roofless || ruin >= NO_SLABS);
     for (const [li, l] of b.levels.entries()) {
       ctx.ruin = ruin > 0.01 && !b.frame ? { level: ruin, li, floors: b.levels.length, rnd: ruinRandom(`${b.id}:${li}`) } : null;
       buildFloorAndColumns(ctx, b, l, inner, floorMat);
@@ -844,9 +871,12 @@ export function buildSiteFromSpec(spec: SiteSpec, opts: { bare?: boolean } = {})
         break;
       }
       buildWalls(ctx, b, l, inner);
-      if (ruin < ROOFLESS) buildRoof(ctx, b, l, localRoof); // a ruin past this has lost its roof
+      if (!open) buildRoof(ctx, b, l, localRoof); // a deep ruin or an open shell has lost its roof
     }
+    const last = b.levels[b.levels.length - 1];
+    if (b.crenels && last && !b.frame && (open || last.roof === 'flat' || last.roof === 'none' || !!b.footprint)) buildCrenels(ctx, b, last.baseY + last.height, inner);
     ctx.ruin = null;
+    ctx.noSlabs = false;
     ctx.mat.wall = baseWall;
     if (b.basement && !b.frame) buildBasement(ctx, b, inner, floorMat);
     // roofs live under the building but belong to the global roof group for hide/show
