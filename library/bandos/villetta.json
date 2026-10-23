@@ -178,7 +178,7 @@
    ]
   },
   {
-   "id": "b-mvkwludd-agkn",
+   "id": "b-mvkxwigu-ezo4",
    "name": "Main store",
    "pos": {
     "x": 64.86,
@@ -952,7 +952,7 @@
    "block": {
     "id": "abando/vault-shed",
     "v": 1,
-    "inst": "blk-mvkwludd-gfv",
+    "inst": "blk-mvkxwigu-55x7",
     "params": {
      "len": 151.804,
      "hall": 13.009,
@@ -1405,11 +1405,11 @@
    "style": "beam"
   },
   {
-   "id": "st-mvkwludf-j3vd",
+   "id": "st-mvkxwigx-6f7g",
    "kind": "shapes",
    "name": "Caged roof ladder",
-   "x": 44.666,
-   "z": 60.832,
+   "x": 64.86,
+   "z": 9.191,
    "rotDeg": 277.79,
    "height": 9,
    "size": 1,
@@ -1444,13 +1444,13 @@
    "block": {
     "id": "abando/cage-ladder",
     "v": 1,
-    "inst": "blk-mvkwludf-iq53",
+    "inst": "blk-mvkxwigx-j7qh",
     "params": {
      "h": 7.8
     },
     "at": {
-     "x": 44.666,
-     "z": 60.832
+     "x": 64.86,
+     "z": 9.191
     },
     "rot": 277.79
    }
