@@ -133,8 +133,40 @@ const CAMERA_ICON: Record<CameraView, string> = { orbit: 'camOrbit', chase: 'cam
     .cams {
       display: flex;
       flex-wrap: wrap;
+      align-items: center;
       gap: 3px;
       margin: 4px 0;
+    }
+    .lab {
+      width: 46px;
+      color: var(--dim);
+      font-size: 10px;
+    }
+    .seg {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .seg button {
+      display: inline-grid;
+      place-items: center;
+      background: none;
+      border: 0;
+      padding: 3px 7px;
+      cursor: pointer;
+      color: var(--dim);
+    }
+    .seg button + button {
+      border-left: 1px solid var(--line);
+    }
+    .seg button.on {
+      background: var(--accent);
+      color: var(--accent-ink);
+    }
+    .seg button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
     }
   `,
   template: `
@@ -164,12 +196,18 @@ const CAMERA_ICON: Record<CameraView, string> = { orbit: 'camOrbit', chase: 'cam
           <button class="fold" [attr.aria-expanded]="isOpen('camera')" (click)="fold('camera')"><span class="chev">▾</span> 3D camera</button>
         </div>
         @if (isOpen('camera')) {
-          <div class="cams" role="group" aria-label="3D camera">
-            @for (v of cameras; track v) {
-              <button class="btn ib" [class.on]="view.cameraView() === v" (click)="view.setCameraView(v)" [title]="camHint[v]" [attr.aria-label]="names[v]" [attr.aria-pressed]="view.cameraView() === v"><app-tool-icon [name]="camIcon[v]" /></button>
-            }
+          <!-- which camera the main page uses: one of four (a segmented switch) -->
+          <div class="cams">
+            <span class="lab">camera</span>
+            <div class="seg" role="group" aria-label="Main page camera">
+              @for (v of cameras; track v) {
+                <button [class.on]="view.cameraView() === v" (click)="view.setCameraView(v)" [title]="camHint[v]" [attr.aria-label]="names[v]" [attr.aria-pressed]="view.cameraView() === v"><app-tool-icon [name]="camIcon[v]" /></button>
+              }
+            </div>
           </div>
-          <div class="cams" role="group" aria-label="Camera options">
+          <!-- how the 3D is shown, whatever the camera: independent toggles, and the reset -->
+          <div class="cams" role="group" aria-label="View options">
+            <span class="lab">view</span>
             <button class="btn ib" [class.on]="follow()" (click)="toggleFollow()" [title]="followHint()" [attr.aria-label]="followHint()" [attr.aria-pressed]="follow()"><app-tool-icon name="follow" /></button>
             <button class="btn ib" [class.on]="view.roofHidden()" (click)="view.toggleRoof()" [title]="view.roofHidden() ? 'Roofs hidden: show them again' : 'Hide the roofs (see inside the buildings)'" aria-label="Hide roofs" [attr.aria-pressed]="view.roofHidden()"><app-tool-icon name="roof" /></button>
             <button class="btn ib" [class.on]="view.satGround()" (click)="view.toggleSatGround()" title="Satellite picture on the 3D ground (bandos with a place and real ground; imagery © Esri, Maxar)" aria-label="Satellite ground" [attr.aria-pressed]="view.satGround()"><app-tool-icon name="satellite" /></button>

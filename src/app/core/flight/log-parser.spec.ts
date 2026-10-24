@@ -1,4 +1,4 @@
-import { parseLog } from './log-parser';
+import { cleanHeights, parseLog } from './log-parser';
 import { createFlight, flightStats, maxSpeed, prepareFlight } from './flight';
 import { DEFAULT_CALIBRATION } from '../constants';
 import { betaflightCsv } from '../testing/fixtures';
@@ -12,6 +12,23 @@ describe('log parser', () => {
     expect(pts[0]?.alt).toBeCloseTo(13, 6);
     expect(pts[1]!.t - pts[0]!.t).toBeCloseTo(0.1, 6); // 80 rows x 1250 us
     expect(tel).toBeTruthy();
+  });
+
+  it('takes heights from the barometer when the log has it (GPS altitude wanders)', () => {
+    const csv = 'time,GPS_coord[0],GPS_coord[1],GPS_altitude,baroAlt\n' + [0, 1, 2].map((i) => `${i * 100000},${455287000 + i * 10},${121333000},${1300 + i * 200},${-60 + i * 200}`).join('\n');
+    const { pts } = parseLog(csv);
+    expect(pts.map((p) => +p.alt.toFixed(6))).toEqual([-0.6, 1.4, 3.4]); // baroAlt is cm; GPS would have said 130, 150, 170 m
+  });
+
+  it('cleans the barometer: spikes go, real climbs stay', () => {
+    const t = Array.from({ length: 30 }, (_, i) => i * 0.1);
+    const h = t.map((x) => x * 2); // a steady 2 m/s climb
+    h[10] = -25; // prop wash in a flip
+    h[20] = 60;
+    const c = cleanHeights(h, t);
+    expect(Math.abs(c[10]! - 2)).toBeLessThan(0.5);
+    expect(Math.abs(c[20]! - 4)).toBeLessThan(0.5);
+    expect(c[29]!).toBeGreaterThan(5); // the climb is kept
   });
 
   it('decimates telemetry to every 8th row and keeps the units', () => {

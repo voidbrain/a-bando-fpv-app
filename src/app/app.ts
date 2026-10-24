@@ -4,6 +4,7 @@ import { storageAdvice } from './core/storage-errors';
 import { LibraryStore } from './services/library-store.service';
 import { ToastService } from './services/toast.service';
 import { I18nService } from './services/i18n.service';
+import { PanelPlacer } from './services/panel-placer.service';
 import { TourService } from './services/tour.service';
 import { FlightService } from './services/flight.service';
 import { FrameLoopService } from './services/frame-loop.service';
@@ -93,11 +94,18 @@ export class App {
     inject(ShortcutsService).bind();
     inject(FrameLoopService).start();
 
-    // A log with Blackbox telemetry opens the Blackbox panel.
+    // A new log brings its instruments as soon as its data is there: from the Flights panel (Welcome's "Load a log",
+    // the guide) the path and speed, and with Blackbox telemetry the Blackbox and attitude, laid out together with it.
+    // Anywhere else only the Blackbox opens, where it was.
+    const placer = inject(PanelPlacer);
     effect(() => {
       const active = this.flightStore.activeId();
       untracked(() => {
-        if (active && this.flights.active?.tel) this.layout.setVisible('blackbox', true);
+        const f = active ? this.flights.active : null;
+        if (!f) return;
+        const tel = !!f.tel;
+        if (this.layout.panels().flights.visible) void placer.open(['flights', 'timeline', 'path', 'speed', ...(tel ? (['attitude', 'blackbox'] as const) : [])]);
+        else if (tel) this.layout.setVisible('blackbox', true);
       });
     });
     // The radio panel opens itself the first time a controller is seen.

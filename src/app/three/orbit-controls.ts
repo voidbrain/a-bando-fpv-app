@@ -53,6 +53,7 @@ export function attachOrbitControls(el: HTMLElement, target: ControlTarget): () 
   const move = (e: PointerEvent): void => {
     const p = pointers.get(e.pointerId);
     if (!p) return;
+    target.onInput?.(); // a drag in progress is input too (the main view's look-around waits for it to end)
     if (!interactive() && target.takeOver && Math.hypot(e.clientX - p.x0, e.clientY - p.y0) > 4) target.takeOver();
     if (!interactive()) return;
     const dx = e.clientX - p.x;
