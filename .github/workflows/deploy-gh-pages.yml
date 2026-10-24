@@ -19,8 +19,10 @@ concurrency:
 
 jobs:
   checks:
-    # the whole CI, browser tests included: nothing is published that did not pass them
+    # the fast checks of the CI (unit, types, translations, examples, build); the browser tests run on pull requests
     uses: ./.github/workflows/ci.yml
+    with:
+      e2e: false
 
   build:
     needs: checks

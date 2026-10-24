@@ -4,8 +4,14 @@ name: CI
 on:
   pull_request:
     branches: [main]
-  # the deploy workflow runs the same checks (unit, types, translations, examples, build, e2e) before it publishes
+  # the deploy workflow runs the fast checks (unit, types, translations, examples, build) before it publishes, without
+  # the browser tests: with software WebGL a guide step takes minutes there and times out now and then, which would hold
+  # back every deploy. They still run on every pull request.
   workflow_call:
+    inputs:
+      e2e:
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -45,6 +51,8 @@ jobs:
 
   e2e:
     # in a real (headless) browser: every guide step plays on its own, and the main screens pass axe (WCAG 2.1 A / AA)
+    # not when the deploy calls this workflow (e2e: false); on pull requests `inputs` is empty, so it runs
+    if: ${{ inputs.e2e != false }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
