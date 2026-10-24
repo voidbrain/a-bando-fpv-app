@@ -47,6 +47,8 @@ export class VideoService {
   private fileKey = '';
   private lastPlayAttempt = 0;
   private lastSeekTarget = -1;
+  /** A seek of the video alone (manual sync): the replay must not follow it. */
+  private ownSeek = false;
 
   constructor() {
     this.playback.clock = {
@@ -63,6 +65,10 @@ export class VideoService {
     });
     // Seeking the video's own bar while paused moves the replay with it.
     this.element.addEventListener('seeked', () => {
+      if (this.ownSeek) {
+        this.ownSeek = false;
+        return;
+      }
       const f = this.flights.active;
       if (this.transport.playing() || !this.loaded() || !f) return;
       const expected = this.playback.time + this.offset();
@@ -77,7 +83,6 @@ export class VideoService {
     if (this.objectUrl) URL.revokeObjectURL(this.objectUrl);
     this.objectUrl = URL.createObjectURL(file);
     this.element.src = this.objectUrl;
-    this.element.controls = true;
     this.lastSeekTarget = -1;
     this.fileKey = `${file.name}:${file.size}`;
     this.fileName.set(file.name);
@@ -95,6 +100,18 @@ export class VideoService {
     this.lastSeekTarget = -1;
     const key = this.syncKey();
     if (key) this.storage.write(key, String(o));
+  }
+
+  /**
+   * Move the video alone by `seconds` (the replay pauses and stays where it is): for a manual sync, step the video to a
+   * moment, then "Sync here" or "Video here = …". The video has no controls of its own; the timeline drives it.
+   */
+  stepVideo(seconds: number): void {
+    if (!this.loaded()) return;
+    if (this.transport.playing()) this.playback.pause();
+    const v = this.element;
+    this.ownSeek = true;
+    v.currentTime = Math.max(0, Math.min((v.duration || 1e9) - 0.001, v.currentTime + seconds));
   }
 
   /** "The video shows the replay's current moment right now": derive the offset from the video's position. */

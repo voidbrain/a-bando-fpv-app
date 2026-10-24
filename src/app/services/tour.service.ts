@@ -417,10 +417,12 @@ export class TourService {
       case 'flightSite':
         return this.flightSite();
       case 'show':
-        // shown where it belongs (the timeline at the bottom), on top: not moved to the middle like 'panel'
+        // shown where it belongs, on top: not moved to the middle like 'panel'. The timeline gets its place before it
+        // appears (centred just above the caption bar, which owns the bottom centre) and keeps it.
         for (const id of (arg ?? '').split(',') as PanelId[]) {
           this.layout.setVisible(id, true);
           this.layout.raise(id);
+          if (id === 'timeline') await this.placeTimeline();
         }
         return this.sleep(250);
       case 'hide':
@@ -552,7 +554,7 @@ export class TourService {
   /**
    * Place the panels of a showcase screen, measured against the window (the timeline keeps its own place). `replay`:
    * the video top-left, speed and attitude in the top-right corner, the path and the Blackbox under them, everything
-   * else hidden. `cameras`: the chase and FPV views under the video, smaller than it, appearing one after the other.
+   * else hidden. `cameras`: the FPV view under the video, as wide as it.
    */
   private async arrange(what: 'replay' | 'cameras'): Promise<void> {
     const W = innerWidth, H = innerHeight, m = 14, gap = 8;
@@ -577,13 +579,38 @@ export class TourService {
     // under the video, above the timeline (it keeps its place)
     const vid = box('video'), tl = box('timeline');
     const x0 = vid?.left ?? m, top = (vid?.bottom ?? 300) + gap, bottom = Math.min(H - m, (tl && tl.left < (vid?.right ?? 0) ? tl.top : H) - gap);
-    const w = Math.round((vid?.width ?? 400) * 0.8), h = Math.max(110, Math.min(Math.round(w * 0.6), Math.floor((bottom - top - gap) / 2)));
-    for (const [k, id] of (['vpChase', 'vpFpv'] as PanelId[]).entries()) {
-      this.layout.resizeTo(id, w, h);
-      this.layout.moveTo(id, x0, top + k * (h + gap));
-      this.layout.setVisible(id, true);
-      await this.sleep(650);
-    }
+    const w = Math.round(vid?.width ?? 400), h = Math.max(140, Math.min(Math.round(w * 0.62), bottom - top));
+    this.layout.setVisible('vpChase', false);
+    this.layout.resizeTo('vpFpv', w, h);
+    this.layout.moveTo('vpFpv', x0, top);
+    this.layout.setVisible('vpFpv', true);
+    await this.sleep(650);
+  }
+
+  /**
+   * The timeline's place in a guide: centred, its bottom above the caption bar with room for its tallest (three-line)
+   * caption, so the two never overlap. Measured just after it appears, while it is still fading in: a hidden panel has
+   * no size, and the timeline's contents lay out only once shown.
+   */
+  private async placeTimeline(): Promise<void> {
+    await this.sleep(60);
+    const bar = document.querySelector('app-tour-overlay .bar')?.getBoundingClientRect();
+    // layout size, not the on-screen box: the entrance animation still has it scaled down
+    const el = document.querySelector<HTMLElement>('app-panel[data-id="timeline"]');
+    const barTop = bar ? Math.min(bar.top, bar.bottom - BAR_TALLEST) : innerHeight - 40 - BAR_TALLEST;
+    const place = (): number => {
+      const w = el?.offsetWidth || 560, h = el?.offsetHeight || 150;
+      this.layout.moveTo('timeline', Math.round((innerWidth - w) / 2), Math.max(8, Math.round(barTop - 8 - h)));
+      return h;
+    };
+    // its contents still fill in for a moment: keep its bottom edge where it is, so it grows upwards
+    let h = place();
+    void (async () => {
+      for (let i = 0; i < 20; i++) {
+        await this.sleep(100);
+        if ((el?.offsetHeight || h) !== h) h = place();
+      }
+    })();
   }
 
 
@@ -615,5 +642,8 @@ export class TourService {
     }
   }
 }
+
+/** The caption bar's height with a three-line caption, px. */
+const BAR_TALLEST = 100;
 
 const ease = (t: number): number => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);

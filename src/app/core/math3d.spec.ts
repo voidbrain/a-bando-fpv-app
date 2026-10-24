@@ -1,3 +1,4 @@
+import { wrapDeg } from './math';
 import { Quat, Vec3, attitudeAngles, attitudeQuat, eulerYXZ } from './math3d';
 
 describe('math3d', () => {
@@ -43,5 +44,14 @@ describe('math3d', () => {
   it('multiply composes rotations in the local frame', () => {
     const q = new Quat().setFromEuler(0, Math.PI / 2, 0, 'YXZ').multiply(new Quat().setFromEuler(0, Math.PI / 2, 0, 'YXZ'));
     expect(Math.abs(eulerYXZ(q).y)).toBeCloseTo(Math.PI, 6);
+  });
+});
+
+describe('wrapDeg', () => {
+  it('wraps degrees into -180..180', () => {
+    expect(wrapDeg(190)).toBe(-170);
+    expect(wrapDeg(-190)).toBe(170);
+    expect(wrapDeg(725)).toBe(5);
+    expect(wrapDeg(0)).toBe(0);
   });
 });

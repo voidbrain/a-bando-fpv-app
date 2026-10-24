@@ -223,4 +223,13 @@ app-video-panel .slot video {
     opacity: 1;
     transform: translate(-50%, 0);
   }
+  /* while a guide plays, the caption bar owns the bottom centre: the toast drops in from the top instead */
+  &.top {
+    bottom: auto;
+    top: 14px;
+    transform: translate(-50%, -20px);
+    &.show {
+      transform: translate(-50%, 0);
+    }
+  }
 }

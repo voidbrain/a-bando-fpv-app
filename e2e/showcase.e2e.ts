@@ -11,7 +11,7 @@ test('the showcase link plays to the end', async ({ page }) => {
   await expect(bar).toContainText('OpenBando'); // Italian captions (the app name stays)
   await expect(bar).toBeHidden({ timeout: 300_000 });
   const shown = await page.locator('app-panel:not([hidden])').evaluateAll((els) => els.map((e) => `${e.getAttribute('data-id')}${e.classList.contains('ghost') ? '*' : ''}`));
-  expect(shown.sort()).toEqual(['attitude', 'blackbox', 'path', 'speed', 'timeline', 'video*', 'vpChase', 'vpFpv'].sort()); // only the video under glass
+  expect(shown.sort()).toEqual(['attitude', 'blackbox', 'path', 'speed', 'timeline', 'video*', 'vpFpv'].sort()); // only the video under glass
   expect(errors).toEqual([]);
 });
 

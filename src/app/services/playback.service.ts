@@ -1,5 +1,5 @@
 import { Injectable, effect, inject, untracked } from '@angular/core';
-import { ReplayPose } from '../core/flight/replay';
+import { ReplayPose, followClock } from '../core/flight/replay';
 import { PlaybackStore } from '../state/playback.store';
 import { FlightStore } from '../state/flight.store';
 import { CalibrationStore } from '../state/calibration.store';
@@ -82,8 +82,10 @@ export class PlaybackService {
     if (!f) return;
     if (this.transport.playing()) {
       const master = this.transport.direction() > 0 ? this.clock?.time() : null;
-      if (master != null) this.time = Math.max(0, master);
-      else this.time += dt * this.transport.direction() * this.transport.speed();
+      this.time += dt * this.transport.direction() * this.transport.speed();
+      // the video leads, but its clock stalls and jumps when the decoder falls behind: follow it smoothly, jump only
+      // when it is clearly elsewhere (a seek, a long stall)
+      if (master != null) this.time = followClock(this.time, Math.max(0, master), dt);
       if (this.time < 0) {
         if (this.transport.loop()) this.time = f.dur;
         else {

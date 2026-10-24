@@ -38,7 +38,8 @@ export const zoomPathView = (v: PathView, wheelDeltaY: number): void => {
   v.zoom = clamp(v.zoom * (1 - wheelDeltaY * 0.001), 0.2, 30);
 };
 
-type Pt = [number, number, number];
+/** Projected u, v, speed, and the index of the flight point it was taken from. */
+type Pt = [number, number, number, number];
 
 const GRID = 'rgba(150,170,160,.26)';
 const AXIS = 'rgba(225,238,230,.85)';
@@ -53,6 +54,8 @@ export const niceStep = (px: number, pxPerMetre: number): number => NICE_STEPS.f
  */
 export function drawFlightPath(
   g: CanvasRenderingContext2D, w: number, h: number, flights: readonly Flight[], view: PathView, cal: Calibration, speedMax: number, replayPosition: Vec3 | null,
+  /** The flight being replayed: its part already flown is drawn thick in the speed colours, the rest thin and pale. */
+  replayed: Flight | null = null,
 ): string {
   g.clearRect(0, 0, w, h);
   if (!flights.length || !flights[0]!.loc.length) return '';
@@ -78,9 +81,9 @@ export function drawFlightPath(
   const lines: Pt[][] = flights.map((f) => {
     const st = Math.max(1, Math.ceil(f.loc.length / 1200));
     const pts: Pt[] = [];
-    for (let i = 0; i < f.loc.length; i += st) pts.push([...project(f.loc[i]!), f.spd[i] ?? 0]);
+    for (let i = 0; i < f.loc.length; i += st) pts.push([...project(f.loc[i]!), f.spd[i] ?? 0, i]);
     const last = f.loc.length - 1;
-    if (last % st !== 0) pts.push([...project(f.loc[last]!), f.spd[last] ?? 0]);
+    if (last % st !== 0) pts.push([...project(f.loc[last]!), f.spd[last] ?? 0, last]);
     return pts;
   });
   for (const pts of lines) for (const q of pts) {
@@ -179,15 +182,19 @@ export function drawFlightPath(
 
     g.lineJoin = 'round';
     g.lineCap = 'round';
-    for (const pts of lines) {
+    lines.forEach((pts, li) => {
+      // a flight not being replayed is drawn whole in its speed colours; the replayed one only up to the playhead
+      const f = flights[li]!;
+      const upTo = !replayed ? Infinity : f === replayed ? f.cursor : -1;
       g.strokeStyle = 'rgba(0,0,0,.45)';
       g.lineWidth = 5;
       g.beginPath();
       pts.forEach((q, i) => (i ? g.lineTo(X(q[0]), Y(q[1])) : g.moveTo(X(q[0]), Y(q[1]))));
       g.stroke();
-      g.lineWidth = 2.6;
       for (let i = 1; i < pts.length; i++) {
-        g.strokeStyle = speedHsl((pts[i]![2] || 0) / speedMax, 90, 52);
+        const flown = pts[i - 1]![3] < upTo;
+        g.lineWidth = flown ? 3.4 : 1.6;
+        g.strokeStyle = flown ? speedHsl((pts[i]![2] || 0) / speedMax, 90, 52) : speedHsl((pts[i]![2] || 0) / speedMax, 18, 72);
         g.beginPath();
         g.moveTo(X(pts[i - 1]![0]), Y(pts[i - 1]![1]));
         g.lineTo(X(pts[i]![0]), Y(pts[i]![1]));
@@ -203,7 +210,7 @@ export function drawFlightPath(
         g.fill();
         g.stroke();
       }
-    }
+    });
     if (replayPosition) {
       const c = project(replayPosition);
       g.strokeStyle = '#fff';

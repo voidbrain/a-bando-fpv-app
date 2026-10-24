@@ -79,7 +79,7 @@ const PILLARS: readonly Pillar[] = [
           }
         </div>
         <footer>
-          <button class="btn primary" (click)="showcase()" data-tour="welcome-tour">▶ Watch the welcome tour</button>
+          <button class="btn primary" (click)="showcase()" data-tour="welcome-tour">▶ Watch <span translate="no">Welcome</span></button>
           <button class="btn" (click)="go(['guide'], false)">Guide me</button>
           <span class="grow"></span>
           <span class="dim small">No account needed. Your logs, videos and places stay on this computer.</span>

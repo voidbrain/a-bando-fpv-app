@@ -171,7 +171,8 @@ describe('services', () => {
       p.clock = { time: () => 2.5 };
       p.play();
       frames(2);
-      expect(p.time).toBeCloseTo(2.5, 9);
+      // jumps to the video's time, then follows it smoothly (a few frames' drift at most)
+      expect(Math.abs(p.time - 2.5)).toBeLessThan(0.05);
       p.clock = null;
       p.seekTo(-5);
       expect(p.time).toBe(0);
