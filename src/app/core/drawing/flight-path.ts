@@ -16,7 +16,7 @@ export interface PathView {
   pitch: number;
 }
 
-export const createPathView = (): PathView => ({ mode: 'top', zoom: 1, px: 0, py: 0, yaw: 0.7, pitch: 0.55 });
+export const createPathView = (): PathView => ({ mode: '3d', zoom: 1, px: 0, py: 0, yaw: 0.7, pitch: 0.55 });
 export const resetPathView = (v: PathView): void => {
   v.zoom = 1;
   v.px = v.py = 0;

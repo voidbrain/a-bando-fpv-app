@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FENCES, fenceDef, newFence, postsAlong, setFenceMaterial } from './fences';
+import { FENCES, fenceDef, hedgeLumps, newFence, postsAlong, setFenceMaterial, wireSag } from './fences';
 
 describe('fence materials', () => {
   it('every material has distinct ids and sane sizes; unknown falls back to masonry', () => {
@@ -36,5 +36,22 @@ describe('fence materials', () => {
     expect(p[0]).toBe(0);
     expect(p[p.length - 1]).toBe(1);
     expect(p).toHaveLength(4);
+  });
+});
+
+describe('hedges and lines', () => {
+  it('a hedge is lumpy, the same way every time, wilder for brambles', () => {
+    const a = hedgeLumps(10, 3.2, false), b = hedgeLumps(10, 3.2, false), w = hedgeLumps(10, 3.2, true);
+    expect(a).toEqual(b);
+    expect(a.length).toBe(10);
+    const range = (l: { h: number }[]) => Math.max(...l.map((x) => x.h)) - Math.min(...l.map((x) => x.h));
+    expect(range(w)).toBeGreaterThan(range(a));
+  });
+  it('wires sag most in the middle of each span and touch the poles', () => {
+    const s = wireSag(70, [0, 0.5, 1], 0.03, 10);
+    expect(s.length).toBe(2);
+    expect(s[0]![0]!.drop).toBe(0);
+    expect(s[0]![10]!.drop).toBeCloseTo(0);
+    expect(s[0]![5]!.drop).toBeCloseTo(4 * 0.03 * 35 * 0.25);
   });
 });

@@ -48,7 +48,7 @@ for (const f of readdirSync(bdir).filter((n) => n.endsWith('.json')).sort()) {
     process.exit(1);
   }
   writeFileSync(join(out, f), JSON.stringify(b) + '\n');
-  bandos.push({ file: `bandos/${f}`, name: b.name, about: typeof b.about === 'string' ? b.about : '', origin: b.origin, buildings: b.buildings.length, ...(b.privacy ? { privacy: b.privacy } : {}) });
+  bandos.push({ file: `bandos/${f}`, name: b.name, about: typeof b.about === 'string' ? b.about : '', origin: b.origin, buildings: b.buildings.length, release: Number.isInteger(b.release) && b.release > 0 ? b.release : 1, ...(b.privacy ? { privacy: b.privacy } : {}) });
 }
 // an example removed from library/bandos must not stay published
 for (const f of readdirSync(out).filter((n) => n.endsWith('.json'))) if (!bandos.some((b) => b.file === `bandos/${f}`)) rmSync(join(out, f));

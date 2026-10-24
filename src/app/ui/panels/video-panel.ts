@@ -1,6 +1,5 @@
 import { Component, ElementRef, effect, inject, signal, viewChild } from '@angular/core';
 import { SYNC_PLOT_HEIGHT, drawSyncPlot } from '../../core/drawing/sync-plot';
-import { LayoutStore } from '../../state/layout.store';
 import { ViewStore } from '../../state/view.store';
 import { VideoService } from '../../services/video.service';
 import { checkedFrom, numberFrom } from '../dom';
@@ -17,12 +16,19 @@ import { Panel } from '../panel/panel';
         <div class="dim small">The video is on the main page (Views panel → Main page).</div>
       }
       <div class="row">
-        <label class="btn" data-tour="load-video">Load video<input type="file" accept="video/*" hidden (change)="load($event)" /></label>
-        <button class="btn primary" [disabled]="video.busy()" (click)="video.autoSync(scanFrom(), scanLength())" data-tour="auto-sync">Auto-sync</button>
+        @if (!video.synced()) {
+          <label class="btn" data-tour="load-video">Load video<input type="file" accept="video/*" hidden (change)="load($event)" /></label>
+        }
+        <button class="btn" [class.primary]="!video.synced()" [disabled]="video.busy() || !video.loaded()" (click)="video.autoSync(scanFrom(), scanLength())" data-tour="auto-sync">{{ video.synced() ? 'Sync again' : 'Auto-sync' }}</button>
+        <span class="dim small grow">{{ video.status() }}</span>
       </div>
-      <div class="dim small">{{ video.status() }}</div>
       <details class="adv">
         <summary>Advanced</summary>
+        @if (video.synced()) {
+          <div class="row">
+            <label class="btn">Load another video<input type="file" accept="video/*" hidden (change)="load($event)" /></label>
+          </div>
+        }
         <div class="row">
           <label>offset s <input type="number" step="0.1" [value]="video.offset().toFixed(2)" (change)="video.setOffset(num($event))" /></label>
           <button class="btn" (click)="video.syncHere()">Sync here</button>
@@ -31,7 +37,6 @@ import { Panel } from '../panel/panel';
         </div>
         <div class="row">
           <label>cam tilt° <input type="number" step="1" [value]="view.fpvTiltDeg()" (change)="view.setFpvTilt(num($event))" /></label>
-          <label>size <input type="range" min="220" max="900" [value]="width()" (input)="setWidth(num($event))" /></label>
         </div>
         <div class="row">
           <label>from s <input type="number" step="10" [value]="scanFrom()" (change)="scanFrom.set(num($event))" /></label>
@@ -60,6 +65,10 @@ import { Panel } from '../panel/panel';
       color: var(--dim);
       margin: 4px 0;
     }
+    .grow {
+      flex: 1;
+      min-width: 0;
+    }
     .slot {
       display: block;
       line-height: 0;
@@ -69,7 +78,6 @@ import { Panel } from '../panel/panel';
 export class VideoPanel {
   protected readonly video = inject(VideoService);
   protected readonly view = inject(ViewStore);
-  private readonly layout = inject(LayoutStore);
   protected readonly plotHeight = SYNC_PLOT_HEIGHT;
   protected readonly scanFrom = signal(0);
   protected readonly scanLength = signal(90);
@@ -89,12 +97,6 @@ export class VideoPanel {
     });
   }
 
-  protected width(): number {
-    return this.layout.panels()['video'].w ?? 380;
-  }
-  protected setWidth(w: number): void {
-    this.layout.setWidth('video', w);
-  }
   protected load(e: Event): void {
     const input = e.target as HTMLInputElement;
     const f = input.files?.[0];

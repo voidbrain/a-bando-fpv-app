@@ -95,14 +95,18 @@ export const LayoutStore = signalStore(
       setWidth: (id: PanelId, w: number) => update(id, () => ({ w })),
       raise,
       /** Put panels back as they were (shown or not, where, collapsed): the guide restores the layout it changed. */
-      restore: (saved: Partial<Record<PanelId, Pick<PanelState, 'visible' | 'x' | 'y' | 'minimized'>>>) =>
+      restore: (saved: Partial<Record<PanelId, Partial<PanelState>>>) =>
         patchState(store, (s) => {
           const panels = { ...s.panels };
-          for (const [id, p] of Object.entries(saved) as [PanelId, Pick<PanelState, 'visible' | 'x' | 'y' | 'minimized'>][]) panels[id] = { ...panels[id], ...p };
+          for (const [id, p] of Object.entries(saved) as [PanelId, Partial<PanelState>][]) panels[id] = { ...panels[id], ...p };
           return { panels };
         }),
       reset: () => {
-        patchState(store, defaults());
+        // everything back to its first place and size; Welcome is for a first visit, Views stays the way back
+        const d = defaults();
+        d.panels.welcome = { ...d.panels.welcome, visible: false };
+        d.panels.views = { ...d.panels.views, visible: true };
+        patchState(store, d);
         // the float boxes and the editor's toolbars remember their place on their own
         try {
           for (const k of Object.keys(localStorage)) if (k.startsWith('abando-float-')) localStorage.removeItem(k);

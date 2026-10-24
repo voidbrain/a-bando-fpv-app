@@ -8,6 +8,8 @@ export interface ExampleBando {
   buildings: number;
   /** Shared without its place: the list does not show coordinates then. */
   privacy?: 'hidden';
+  /** Raised when the example changes: copies made from an older release are told a newer one is out. */
+  release: number;
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && isFinite(v);
@@ -27,8 +29,16 @@ export function sanitizeExamples(raw: unknown): ExampleBando[] {
       about: typeof o['about'] === 'string' ? o['about'].slice(0, 300) : '',
       origin: { lat: origin['lat'], lon: origin['lon'] },
       buildings: isNum(o['buildings']) ? Math.max(0, Math.round(o['buildings'])) : 0,
+      release: isNum(o['release']) ? Math.max(1, Math.round(o['release'])) : 1,
       ...(o['privacy'] === 'hidden' ? { privacy: 'hidden' as const } : {}),
     });
   }
   return out;
+}
+
+/** A newer release of the example a bando was copied from, or null (not a copy, or up to date, or the example is gone). */
+export function newerExample(spec: { derivedFrom?: { example: string; release: number } }, examples: readonly ExampleBando[]): ExampleBando | null {
+  const d = spec.derivedFrom;
+  const e = d ? examples.find((x) => x.file === d.example) : undefined;
+  return e && d && e.release > d.release ? e : null;
 }

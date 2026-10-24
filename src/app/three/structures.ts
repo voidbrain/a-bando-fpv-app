@@ -195,7 +195,7 @@ export function buildStructure(s: StructureSpec): BuiltStructure {
     const palette = ['#9a3b2e', '#2f5d8a', '#3f7a52', '#c8892a', '#6d7378', '#7a4f8a'];
     const color = s.color ?? palette[[...s.id].reduce((a, c) => a + c.charCodeAt(0), 0) % palette.length]!;
     add(new THREE.Mesh(new THREE.BoxGeometry(L, H, Wd), mat(color, { metalness: 0.25 })), 0, H / 2, 0);
-    const rib = mat('#00000030');
+    const rib = mat('#' + new THREE.Color(color).multiplyScalar(0.75).getHexString(), { metalness: 0.25 }); // ribs: the box's colour, a shade darker
     for (let x = -L / 2 + 0.5; x < L / 2 - 0.3; x += 0.6) for (const sz of [-1, 1]) add(new THREE.Mesh(new THREE.BoxGeometry(0.08, H * 0.92, 0.04), rib), x, H / 2, sz * (Wd / 2 + 0.02));
     const n = Math.max(1, Math.ceil(L / 2.5));
     for (let i = 0; i < n; i++) box(-L / 2 + ((i + 0.5) * L) / n, 0, L / n + 0.05, Wd, 0, H);

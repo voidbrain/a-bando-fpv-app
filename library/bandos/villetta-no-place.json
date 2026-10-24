@@ -1,5 +1,6 @@
 {
  "about": "The Villetta main store shared without its place: no map and no map data, its real ground travels inside. Open a copy, edit it, load your flights: they start on the take-off pad, and pins and the compass fit them.",
+ "release": 2,
  "version": 1,
  "id": "example-villetta-no-place",
  "name": "Villetta (place hidden)",
@@ -3425,8 +3426,8 @@
  "seed": 7,
  "extent": 235,
  "droneStart": {
-  "x": 16.099,
-  "z": 30.438
+  "x": 40.3,
+  "z": -50.5
  },
  "terrain": {
   "cell": 1,

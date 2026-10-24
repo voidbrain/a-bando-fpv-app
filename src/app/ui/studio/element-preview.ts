@@ -142,9 +142,9 @@ export class ElementPreview {
       this.big.set(false);
       return;
     }
-    const body = (this.host.nativeElement as HTMLElement).parentElement;
+    // as big as the window lets it be: the inspector scrolls around it
     this.smallH = this.h();
-    this.h.set(Math.round(Math.max(this.h(), (body?.clientHeight ?? 600) * 0.75)));
+    this.h.set(Math.round(Math.max(this.h() + 120, Math.min(560, innerHeight * 0.55))));
     this.big.set(true);
   }
 

@@ -104,7 +104,35 @@ export class SiteService {
   /** Wipe the scene back to the blank canvas (no buildings), keeping the current location. */
   newBlank(): void {
     this.applySpec(emptySpec(this.active().origin, 'Blank site'), true);
-    this.toast.show('Blank model: import a location in the Sites panel or Alt+click the map to build one.');
+    this.toast.show('Blank model: create a bando in the Bandos panel, or Alt+click the map to build one.');
+  }
+
+  /**
+   * Show a bando without keeping it (the welcome tour's copy of an example, the empty world): nothing is saved and the
+   * bando opened last stays the one a reload opens. A file's own ground goes to the cache as with an import.
+   */
+  showTemporary(text: string | SiteSpec): boolean {
+    const spec = typeof text === 'string' ? this.library.importJson(text) : text;
+    if (!spec) return false;
+    this.absorbGround(spec);
+    this.applySpec(spec, true, false);
+    return true;
+  }
+
+  /** The empty world of a first visit (nothing saved). */
+  showVoid(): void {
+    this.applySpec(emptySpec({ lat: 0, lon: 0 }, 'Blank site'), true, false);
+  }
+
+  /** The real ground a shared file carries goes to the elevation cache, out of the spec (it is cloned on every edit). */
+  private absorbGround(spec: SiteSpec): void {
+    const base = spec.terrain?.base;
+    if (spec.terrain && base?.data) {
+      const h = decodeHeights(base.data, emptyGrid(spec.terrain).h.length);
+      delete base.data;
+      if (h) void cacheBase(base.key, h);
+      else delete spec.terrain.base;
+    }
   }
 
   /** Load a stored site by id. */
@@ -112,7 +140,7 @@ export class SiteService {
     const spec = this.library.load(id);
     if (!spec) return false;
     this.applySpec(spec, true);
-    this.toast.show(`Site “${spec.name}” loaded.`);
+    this.toast.show(`Bando “${spec.name}” loaded.`);
     return true;
   }
 
@@ -123,16 +151,10 @@ export class SiteService {
   importJson(text: string): boolean {
     const spec = this.library.importJson(text);
     if (!spec) {
-      this.toast.show('Not a valid site file.');
+      this.toast.show('Not a valid bando file.');
       return false;
     }
-    const base = spec.terrain?.base;
-    if (spec.terrain && base?.data) {
-      const h = decodeHeights(base.data, emptyGrid(spec.terrain).h.length);
-      delete base.data;
-      if (h) void cacheBase(base.key, h);
-      else delete spec.terrain.base;
-    }
+    this.absorbGround(spec);
     if (this.library.load(spec.id)) spec.id = uid();
     this.library.save(spec);
     this.applySpec(spec, true);
@@ -299,7 +321,7 @@ export class SiteService {
   saveActive(): void {
     const spec = this.active();
     this.library.save(spec);
-    this.toast.show(`Site “${spec.name}” saved (${this.generatedCount()} in the library). Source: ${this.geo.attribution}.`);
+    this.toast.show(`Bando “${spec.name}” saved (${this.generatedCount()} in the library). Source: ${this.geo.attribution}.`);
   }
 
   /** Store the editor draft in the library and make it the active site (the Sites panel's Save). */
@@ -307,7 +329,7 @@ export class SiteService {
     const spec = this.editor.snapshot();
     this.library.save(spec);
     this.applySpec(spec, false);
-    this.toast.show(`Site “${spec.name}” saved (${this.library.list().length} in the library). Source: ${this.geo.attribution}.`);
+    this.toast.show(`Bando “${spec.name}” saved (${this.library.list().length} in the library). Source: ${this.geo.attribution}.`);
   }
 
   /** Re-solve the GPS calibration from the active spec's corner landmarks / bearing (after a "Point north"). */
@@ -466,11 +488,11 @@ export class SiteService {
   /** The terrain grid the flight paths were last laid on (a new grid re-projects them). */
   private groundGrid: HeightGrid | null = null;
 
-  private applySpec(spec: SiteSpec, resetView: boolean): void {
+  private applySpec(spec: SiteSpec, resetView: boolean, remember = true): void {
     this.active.set(spec);
     // adopt the spec as the new draft, unless the caller is applying the draft itself (live preview)
     if (!sameSpec(this.editor.draft(), spec)) this.editor.load(spec);
-    writeStoredId(spec.id);
+    if (remember) writeStoredId(spec.id);
     setSiteOrigin(spec.origin);
     const ground = siteGround(spec);
     setTakeoff({ ...spec.droneStart, y: ground.start });

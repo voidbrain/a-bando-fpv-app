@@ -125,4 +125,16 @@ describe('sharing a bando without its place', () => {
     expect(f.loc[0]!.z).toBeCloseTo(takeoffSpot().z, 3);
     expect(autoAlignFlights()).toBe(false);
   });
+
+  it('a write the browser refuses is kept for this visit and reported, not swallowed', () => {
+    const store = TestBed.inject(LibraryStore);
+    const full = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw Object.assign(new Error('full'), { name: 'QuotaExceededError' });
+    });
+    store.put('sites', 'x', { n: 1 });
+    full.mockRestore();
+    expect(store.get('sites', 'x')).toEqual({ n: 1 });
+    expect(store.health().failed).toBe(1);
+    expect(store.health().problem).toBe('quota');
+  });
 });

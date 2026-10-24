@@ -1,5 +1,5 @@
-import { Component, ElementRef, computed, inject, linkedSignal, signal, viewChild } from '@angular/core';
-import { captionPlace, snippetForMark, type Snippet } from '../core/tour';
+import { Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
+import { snippetForMark, type Snippet } from '../core/tour';
 import { TourService } from '../services/tour.service';
 
 /**
@@ -33,6 +33,7 @@ import { TourService } from '../services/tour.service';
     @if (tour.state(); as s) {
       <div #bar class="bar" role="status" aria-live="polite" [attr.data-preparing]="s.preparing || null" [style.left.px]="barAt().left" [style.top.px]="barAt().top">
         <div class="head">
+          <span class="grip" title="Drag to move" aria-hidden="true" (pointerdown)="gripDown($event)" (pointermove)="gripMove($event)" (pointerup)="gripUp($event)" (pointercancel)="gripUp($event)">⠿</span>
           <b>{{ s.title }}</b>
           <span class="dim small mono">{{ s.index }} / {{ s.total }}</span>
           <span class="sp"></span>
@@ -107,9 +108,14 @@ import { TourService } from '../services/tour.service';
       border-radius: 10px;
       box-shadow: 0 10px 32px rgba(0, 0, 0, 0.6);
       overflow: hidden;
-      transition:
-        left 0.3s,
-        top 0.3s;
+
+    }
+    .grip {
+      cursor: grab;
+      color: var(--dim);
+      padding: 0 2px;
+      touch-action: none;
+      user-select: none;
     }
     .head {
       display: flex;
@@ -163,17 +169,29 @@ export class TourOverlay {
   private last: Element | null = null;
   protected readonly on = computed(() => this.tour.tips() && !this.tour.state());
   private readonly barEl = viewChild<ElementRef<HTMLElement>>('bar');
-  /** The caption follows the action: next to what the tour points at (measured height, so long captions fit). */
+  /** Where the caption was dragged (for this visit); otherwise centred near the bottom, where it never covers the action. */
+  private readonly dragged = signal<{ left: number; top: number } | null>(null);
   protected readonly barAt = computed(() => {
-    const h = this.barEl()?.nativeElement.offsetHeight || 110;
+    const h = this.barEl()?.nativeElement.offsetHeight || 110, w = Math.min(520, innerWidth - 32);
     this.tour.state(); // re-measure when the caption changes
-    return captionPlace(this.near(), { w: innerWidth, h: innerHeight }, { w: Math.min(520, innerWidth - 32), h });
+    const d = this.dragged();
+    if (d) return { left: Math.max(0, Math.min(innerWidth - w, d.left)), top: Math.max(0, Math.min(innerHeight - 40, d.top)) };
+    return { left: Math.round((innerWidth - w) / 2), top: Math.max(8, innerHeight - h - 40) };
   });
-  /** The last target pointed at while the guide runs: between pointings the caption stays where it was. */
-  private readonly near = linkedSignal<{ f: ReturnType<TourService['focus']>; on: boolean }, ReturnType<TourService['focus']>>({
-    source: () => ({ f: this.tour.focus(), on: !!this.tour.state() }),
-    computation: (src, prev) => src.f ?? (src.on ? (prev?.value ?? null) : null),
-  });
+  private grab: { dx: number; dy: number } | null = null;
+  protected gripDown(e: PointerEvent): void {
+    const r = this.barEl()?.nativeElement.getBoundingClientRect();
+    if (!r) return;
+    this.grab = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+  protected gripMove(e: PointerEvent): void {
+    if (this.grab) this.dragged.set({ left: e.clientX - this.grab.dx, top: e.clientY - this.grab.dy });
+  }
+  protected gripUp(e: PointerEvent): void {
+    this.grab = null;
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+  }
 
   protected hover(e: MouseEvent): void {
     if (!this.on()) return;

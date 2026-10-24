@@ -2,6 +2,7 @@ import { Component, ElementRef, effect, inject, signal, untracked, viewChildren 
 import { SHOWCASE } from '../../core/tour';
 import { StudioService } from '../../services/studio.service';
 import { TourService } from '../../services/tour.service';
+import { PanelPlacer } from '../../services/panel-placer.service';
 import { LayoutStore } from '../../state/layout.store';
 import type { PanelId } from '../panel-defs';
 import { Panel } from '../panel/panel';
@@ -31,7 +32,7 @@ const PILLARS: readonly Pillar[] = [
     links: [
       { label: 'Load a log', open: ['flights', 'timeline'] },
       { label: 'Load a video', open: ['video', 'timeline'] },
-      { label: 'Simulator', open: ['simulator', 'radio'] },
+      { label: 'Simulator', open: ['simulator', 'radio', 'help', 'speed', 'attitude'] },
     ],
   },
   {
@@ -48,7 +49,7 @@ const PILLARS: readonly Pillar[] = [
 
 /**
  * Welcome: what OpenBando is for (Build, Fly, Share), in three columns with a short film each (the column in focus plays, the others rest),
- * and a button that plays the one-minute showcase. Shown on a first visit over the empty world; closing it brings Views.
+ * and a button that plays the welcome tour (the showcase). Shown on a first visit over the empty world; closing it brings Views.
  */
 @Component({
   selector: 'app-welcome-panel',
@@ -71,14 +72,14 @@ const PILLARS: readonly Pillar[] = [
               <p>{{ p.text }}</p>
               <div class="links">
                 @for (l of p.links; track l.label) {
-                  <button class="btn" (click)="go(l.open, !!l.list); $event.stopPropagation()">{{ l.label }} →</button>
+                  <button class="btn" (click)="go(l.open, !!l.list); $event.stopPropagation()">{{ l.label }} <span aria-hidden="true">→</span></button>
                 }
               </div>
             </section>
           }
         </div>
         <footer>
-          <button class="btn primary" (click)="showcase()" data-tour="welcome-tour">▶ Watch the one-minute tour</button>
+          <button class="btn primary" (click)="showcase()" data-tour="welcome-tour">▶ Watch the welcome tour</button>
           <button class="btn" (click)="go(['guide'], false)">Guide me</button>
           <span class="grow"></span>
           <span class="dim small">No account needed. Your logs, videos and places stay on this computer.</span>
@@ -182,6 +183,7 @@ export class WelcomePanel {
   private readonly layout = inject(LayoutStore);
   private readonly studio = inject(StudioService);
   private readonly tour = inject(TourService);
+  private readonly placer = inject(PanelPlacer);
   /** The column in focus: its film plays. */
   protected readonly focus = signal('build');
 
@@ -207,11 +209,11 @@ export class WelcomePanel {
   }
 
 
-  /** A link: open those panels (the Bandos list on its list), close Welcome. */
+  /** A link: close Welcome, open the panels for that job (the Bandos panel on its list) side by side, on top. */
   protected go(open: readonly PanelId[], list: boolean): void {
     if (list && this.studio.view() !== 'list') this.studio.back();
-    for (const id of open) this.layout.setVisible(id, true);
     this.layout.setVisible('welcome', false);
+    void this.placer.open(open);
   }
 
   protected showcase(): void {

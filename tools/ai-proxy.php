@@ -9,19 +9,32 @@
  * Install: upload as /ai-proxy.php over HTTPS, fill the settings below. In the app: AI assistant -> "Server / home PC"
  *   address = https://YOUR-DOMAIN/ai-proxy.php    model = (ignored if you set $FORCE_MODEL)
  *   token   = the value of $APP_TOKEN
+ *
+ * Checklist before it goes live (it refuses to run until the first point is done):
+ *   1. $APP_TOKEN: a long random string of your own (24 characters or more), e.g. `openssl rand -hex 24`.
+ *      It can also come from the server environment (OPENBANDO_AI_TOKEN), so it never sits in a file.
+ *   2. $UPSTREAM_KEY: only here (or in OPENBANDO_AI_KEY), never in the app.
+ *   3. $ALLOWED_ORIGINS: only the sites that may use it.
+ *   4. A spending limit on the upstream account, if it is a paid API.
  */
 
 // --- settings ---------------------------------------------------------------------------------------------
 $ALLOWED_ORIGINS = ['https://voidbrain.github.io', 'http://localhost:4200'];
 $UPSTREAM        = 'https://api.openai.com/v1/chat/completions'; // or e.g. https://my-pc.tailnet.ts.net/v1/chat/completions
-$UPSTREAM_KEY    = '';                                             // the real API key (empty for Ollama)
-$APP_TOKEN       = 'change-me-to-a-long-random-string';            // what the app sends as its "token"
+$UPSTREAM_KEY    = getenv('OPENBANDO_AI_KEY') ?: '';              // the real API key (empty for Ollama)
+$APP_TOKEN       = getenv('OPENBANDO_AI_TOKEN') ?: 'change-me-to-a-long-random-string'; // what the app sends as its "token"
 $FORCE_MODEL     = '';                                             // e.g. 'gpt-4o-mini': ignore the model the app asks for
 $MAX_BODY        = 60000;   // bytes of request
 $MAX_TOKENS      = 900;     // cap on the answer length
 $PER_MINUTE      = 20;      // requests per IP per minute
 $RATE_DIR        = __DIR__ . '/ai-rate';
 // ----------------------------------------------------------------------------------------------------------
+
+// fail closed: with the placeholder (or a short) token anybody could spend the upstream allowance
+if ($APP_TOKEN === 'change-me-to-a-long-random-string' || strlen($APP_TOKEN) < 24) {
+    http_response_code(503);
+    exit('proxy not configured: set $APP_TOKEN (or OPENBANDO_AI_TOKEN) to a random string of 24+ characters');
+}
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 header('Vary: Origin');

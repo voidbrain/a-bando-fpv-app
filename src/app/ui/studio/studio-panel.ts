@@ -1,10 +1,14 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, effect, inject, signal, untracked } from '@angular/core';
+import { LayoutStore } from '../../state/layout.store';
+import { LibraryStore } from '../../services/library-store.service';
+import { storageAdvice } from '../../core/storage-errors';
 import type { Privacy } from '../../core/share';
 import { BackupService } from '../../services/backup.service';
 import { DownloadService } from '../../services/download.service';
 import { tr } from '../../services/i18n.service';
 import { ExampleBandosService } from '../../services/example-bandos.service';
-import type { ExampleBando } from '../../core/examples';
+import { newerExample, type ExampleBando } from '../../core/examples';
+import type { SiteEntry } from '../../services/site-library.service';
 import { FormsModule } from '@angular/forms';
 import { SiteService } from '../../services/site.service';
 import { StudioService } from '../../services/studio.service';
@@ -30,6 +34,12 @@ import { BandoEditor } from './bando-editor';
           <button class="btn" (click)="backupAll()" [disabled]="!site.bandos().length" title="Save every bando and your own blocks in one file (keep it somewhere safe: the browser can lose what it stores)">Back up all</button>
           <label class="btn" title="Bring back a backup file: bandos it has that are missing here are added, an older copy here is replaced, a newer one is kept">Restore…<input type="file" accept=".json,application/json" hidden (change)="restoreFile($event)" /></label>
         </div>
+        @if (storage.health().problem; as pb) {
+          <div class="notice warn" role="alert">
+            {{ advice(pb) }}
+            <button class="btn" (click)="backupAll()">Back up all</button>
+          </div>
+        }
         @if (site.bandos().length === 0) {
           <div class="empty dim">
             No bando yet. Press <b>New bando</b>, search a place, frame the area on the map and generate the 3D model.
@@ -43,6 +53,12 @@ import { BandoEditor } from './bando-editor';
                 @if (b.id === site.active().id) { <span class="badge">open</span> }
                 <span class="dim small mono">{{ b.buildings }} buildings · {{ b.privacy === 'hidden' ? 'place hidden' : b.origin.lat.toFixed(4) + ', ' + b.origin.lon.toFixed(4) }}</span>
               </button>
+              @if (newer(b); as ex) {
+                <div class="small upd">
+                  A newer release of “{{ ex.name }}” is out.
+                  <button class="btn" (click)="openExample(ex)">Open a fresh copy</button>
+                </div>
+              }
               <div class="acts">
                 <button class="btn" (click)="studio.edit(b.id)" [title]="b.privacy === 'hidden' ? 'Edit the model (its place is hidden, so there is no map area)' : 'Change the area on the map and regenerate'">{{ b.privacy === 'hidden' ? 'Edit' : 'Edit area' }}</button>
                 <button class="btn" (click)="rename(b.id, b.name)">Rename</button>
@@ -93,10 +109,30 @@ import { BandoEditor } from './bando-editor';
       display: flex;
       flex-direction: column;
       flex: 1 1 auto;
-      min-height: 0;
+      /* the panel's height follows its content on the list: the editor needs room of its own */
+      min-height: min(540px, calc(100vh - 120px));
     }
     .name {
       width: 180px;
+    }
+    .upd {
+      margin: 4px 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      color: var(--accent);
+    }
+    .notice {
+      margin: 6px 0;
+      padding: 6px 8px;
+      border: 1px solid var(--warn);
+      border-radius: 6px;
+      font-size: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
     }
     .list {
       display: flex;
@@ -157,6 +193,11 @@ export class StudioPanel {
   protected readonly studio = inject(StudioService);
   protected readonly site = inject(SiteService);
   private readonly toast = inject(ToastService);
+  private readonly layout = inject(LayoutStore);
+  protected readonly storage = inject(LibraryStore);
+  protected readonly advice = storageAdvice;
+  /** A newer release of the example this bando was copied from (its own edits are not touched: a fresh copy is offered). */
+  protected newer = (b: SiteEntry): ExampleBando | null => newerExample(b, this.examples.list());
   private readonly downloads = inject(DownloadService);
   private readonly backups = inject(BackupService);
   protected readonly examples = inject(ExampleBandosService);
@@ -165,6 +206,21 @@ export class StudioPanel {
 
   constructor() {
     void this.examples.load();
+    // the list is a narrow card; the editor gets more width while it is open (unless the pilot sized the panel)
+    let widened = false;
+    effect(() => {
+      const zone = this.studio.view() === 'zone';
+      untracked(() => {
+        const w = this.layout.panels().studio.w;
+        if (zone && w === null) {
+          this.layout.setWidth('studio', Math.min(900, innerWidth - 24));
+          widened = true;
+        } else if (!zone && widened) {
+          this.layout.restore({ studio: { w: null, h: null } });
+          widened = false;
+        }
+      });
+    });
   }
 
   protected async openExample(e: ExampleBando): Promise<void> {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import published from '../../../public/library/catalog.json';
 import { applyPattern, placeBlock, type BlockSpec } from './blocks';
-import { latestVersions, mergeCatalog, sanitizeCatalog, searchBlocks } from './catalog';
+import { blockCategory, groupBlocks, latestVersions, mergeCatalog, sanitizeCatalog, searchBlocks } from './catalog';
 import { emptySpec, type BuildingSpec } from './site-spec';
 
 const hall = (): BuildingSpec => ({ id: 'h', name: 'Hall', pos: { x: 0, z: 0 }, rotDeg: 0, length: 40, width: 20, levels: [{ baseY: 0, height: 6, sides: { n: true, s: true, e: true, w: true }, doors: {}, partitions: [], roof: 'flat', roofRise: 0 }] });
@@ -64,3 +64,19 @@ describe('façade blocks from the catalogue', () => {
     expect(parseInt(north, 10)).toBeLessThan(parseInt(all, 10));
   });
 });
+
+describe('Library sub-categories', () => {
+  const blocks = (published.blocks as unknown[]).map((b) => b as BlockSpecLike);
+  it('keep the FPV gates together and every catalogue block in a named group', () => {
+    const gates = blocks.filter((b) => blockCategory(b) === 'fpv').map((b) => b.id);
+    expect(gates).toEqual(expect.arrayContaining(['abando/race-gate', 'abando/dive-gate']));
+    expect(blocks.filter((b) => blockCategory(b) === 'other').map((b) => b.id)).toEqual([]);
+  });
+  it('list groups in order, names sorted inside each', () => {
+    const g = groupBlocks(blocks as never);
+    expect(g[0]!.id).toBe('fpv');
+    for (const x of g) expect(x.blocks.map((b) => b.name)).toEqual([...x.blocks.map((b) => b.name)].sort((a, b) => a.localeCompare(b)));
+    expect(blockCategory({ id: 'local/x', kind: 'structure', tags: ['fpv'] })).toBe('mine');
+  });
+});
+type BlockSpecLike = { id: string; kind: 'structure' | 'building' | 'group' | 'pattern'; tags: string[]; name: string };

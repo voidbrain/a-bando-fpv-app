@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-/** The showcase link plays the one-minute tour by itself and ends on its finished screen. */
+/** The showcase link plays the welcome tour by itself and ends on its finished screen. */
 test('the showcase link plays to the end', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -11,7 +11,7 @@ test('the showcase link plays to the end', async ({ page }) => {
   await expect(bar).toContainText('OpenBando'); // Italian captions (the app name stays)
   await expect(bar).toBeHidden({ timeout: 300_000 });
   const shown = await page.locator('app-panel:not([hidden])').evaluateAll((els) => els.map((e) => `${e.getAttribute('data-id')}${e.classList.contains('ghost') ? '*' : ''}`));
-  expect(shown.sort()).toEqual(['attitude*', 'path*', 'speed*', 'timeline*', 'video*', 'vpChase*', 'vpFpv*', 'vpOrbit*', 'vpTop*'].sort());
+  expect(shown.sort()).toEqual(['attitude', 'blackbox', 'path', 'speed', 'timeline', 'video*', 'vpChase', 'vpFpv'].sort()); // only the video under glass
   expect(errors).toEqual([]);
 });
 

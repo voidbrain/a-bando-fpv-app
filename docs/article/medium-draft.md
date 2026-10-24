@@ -104,7 +104,7 @@ or 4K.
 ## Try it
 
 Open OpenBando, close the welcome screen, and open **Chiari e Forti** from the examples: an old oil factory on the
-river Sile with its battlemented mill tower. Or play the one-minute tour from the welcome screen.
+river Sile with its battlemented mill tower. Or play the welcome tour from the welcome screen.
 
 OpenBando is open source. Build your bando, fly it, and share it only with the people who should know where it is.
 

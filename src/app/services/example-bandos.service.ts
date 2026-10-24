@@ -35,7 +35,9 @@ export class ExampleBandosService {
     try {
       const res = await fetch(new URL(`${BASE}${e.file}`, document.baseURI).toString());
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return this.site.importJson(await res.text());
+      // the copy remembers which example and release it came from: a newer release can be pointed out later
+      const raw = (await res.json()) as Record<string, unknown>;
+      return this.site.importJson(JSON.stringify({ ...raw, derivedFrom: { example: e.file, release: e.release } }));
     } catch {
       this.toast.show(`Could not download “${e.name}”. Check the connection and try again.`);
       return false;

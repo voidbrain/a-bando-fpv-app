@@ -13,6 +13,7 @@ import { columnsInLine, pointsInside, treeZones } from '../../core/elements';
 import { FENCES, fenceDef, newFence, setFenceMaterial, type FenceMaterial } from '../../core/fences';
 import { areaCorners } from '../../core/areas';
 import { roadDef, surfaceDef } from '../../core/layers';
+import { blockCategory } from '../../core/catalog';
 import { siteGround } from '../../core/site-ground';
 import { PickMenu, type PickOption } from './pick-menu';
 import { BlocksBox } from './blocks-box';
@@ -67,7 +68,7 @@ const STRUCT_ICON: Record<StructureKind, string> = {
   chimney: 'chimney', silo: 'silo', tank: 'tank', water_tower: 'waterTower', lattice_tower: 'lattice', tower_crane: 'crane',
   bridge: 'bridge', stairs: 'stairs', ramp: 'ramp', container: 'container', car: 'car', truck: 'truck', excavator: 'excavator', shapes: 'blocks',
 };
-const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: 'concrete', brick: 'brick', wood: 'fence', metal: 'metalSheet', chainlink: 'chainlink' };
+const FENCE_ICON: Record<FenceMaterial, string> = { masonry: 'wall', concrete: 'concrete', brick: 'brick', wood: 'fence', metal: 'metalSheet', chainlink: 'chainlink', hedge: 'hedge', bramble: 'bramble', wires: 'wires' };
 
 /**
  * The bando editor. One map (street / satellite / hidden, with adjustable opacity) carries everything:
@@ -117,6 +118,7 @@ export class BandoEditor {
     { id: 'merge', icon: 'merge', group: 'build', name: 'Merge', color: '#a29bfe', hint: 'Then click a touching (or almost touching) building to join it into the selected one', where: 'out', needsBuilding: true },
     { id: 'cut', icon: 'cut', group: 'build', name: 'Cut', color: '#ff6b6b', hint: 'Cut a notch out of the selected building (U, H, L shapes)', where: 'out', needsBuilding: true },
     { id: 'wing', icon: 'wing', group: 'build', name: 'Wing', color: '#74b9ff', hint: 'Add a wing to the selected building', where: 'out', needsBuilding: true },
+    { id: 'gate', icon: 'gate', group: 'fpv', name: 'FPV gates and poles', color: '#e8742a', hint: 'Race gates, dive gates, ladders, hurdles, flags and slalom poles: click the map to place one', where: 'out' },
     { id: 'structure', icon: 'structure', group: 'struct', name: 'Structure', color: '#f78fb3', hint: 'Tower, bridge, container, vehicle ... (choose the kind in the options)', where: 'out' },
     { id: 'tree', icon: 'tree', group: 'trees', name: 'Tree', color: '#4cd964', hint: 'Click the map to plant a tree', where: 'out' },
     { id: 'scatter', icon: 'brush', group: 'trees', name: 'Tree brush', color: '#00cec9', hint: 'Paint trees with a pen, or fill a square, circle or hand-drawn area with random trees', where: 'out' },
@@ -243,6 +245,12 @@ export class BandoEditor {
     { id: 'bridge', label: 'Bridge (drag)' }, { id: 'stairs', label: 'Stairs' }, { id: 'ramp', label: 'Ramp' },
     { id: 'container', label: 'Container' }, { id: 'car', label: 'Car' }, { id: 'truck', label: 'Truck' }, { id: 'excavator', label: 'Excavator' },
   ];
+  /** The FPV gates and poles of the Library (catalogue and own), for the Gates tool. */
+  protected readonly gateOptions = computed<PickOption[]>(() =>
+    this.blockLib.all().filter((b) => blockCategory(b) === 'fpv').sort((a, b) => a.name.localeCompare(b.name)).map((b) => ({ id: b.id, label: b.name, icon: 'gate', hint: b.description ?? '' })),
+  );
+  protected readonly gateId = signal('abando/race-gate');
+  protected readonly gateRot = signal(0);
   protected readonly structOptions: readonly PickOption[] = this.structKinds.map((k) => ({ id: k.id, label: k.label, icon: STRUCT_ICON[k.id] }));
   protected readonly indoor = signal(false);
   protected readonly level = signal(0);
@@ -665,6 +673,7 @@ export class BandoEditor {
     if (this.pinMode()) return 'Click the map where the flight ' + (this.pinMode() === 's' ? 'started' : 'ended') + '. Esc cancels.';
     const arm = this.blocks.armed();
     if (arm) return `Click the map to place “${arm.block.name}” (again for another one). Esc stops.`;
+    if (t === 'gate') return 'Click the map to place it, facing the way set in the options. Select it to move or turn it.';
     if (t === 'structure') return this.structKind() === 'bridge' ? 'Drag from one end of the bridge to the other. Select it to change height, width, style.' : 'Click to place it. Select it to change height and size; drag to move.';
     if (t === 'building') return this.buildKind() === 'greenhouse' ? 'Drag a rectangle: the long side is the tunnel, the short side the arch span.' : 'Drag a rectangle to add a building (it cannot overlap another).';
     if (t === 'merge') return this.b() ? `Click a touching building to merge it into “${this.b()!.name}”.` : 'Click the building to keep, then the one to merge into it.';
@@ -1008,6 +1017,7 @@ export class BandoEditor {
     this.scene.pin.set(null);
     this.hover.set(null);
     this.dragPlacement.set(null);
+    this.blocks.armed.set(null); // a block picked in the Library is let go when another tool is chosen
     this.tool.set(t);
     if (t === 'wall' && this.b()) this.enterIndoor();
     if (t !== 'measure') {
@@ -1113,6 +1123,11 @@ export class BandoEditor {
     }
     const t = this.tool();
     const bd = this.b();
+    if (t === 'gate') {
+      const b = this.blockLib.get(this.gateId());
+      if (b) this.blocks.place({ block: b, params: {}, rot: this.gateRot() }, p);
+      return;
+    }
     if (t === 'structure') {
       const q = { x: snap(p.x, 0.5), z: snap(p.z, 0.5) };
       if (this.structKind() === 'bridge') this.drag.set({ t: 'bridgeDraw', a: q, b: { ...q } });

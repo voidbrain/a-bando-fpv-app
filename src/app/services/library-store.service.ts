@@ -1,4 +1,5 @@
 import { Service, signal } from '@angular/core';
+import { storageProblem, type StorageProblem } from '../core/storage-errors';
 
 /** What the library keeps: bandos, the pilot's own blocks, the cached online catalogue, and small bookkeeping values. */
 export type Collection = 'sites' | 'blocks' | 'catalog' | 'meta';
@@ -17,6 +18,11 @@ export class LibraryStore {
   private db: IDBDatabase | null = null;
   /** Bumped on every write: computed views of the library re-evaluate. */
   readonly revision = signal(0);
+  /**
+   * Where the library lives and whether writes are failing: `memory` = the browser keeps nothing (private window,
+   * storage blocked); `failed` counts writes that did not reach the disk this visit, `problem` is the last kind.
+   */
+  readonly health = signal<{ mode: 'indexeddb' | 'local' | 'memory'; failed: number; problem: StorageProblem | null }>({ mode: 'local', failed: 0, problem: null });
   private ready: Promise<void> | null = null;
 
   constructor() {
@@ -29,6 +35,8 @@ export class LibraryStore {
     this.ready ??= this.open().then(
       async (db) => {
         this.db = db;
+        this.health.update((h) => ({ ...h, mode: 'indexeddb' }));
+        db.onversionchange = () => db.close(); // another tab upgrades the database: let it
         for (const c of COLLECTIONS) {
           const rows = await req<{ key: string; value: unknown }[]>(db.transaction(c, 'readonly').objectStore(c).getAll());
           for (const r of rows) this.mem.get(c)!.set(r.key, r.value);
@@ -81,17 +89,32 @@ export class LibraryStore {
     });
   }
 
+  /** One write; a failure (an error, an aborted transaction, a database that is gone) is counted and reported. */
   private write(c: Collection, fn: (s: IDBObjectStore) => void): Promise<void> {
     return new Promise((ok) => {
       try {
         const tx = this.db!.transaction(c, 'readwrite');
         fn(tx.objectStore(c));
         tx.oncomplete = () => ok();
-        tx.onerror = () => ok(); // a failed write keeps the value in memory for this visit
-      } catch {
+        // the value stays in memory for this visit; the pilot is told, and Back up all keeps it
+        tx.onerror = (e) => {
+          e.preventDefault();
+          this.failed(tx.error);
+          ok();
+        };
+        tx.onabort = () => {
+          this.failed(tx.error ?? { name: 'AbortError' });
+          ok();
+        };
+      } catch (e) {
+        this.failed(e);
         ok();
       }
     });
+  }
+
+  private failed(e: unknown): void {
+    this.health.update((h) => ({ ...h, failed: h.failed + 1, problem: storageProblem(e) }));
   }
 
   private loadLocal(): void {
@@ -107,16 +130,18 @@ export class LibraryStore {
           /* a corrupt entry is skipped, the rest still loads */
         }
       }
-    } catch {
-      /* no storage at all: memory only */
+      this.health.update((h) => ({ ...h, mode: 'local' }));
+    } catch (e) {
+      // no storage at all: memory only, and the pilot must know it
+      this.health.update((h) => ({ ...h, mode: 'memory', problem: storageProblem(e) === 'other' ? 'denied' : storageProblem(e) }));
     }
   }
 
   private lsWrite(k: string, v: unknown): void {
     try {
       localStorage.setItem(k, JSON.stringify(v));
-    } catch {
-      /* full or unavailable: kept in memory for this visit */
+    } catch (e) {
+      this.failed(e); // full or unavailable: kept in memory for this visit, and reported
     }
   }
 }

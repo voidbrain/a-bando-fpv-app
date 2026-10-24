@@ -17,6 +17,8 @@ export interface SiteEntry {
   /** A bando whose place is hidden. */
   privacy?: 'hidden';
   buildings: number;
+  /** The example it was copied from, and that example's release then. */
+  derivedFrom?: { example: string; release: number };
 }
 
 /** One stored bando: the spec and when it was last saved (the list shows the newest first). */
@@ -47,7 +49,7 @@ export class SiteLibraryService {
       .all<SiteRecord>('sites')
       .filter((r) => r && r.spec && typeof r.spec.id === 'string')
       .sort((a, b) => b.savedAt - a.savedAt)
-      .map(({ spec }) => ({ id: spec.id, name: spec.name, createdAt: spec.createdAt, origin: spec.origin, buildings: spec.buildings?.length ?? 0, ...(spec.privacy ? { privacy: spec.privacy } : {}) }));
+      .map(({ spec }) => ({ id: spec.id, name: spec.name, createdAt: spec.createdAt, origin: spec.origin, buildings: spec.buildings?.length ?? 0, ...(spec.privacy ? { privacy: spec.privacy } : {}), ...(spec.derivedFrom ? { derivedFrom: spec.derivedFrom } : {}) }));
   }
 
   load(id: string): SiteSpec | null {

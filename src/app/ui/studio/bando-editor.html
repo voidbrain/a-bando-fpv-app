@@ -451,6 +451,10 @@
               @case ('structure') {
                 <app-pick-menu label="What to place" [options]="structOptions" [value]="structKind()" (valueChange)="structKind.set(asStruct($event))" />
               }
+              @case ('gate') {
+                <app-pick-menu label="What to place" [options]="gateOptions()" [value]="gateId()" (valueChange)="gateId.set($event)" />
+                <label class="lay" title="Which way it faces (degrees, clockwise)">turn <input class="mini" type="number" min="0" max="359" step="15" [value]="gateRot()" (change)="gateRot.set(num($event))" />°</label>
+              }
               @case ('measure') {
                 <button class="btn" [disabled]="measure.sel() === null" (click)="measure.delete()" title="Delete the selected measure (Delete key)">Delete</button>
                 <button class="btn" [disabled]="!measure.chain().segs.length" (click)="measure.clear()" title="Remove all measures">Clear all</button>
