@@ -14,7 +14,7 @@ that the page's "Live link" card connects to  (default  ws://localhost:8765 ).
 
 It looks for valid CRSF frames (CRC-checked) anywhere in the incoming bytes, so it does not matter how
 a transport wraps them. It decodes GPS, battery, attitude, flight mode and link statistics.
-Open the page over http (for example:  python -m http.server 8000  and  http://localhost:8000/a-bando-fpv.html ).
+Open the page over http (for example:  python -m http.server 8000  and  the app (npm start, http://localhost:4200) ).
 """
 import argparse, asyncio, base64, hashlib, json, math, socket, struct, sys, threading, time
 

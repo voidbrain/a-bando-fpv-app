@@ -65,7 +65,7 @@ foreach ($UPSTREAMS as $url) {
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_CONNECTTIMEOUT => 6,
         CURLOPT_TIMEOUT        => 28,
-        CURLOPT_USERAGENT      => 'a-bando-fpv-app proxy (+https://github.com/voidbrain/a-bando-fpv-app)',
+        CURLOPT_USERAGENT      => 'OpenBando proxy (+https://github.com/voidbrain/openbando)',
     ]);
     $body = curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);

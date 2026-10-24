@@ -60,8 +60,8 @@ You are an expert in TypeScript, Angular, and scalable web application developme
 
 ## Project conventions (OpenBando)
 
-The app is **OpenBando** (tagline "Build, Fly, Share."). The repository, the Angular project and the Pages path are
-still `a-bando-fpv-app`; renaming them means changing `baseHref` in `angular.json` and the deploy workflow together.
+The app is **OpenBando** (tagline "Build, Fly, Share."). The repository is `voidbrain/openbando`, the Angular project
+`openbando` and the site lives at `https://voidbrain.github.io/openbando/` (`baseHref` in `angular.json`; the deploy workflow uploads `dist/openbando/browser`).
 
 ### Architecture
 

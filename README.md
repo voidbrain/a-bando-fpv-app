@@ -8,8 +8,8 @@ Everything runs in the browser (Angular 22, Three.js, signals). There is no back
 stay in the browser (IndexedDB); videos and logs are read from your disk and never uploaded.
 
 **The welcome tour**, a minute, played by itself: 
-[English](https://voidbrain.github.io/a-bando-fpv-app/?tour=showcase&lang=en) ·
-[Italiano](https://voidbrain.github.io/a-bando-fpv-app/?tour=showcase&lang=it). Any address of the app takes
+[English](https://voidbrain.github.io/openbando/?tour=showcase&lang=en) ·
+[Italiano](https://voidbrain.github.io/openbando/?tour=showcase&lang=it). Any address of the app takes
 `?tour=showcase` and `lang=en` / `lang=it`.
 
 ## What it does
@@ -144,11 +144,11 @@ No further configuration is required — the workflow uses the built-in
 ### How it works
 
 - Runs `npm ci` and `npm run build` (production build, with
-  `"baseHref": "/a-bando-fpv-app/"` set in `angular.json` so asset URLs
+  `"baseHref": "/openbando/"` set in `angular.json` so asset URLs
   resolve correctly under the project-page subpath).
 - Adds a `.nojekyll` file so GitHub Pages does **not** process the bundle
   with Jekyll (without it, Pages renders the README instead of the app).
-- Uploads `dist/a-bando-fpv-app/browser` as the Pages artifact.
+- Uploads `dist/openbando/browser` as the Pages artifact.
 - Deploys it with `actions/deploy-pages`.
 
 The site will be available at `https://<username>.github.io/<repo>/`.
