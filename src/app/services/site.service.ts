@@ -20,6 +20,7 @@ import { CalibrationStore } from '../state/calibration.store';
 import { GeoService } from './geo.service';
 import { SceneService } from './scene.service';
 import { isVoidSpec } from '../three/scene-host';
+import { showcaseLink } from '../core/tour';
 import { SiteLibraryService } from './site-library.service';
 import { ToastService } from './toast.service';
 
@@ -82,8 +83,9 @@ export class SiteService {
       const c = this.calibration.calibration();
       untracked(() => this.keepCalibration(c));
     });
-    // start where the user left off: the stored active spec, otherwise the blank canvas
-    const savedId = readStoredId();
+    // start where the user left off: the stored active spec, otherwise the blank canvas; a showcase link always opens on
+    // the empty world (the bando opened last is not shown first, and stays the one a normal visit opens)
+    const savedId = showcaseLink(location.search, location.hash) ? '' : readStoredId();
     const restored = savedId ? this.library.load(savedId) : null;
     if (restored) untracked(() => this.applySpec(restored, false));
     else this.editor.load(this.active());

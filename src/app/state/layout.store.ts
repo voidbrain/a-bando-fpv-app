@@ -2,6 +2,7 @@ import { patchState, signalStore, withHooks, withMethods, withState } from '@ngr
 import { PANELS, PANEL_BY_ID, type PanelId } from '../ui/panel-defs';
 import { signal } from '@angular/core';
 import { persistState, savedState } from './persist';
+import { showcaseLink } from '../core/tour';
 
 /** Bumped by "Reset UI": components that remember their own place (the editor's toolbars) go back to the default. */
 export const uiResets = signal(0);
@@ -42,6 +43,8 @@ export const LayoutStore = signalStore(
   { providedIn: 'root' },
   withState(() => {
     const d = defaults();
+    // a showcase link starts like a first visit (only Welcome); the tour arranges the rest itself
+    if (showcaseLink(location.search, location.hash)) return d;
     const saved = savedState<LayoutState>(KEY, d);
     // merge per panel so panels added in a newer version still appear with defaults
     const panels = { ...d.panels };
