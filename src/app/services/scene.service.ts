@@ -9,7 +9,7 @@ import { FlightStore } from '../state/flight.store';
 import { LayoutStore } from '../state/layout.store';
 import { ViewStore } from '../state/view.store';
 import type { PanelId } from '../ui/panel-defs';
-import { createOrbitState, fovFor, placeCamera, type FollowSubject, type OrbitState, type PlaceOptions } from '../three/camera-rig';
+import { createOrbitState, fovFor, orbitFromCamera, placeCamera, type FollowSubject, type OrbitState, type PlaceOptions } from '../three/camera-rig';
 import type { RigContext } from '../three/drone-rig';
 import { SceneHost } from '../three/scene-host';
 import { XRay } from '../three/xray';
@@ -86,6 +86,14 @@ export class SceneService {
   private stopTasks: (() => void)[] = [];
 
   constructor() {
+    // turning Follow on hands every view back to it: a view the pilot panned away glides back to the drone
+    effect(() => {
+      if (!this.view.orbitFollow()) return;
+      untracked(() => {
+        this.mainOrbit.manual = false;
+        for (const vp of Object.values(this.viewports)) vp.state.manual = false;
+      });
+    });
     effect(() => {
       if (!this.ready()) return;
       const k = this.calibration.modelScale();
@@ -209,6 +217,20 @@ export class SceneService {
     };
   }
 
+  /**
+   * Look around the drone: a drag or wheel on the chase camera switches the main view to an orbit about the drone,
+   * starting from where the chase camera is, and following it (a pan stops the follow; Follow or a double-click glides
+   * back). FPV keeps the pilot's view: it stays as it is.
+   */
+  lookAround(): void {
+    const cam = this.host?.mainCamera;
+    if (!cam || this.view.cameraView() !== 'chase') return;
+    const p = this.subject().p;
+    orbitFromCamera(this.mainOrbit, cam.position, p);
+    if (!this.view.orbitFollow()) this.view.toggleOrbitFollow();
+    this.view.setCameraView('orbit');
+  }
+
   /** Back to the default overview and park the drone. */
   resetCamera(): void {
     this.sim.reset();
@@ -292,6 +314,14 @@ export class SceneService {
       this.calibration.shift(x - end.x, z - end.z);
       this.toast.show('Path placed. Use the compass to rotate it if needed.');
     }
+  }
+
+  /** Move the active flight so its start lands on (x, z) in site metres (typed coordinates), like pinning the start. */
+  placeStart(x: number, z: number): void {
+    const start = this.flights.active?.loc[0];
+    if (!start || !isFinite(x) || !isFinite(z)) return;
+    this.calibration.shift(x - start.x, z - start.z);
+    this.startFixed.set(true);
   }
 
   /** Turn the active flight's path about its start by `deg` (clockwise seen from above): the orientation knob. */

@@ -74,6 +74,20 @@ export function placeCamera(c: THREE.PerspectiveCamera, view: CameraView, st: Or
   }
 }
 
+/**
+ * Set an orbit about `target` that puts the camera exactly at `cam`: leaving the chase camera for the orbit (to look
+ * around the drone) starts from the very same view, no jump.
+ */
+export function orbitFromCamera(st: OrbitState, cam: { x: number; y: number; z: number }, target: { x: number; y: number; z: number }): void {
+  const dx = cam.x - target.x, dy = cam.y - target.y, dz = cam.z - target.z;
+  const r = Math.hypot(dx, dy, dz) || RAD_MIN;
+  st.tg.set(target.x, target.y, target.z);
+  st.rad = clamp(r, RAD_MIN, RAD_MAX);
+  st.ph = clamp(Math.acos(clamp(dy / r, -1, 1)), 0.1, 1.5);
+  st.th = Math.atan2(dx, dz);
+  st.manual = false;
+}
+
 /** Left-drag: turn around the target (orbit view). */
 export function orbitRotate(st: OrbitState, dx: number, dy: number): void {
   st.th -= dx * 0.006;

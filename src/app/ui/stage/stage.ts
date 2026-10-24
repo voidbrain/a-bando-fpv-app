@@ -60,6 +60,7 @@ export class Stage {
         state: () => this.scene.mainOrbit,
         calRot: () => this.cal.rot(),
         onInput: () => this.scene.autoOrbit.set(false),
+        takeOver: () => this.scene.lookAround(),
         onClick: (x, y, alt) => {
           const cam = this.scene.host?.mainCamera;
           if (!cam) return;

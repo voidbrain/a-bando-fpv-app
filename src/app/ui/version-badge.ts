@@ -2,9 +2,13 @@ import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { LANGS, type Lang } from '../core/i18n';
 import { I18nService } from '../services/i18n.service';
+import { LayoutStore } from '../state/layout.store';
 import { APP_COMMIT, APP_VERSION } from '../version';
 
-/** Build number badge, bottom-left, with the language flag: the deploy workflow bumps the number on every push to main. */
+/**
+ * Build number badge, bottom-left, with the language flag (the deploy workflow bumps the number on every push to main)
+ * and, while the Views panel is closed, a menu button that brings it back: the way to every other panel.
+ */
 @Component({
   selector: 'app-version-badge',
   host: { '(document:pointerdown)': 'outside($event)', '(document:keydown.escape)': 'open.set(false)' },
@@ -13,6 +17,11 @@ import { APP_COMMIT, APP_VERSION } from '../version';
     <button type="button" class="flag" (click)="open.set(!open())" [attr.aria-expanded]="open()" aria-haspopup="menu" [attr.aria-label]="'Language: ' + current().name" title="Language">
       <ng-container *ngTemplateOutlet="flag; context: { $implicit: current().id }" />
     </button>
+    @if (!viewsShown()) {
+      <button type="button" class="flag views" (click)="showViews()" title="Open the Views panel: every panel, the cameras" aria-label="Open the Views panel">
+        <svg viewBox="0 0 24 24" width="16" height="14" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+      </button>
+    }
     @if (open()) {
       <div class="menu" role="menu" translate="no">
         @for (l of langs; track l.id) {
@@ -65,6 +74,11 @@ import { APP_COMMIT, APP_VERSION } from '../version';
       background: rgba(10, 16, 12, 0.75);
       cursor: pointer;
     }
+    .views path {
+      stroke: #eff7e8;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+    }
     .flag:focus-visible,
     .menu button:focus-visible {
       outline: 2px solid var(--accent);
@@ -106,11 +120,17 @@ import { APP_COMMIT, APP_VERSION } from '../version';
 })
 export class VersionBadge {
   protected readonly i18n = inject(I18nService);
+  private readonly layout = inject(LayoutStore);
+  protected readonly viewsShown = computed(() => this.layout.panels().views.visible);
   protected readonly version = APP_VERSION;
   protected readonly commit = APP_COMMIT;
   protected readonly langs = LANGS;
   protected readonly open = signal(false);
   protected readonly current = computed(() => LANGS.find((l) => l.id === this.i18n.lang()) ?? LANGS[0]!);
+
+  protected showViews(): void {
+    this.layout.setVisible('views', true);
+  }
 
   protected pick(id: Lang): void {
     this.i18n.set(id);

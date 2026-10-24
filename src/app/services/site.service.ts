@@ -570,7 +570,9 @@ export class SiteService {
  * in place; freshly generated ones start from the model's bearing.
  */
 export function calibrationForSpec(spec: SiteSpec): Calibration {
-  if (!spec.geoCorners) return { rot: -spec.bearingDeg + 90, dx: 0, dz: 0 };
+  // generated bandos are drawn north-up (x east, z south), which is a turn of 0 in toLocalAt; the old "+ 90" came from
+  // the first hand-built demo site and turned every flight on a generated bando a quarter turn
+  if (!spec.geoCorners) return { rot: -spec.bearingDeg, dx: 0, dz: 0 };
   const r = solveCalibration(spec.geoCorners.p1, spec.geoCorners.p2, spec.calibCorners.p1, spec.calibCorners.p2, spec.origin);
   return r ? r.calibration : { rot: 0, dx: 0, dz: 0 };
 }
