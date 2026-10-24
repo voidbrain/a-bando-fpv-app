@@ -43,6 +43,13 @@ import { Panel } from '../panel/panel';
           <label>scan s <input type="number" step="10" [value]="scanLength()" (change)="scanLength.set(num($event))" /></label>
         </div>
         <div class="row">
+          <span class="dim small">video alone</span>
+          <button class="btn" (click)="video.stepVideo(-1)" title="Move the video back 1 s (the replay stays)">−1 s</button>
+          <button class="btn" (click)="video.stepVideo(-1 / 60)" title="Move the video back one frame (the replay stays)">−1 frame</button>
+          <button class="btn" (click)="video.stepVideo(1 / 60)" title="Move the video forward one frame (the replay stays)">+1 frame</button>
+          <button class="btn" (click)="video.stepVideo(1)" title="Move the video forward 1 s (the replay stays)">+1 s</button>
+        </div>
+        <div class="row">
           <button class="btn" (click)="video.anchorLiftoff()">Video here = lift-off</button>
           <button class="btn" (click)="video.anchorFlip()">Video here = first flip/roll</button>
           <button class="btn" (click)="video.anchorYawFlick()">Video here = first yaw flick</button>
@@ -52,8 +59,9 @@ import { Panel } from '../panel/panel';
         }
         <div class="dim small">
           Auto-sync matches the log with the video over the first minute of flight, using how fast the picture pans and, for flips and rolls, when it is upside down.
-          A flip or roll in the first 10 s is the ideal marker (shown as F on the timeline). If it fails: scrub the video to the frame where the picture is upside
-          down in the middle of the first flip or roll and press “Video here = first flip/roll”; or use “Video here = lift-off” / “Sync here”. Nudge ±0.1 while
+          A flip or roll in the first 10 s is the ideal marker (shown as F on the timeline). If it fails: move the timeline near the moment, then the video alone
+          (−1 s … +1 s) to the frame where the picture is upside down in the middle of the first flip or roll, and press “Video here = first flip/roll”; or use
+          “Video here = lift-off” / “Sync here”. Nudge ±0.1 while
           watching the plot (blue and orange should line up). Video plays locally; nothing is uploaded.
         </div>
       </details>

@@ -1,5 +1,5 @@
 import { Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
-import { snippetForMark, type Snippet } from '../core/tour';
+import { SHOWCASE, snippetForMark, type Snippet } from '../core/tour';
 import { TourService } from '../services/tour.service';
 
 /**
@@ -34,7 +34,8 @@ import { TourService } from '../services/tour.service';
       <div #bar class="bar" role="status" aria-live="polite" [attr.data-preparing]="s.preparing || null" [style.left.px]="barAt().left" [style.top.px]="barAt().top" [style.bottom.px]="barAt().bottom">
         <div class="head">
           <span class="grip" title="Drag to move" aria-hidden="true" (pointerdown)="gripDown($event)" (pointermove)="gripMove($event)" (pointerup)="gripUp($event)" (pointercancel)="gripUp($event)">⠿</span>
-          <b>{{ s.title }}</b>
+          <!-- the showcase is called "Welcome" in every language: a name, not a word to translate -->
+          <b [attr.translate]="s.title === showcaseName ? 'no' : null">{{ s.title }}</b>
           <span class="dim small mono">{{ s.index }} / {{ s.total }}</span>
           <span class="sp"></span>
           <button class="btn" (click)="tour.back()" [disabled]="!s.canBack" title="Back: this step again from its start (from its start, the step before)">‹ Back</button>
@@ -167,6 +168,7 @@ export class TourOverlay {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private hide: ReturnType<typeof setTimeout> | null = null;
   private last: Element | null = null;
+  protected readonly showcaseName = SHOWCASE.title;
   protected readonly on = computed(() => this.tour.tips() && !this.tour.state());
   private readonly barEl = viewChild<ElementRef<HTMLElement>>('bar');
   /**

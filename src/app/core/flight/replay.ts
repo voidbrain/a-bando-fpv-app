@@ -2,6 +2,17 @@ import { clamp, lowerBound, wrapPi } from '../math';
 import { Quat, Vec3 } from '../math3d';
 import type { Calibration, Flight } from '../models';
 
+/**
+ * The replay time after a frame, following a master clock (the video) that stalls and jumps when its decoder falls
+ * behind: `time` already advanced by the frame; it moves a third of the way to the master each 1/10 s, and jumps only
+ * when the master is more than `snap` seconds away (a seek, a long stall).
+ */
+export function followClock(time: number, master: number, dt: number, snap = 0.3): number {
+  const err = master - time;
+  if (Math.abs(err) > snap) return master;
+  return time + err * Math.min(1, dt * 4);
+}
+
 /** Where the attitude of the replayed drone comes from. */
 export type AttitudeSource = 'telemetry' | 'live' | 'gps';
 
@@ -17,6 +28,8 @@ export class ReplayPose {
   /** Smoothed heading of the direction of travel (GPS-only mode). */
   private heading = 0;
   private readonly tmp = new Vec3();
+  private readonly qa = new Quat();
+  private readonly qb = new Quat();
 
   /** Heading follows the track when starting a new flight, not the previous one. */
   reset(): void {
@@ -48,8 +61,13 @@ export class ReplayPose {
     const rot = (cal.rot * Math.PI) / 180;
     const T = f.tel;
     if (T) {
-      const k = lowerBound(T.t, replayTime);
-      this.q.setFromEuler(-T.att[k * 3 + 1]!, -(T.att[k * 3 + 2]! + T.yawOff + rot), -T.att[k * 3]!, 'YXZ');
+      // blend the two log samples around the moment: drawn at 60 frames a second, the nearest sample alone snaps
+      const k = Math.min(lowerBound(T.t, replayTime), T.t.length - 1);
+      const j = Math.max(0, k - 1);
+      const at = (q: Quat, i: number): Quat => q.setFromEuler(-T.att[i * 3 + 1]!, -(T.att[i * 3 + 2]! + T.yawOff + rot), -T.att[i * 3]!, 'YXZ');
+      const span = T.t[k]! - T.t[j]!;
+      const w = span > 0 ? clamp((replayTime - T.t[j]!) / span, 0, 1) : 1;
+      this.q.copy(at(this.qa, j)).slerp(at(this.qb, k), w);
       this.source = 'telemetry';
     } else if (f.att) {
       this.q.setFromEuler(-f.att.pitch, -(f.att.hdg + rot), -f.att.roll, 'YXZ');

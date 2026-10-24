@@ -249,7 +249,7 @@ export const SNIPPETS: readonly Snippet[] = [
     title: 'Replay in sync',
     beats: [
       { say: 'Speed, attitude, sticks and the path: every number of the flight, in step with the video.', actions: [hook('arrange', 'replay'), hook('camera', 'chase'), click('play'), wait(8500)] },
-      { say: 'Ride along: the chase and the FPV camera, in step.', actions: [hook('arrange', 'cameras'), wait(7000)] },
+      { say: 'Ride along: the FPV camera, in step with the video.', actions: [hook('arrange', 'cameras'), wait(7000)] },
       { say: 'The video turns to glass: the model behind it, in step.', actions: [hook('ghost', 'video'), wait(6000)] },
       { say: 'OpenBando. Build, Fly, Share.', actions: [wait(3500)] },
     ],
@@ -257,7 +257,7 @@ export const SNIPPETS: readonly Snippet[] = [
 ];
 
 /** The welcome tour (the showcase), about a minute: Welcome, a bando without its address, a log and its video synced, every camera. */
-export const SHOWCASE: Tour = { id: 'showcase', title: 'Welcome tour', about: 'What OpenBando does, in a minute, played by itself.', snippets: ['sc-welcome', 'sc-bando', 'sc-load', 'sc-replay'], keepLayout: true };
+export const SHOWCASE: Tour = { id: 'showcase', title: 'Welcome', about: 'What OpenBando does, in a minute, played by itself.', snippets: ['sc-welcome', 'sc-bando', 'sc-load', 'sc-replay'], keepLayout: true };
 
 export const TOURS: readonly Tour[] = [
   SHOWCASE,

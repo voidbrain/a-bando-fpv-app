@@ -294,6 +294,13 @@ export class SceneService {
     }
   }
 
+  /** Turn the active flight's path about its start by `deg` (clockwise seen from above): the orientation knob. */
+  turnPath(deg: number): void {
+    const start = this.flights.active?.loc[0];
+    if (!start || !deg) return;
+    this.calibration.apply(rotateCalibrationAbout(this.calibration.calibration(), start, deg));
+  }
+
   // ---- per frame ----
   private updateCameras(dt: number): void {
     const host = this.host;

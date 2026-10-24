@@ -1,16 +1,31 @@
 import * as THREE from 'three';
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import type { Flight } from '../core/models';
 import { clamp } from '../core/math';
 
 /** Speed colour: blue (slow) -> red (fast). */
 const heat = (t: number): THREE.Color => new THREE.Color().setHSL((1 - clamp(t, 0, 1)) * 0.62, 1, 0.5);
 const MAX_POINTS = 1500;
+/** Width of the flown part, screen pixels. */
+const FLOWN_WIDTH = 4;
 
-/** The flight paths in the 3D scene: speed-coloured line + points, ground shadow, drop lines, start (green) / end (red). */
+/** The part still ahead: the speed colour washed out towards a light grey, so the flown part stands out. */
+export function aheadColor(r: number, g: number, b: number): [number, number, number] {
+  const grey = 0.3 * r + 0.59 * g + 0.11 * b;
+  const wash = (c: number): number => (c + (grey - c) * 0.75) * 0.55 + 0.7 * 0.45;
+  return [wash(r), wash(g), wash(b)];
+}
+
+/**
+ * The flight paths in the 3D scene: the whole path as a thin washed-out line + points, the part already flown on top of
+ * it as a thick line in the speed colours (blue slow → red fast), ground shadow, drop lines, start (green) / end (red).
+ */
 export class PathRenderer {
   readonly group = new THREE.Group();
-  /** Per flight: what is needed to dim the part already flown as the playhead moves. */
-  private readonly tracks: { flight: Flight; step: number; base: Float32Array; attr: THREE.BufferAttribute; shown: number }[] = [];
+  /** Per flight: the thick flown line, drawn up to the playhead. */
+  private readonly tracks: { flight: Flight; step: number; flown: LineGeometry; segments: number; shown: number }[] = [];
 
   constructor(scene: THREE.Scene) {
     scene.add(this.group);
@@ -32,11 +47,18 @@ export class PathRenderer {
         gnd.push(p.x, 0.12, p.z);
         if ((i / step) % 8 === 0) drop.push(p.x, 0.12, p.z, p.x, p.y, p.z);
       }
+      const ahead: number[] = [];
+      for (let k = 0; k < col.length; k += 3) ahead.push(...aheadColor(col[k]!, col[k + 1]!, col[k + 2]!));
       const line = new THREE.BufferGeometry();
       line.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      const colAttr = new THREE.Float32BufferAttribute(col, 3);
-      line.setAttribute('color', colAttr);
-      this.tracks.push({ flight: f, step, base: new Float32Array(col), attr: colAttr, shown: -1 });
+      line.setAttribute('color', new THREE.Float32BufferAttribute(ahead, 3));
+      const flown = new LineGeometry();
+      if (pos.length >= 6) {
+        flown.setPositions(pos);
+        flown.setColors(col);
+      }
+      flown.instanceCount = 0;
+      this.tracks.push({ flight: f, step, flown, segments: Math.max(0, pos.length / 3 - 1), shown: -1 });
       const shadow = new THREE.BufferGeometry();
       shadow.setAttribute('position', new THREE.Float32BufferAttribute(gnd, 3));
       const drops = new THREE.BufferGeometry();
@@ -46,6 +68,7 @@ export class PathRenderer {
         new THREE.Points(line, new THREE.PointsMaterial({ size: 3, sizeAttenuation: false, vertexColors: true })),
         new THREE.Line(shadow, new THREE.LineBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.4 })),
         new THREE.LineSegments(drops, new THREE.LineBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.2 })),
+        new Line2(flown, new LineMaterial({ vertexColors: true, linewidth: FLOWN_WIDTH, worldUnits: false })),
       );
       for (const [p, c] of [[f.loc[0]!, 0x2ecc40], [f.loc[n - 1]!, 0xff3b30]] as const) {
         const m = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), new THREE.MeshBasicMaterial({ color: c }));
@@ -55,33 +78,19 @@ export class PathRenderer {
     }
   }
 
-  /**
-   * Dim the part of each path that has already been flown (desaturated and darker), so the speed colours stay on what
-   * is still ahead and the playhead is easy to find. Cheap: only the vertices between the old and new position change.
-   */
+  /** Draw the thick flown line up to the playhead. Cheap: only the number of drawn segments changes. */
   setProgress(): void {
     for (const t of this.tracks) {
-      const n = t.base.length / 3;
-      const idx = Math.min(n - 1, Math.max(-1, Math.floor(t.flight.cursor / t.step)));
+      const idx = Math.min(t.segments, Math.max(0, Math.floor(t.flight.cursor / t.step)));
       if (idx === t.shown) continue;
-      const from = Math.max(0, Math.min(idx, t.shown < 0 ? 0 : t.shown)), to = Math.max(idx, t.shown, 0);
-      const arr = t.attr.array as Float32Array;
-      for (let k = from; k <= Math.min(n - 1, to); k++) {
-        const r = t.base[k * 3]!, g = t.base[k * 3 + 1]!, b = t.base[k * 3 + 2]!;
-        if (k <= idx) {
-          const grey = 0.3 * r + 0.59 * g + 0.11 * b;
-          arr[k * 3] = (r + (grey - r) * 0.85) * 0.5;
-          arr[k * 3 + 1] = (g + (grey - g) * 0.85) * 0.5;
-          arr[k * 3 + 2] = (b + (grey - b) * 0.85) * 0.5;
-        } else {
-          arr[k * 3] = r;
-          arr[k * 3 + 1] = g;
-          arr[k * 3 + 2] = b;
-        }
-      }
-      t.attr.needsUpdate = true;
+      t.flown.instanceCount = idx;
       t.shown = idx;
     }
+  }
+
+  /** Segments of the flown line drawn now (per flight, for tests). */
+  flownSegments(): number[] {
+    return this.tracks.map((t) => t.flown.instanceCount);
   }
 
   private clear(): void {

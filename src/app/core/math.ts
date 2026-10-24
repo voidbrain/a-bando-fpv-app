@@ -7,6 +7,8 @@ export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t
 
 /** Wrap an angle to [-PI, PI). */
 export const wrapPi = (a: number): number => ((((a + Math.PI) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)) - Math.PI;
+/** Degrees wrapped into -180..180. */
+export const wrapDeg = (d: number): number => ((((d + 180) % 360) + 360) % 360) - 180;
 /** Speed colour scale used by every widget: blue (slow) -> red (fast). `t` is 0..1. */
 export const speedHue = (t: number): number => (1 - clamp(t, 0, 1)) * 223;
 export const speedHsl = (t: number, s = 90, l = 52): string => `hsl(${speedHue(t)},${s}%,${l}%)`;
