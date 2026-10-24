@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GeoService } from './geo.service';
 
-const LAT = 45.5, LON = 12.0;
+const LAT = 45.46, LON = 9.19;
 const dLat = (m: number): number => m / 111132;
 const dLon = (m: number): number => m / (111320 * Math.cos((LAT * Math.PI) / 180));
 const pt = (east: number, north: number): { lat: number; lon: number } => ({ lat: LAT + dLat(north), lon: LON + dLon(east) });

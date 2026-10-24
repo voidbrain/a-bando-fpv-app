@@ -103,7 +103,7 @@ export class App {
       const active = this.flightStore.activeId();
       untracked(() => {
         const f = active ? this.flights.active : null;
-        if (!f) return;
+        if (!f || f.live) return; // a live link keeps its own panel open
         const tel = !!f.tel;
         if (this.tour.state()) return; // a guide lays out its own screen
         if (this.layout.panels().flights.visible) void placer.open(['flights', 'timeline', 'path', 'speed', ...(tel ? (['attitude', 'blackbox'] as const) : [])]);

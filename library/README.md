@@ -46,6 +46,10 @@ answers for waterways) and applies the refinements from photos and survey points
 and fails if the files differ, so change the script (or its data), not the JSON. They use catalogue blocks like any
 bando, so a block they need belongs in `blocks/` too.
 
+A made-up example needs no map data: `playground.json` is written entirely by its section of the script (a bando whose
+place is hidden, origin 0, 0, ground from brush strokes, trees from a seeded generator). The script fails when a catalogue
+block is not used in it: a new block gets a sensible spot there too.
+
 To add a place: generate it in the app, save its spec (before editing) as `tools/examples/data/<name>.osm.json`, add a
 section to the script, and run `npm run examples`.
 

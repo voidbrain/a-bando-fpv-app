@@ -10,6 +10,7 @@ import { FrameLoopService } from './frame-loop.service';
 import { PlaybackService } from './playback.service';
 import { SimulatorService } from './simulator.service';
 import { ToastService } from './toast.service';
+import { VideoService } from './video.service';
 
 const csvFile = (name = 'flight.csv', rows = 1600): File => new File([betaflightCsv(rows)], name, { type: 'text/csv' });
 const frames = (n: number, dt = 1 / 60): void => {
@@ -20,7 +21,7 @@ const frames = (n: number, dt = 1 / 60): void => {
 describe('services', () => {
   // the site these cases were written against: its origin and its take-off pad (a blank site starts at 0,0)
   beforeEach(() => {
-    setSiteOrigin({ lat: 45.528698, lon: 12.133305 });
+    setSiteOrigin({ lat: 45.464198, lon: 9.190005 });
     setTakeoff({ x: -44, z: 26 });
   });
   afterEach(() => {
@@ -80,7 +81,7 @@ describe('services', () => {
     it('caches lift-off and the first flip per flight', () => {
       const flights = TestBed.inject(FlightService);
       const tel = makeTelemetry({ duration: 30, liftoff: 3, flips: [{ at: 8, axis: 'roll' }] });
-      const f = flights.add('synthetic', Array.from({ length: 300 }, (_, i) => ({ lat: 45.5287 + i * 1e-6, lon: 12.1333, alt: 10, t: i / 10 })), tel);
+      const f = flights.add('synthetic', Array.from({ length: 300 }, (_, i) => ({ lat: 45.4642 + i * 1e-6, lon: 9.1900, alt: 10, t: i / 10 })), tel);
       expect(flights.liftoff(f)).toBeCloseTo(3, 1);
       expect(flights.firstFlip(f)).toBeCloseTo(8, 0);
     });
@@ -124,6 +125,27 @@ describe('services', () => {
       await TestBed.inject(FlightService).loadFiles([csvFile('p.csv', 1600 * 3)]); // ~6 s
       TestBed.tick();
     };
+
+    it('a seek of the replay moves the video too, even while the video leads the clock', async () => {
+      await load();
+      const p = TestBed.inject(PlaybackService);
+      const v = TestBed.inject(VideoService);
+      // a loaded, playing video: its clock drives the replay (jsdom has no media pipeline, so the element is faked)
+      let vt = 1;
+      Object.defineProperty(v.element, 'readyState', { get: () => 4 });
+      Object.defineProperty(v.element, 'paused', { get: () => false });
+      Object.defineProperty(v.element, 'seeking', { get: () => false });
+      Object.defineProperty(v.element, 'currentTime', { get: () => vt, set: (t: number) => (vt = t) });
+      v.loaded.set(true);
+      v.setOffset(0);
+      p.play();
+      frames(2);
+      p.seekTo(4); // a click on the timeline
+      expect(vt).toBeCloseTo(4, 6); // the video went there too
+      frames(3);
+      expect(p.time).toBeGreaterThan(3.9); // and the replay was not pulled back to where the video had been
+      p.pause();
+    });
 
     it('holds the playhead while paused and follows the flight while playing', async () => {
       await load();

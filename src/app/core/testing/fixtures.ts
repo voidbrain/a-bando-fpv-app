@@ -60,7 +60,7 @@ export function makeTelemetry(opts: { duration: number; liftoff: number; flips?:
 /** A straight 10 Hz GPS track near the site matching a telemetry duration. */
 export function makeFlight(tel: Telemetry | null, duration = 30): Flight {
   const pts: GeoSample[] = [];
-  for (let i = 0; i <= duration * 10; i++) pts.push({ lat: 45.5287 + i * 2e-6, lon: 12.1333 + i * 1e-6, alt: 8 + Math.min(10, i / 10), t: i / 10 });
+  for (let i = 0; i <= duration * 10; i++) pts.push({ lat: 45.4642 + i * 2e-6, lon: 9.1900 + i * 1e-6, alt: 8 + Math.min(10, i / 10), t: i / 10 });
   const f = createFlight('fixture', pts, tel);
   prepareFlight(f, DEFAULT_CALIBRATION);
   return f;
@@ -75,7 +75,7 @@ export function betaflightCsv(rows: number): string {
   for (let i = 0; i < rows; i++) {
     const gpsStep = Math.floor(i / 80); // GPS changes every 80 rows, like a 10 Hz fix on an 800 Hz log
     lines.push(
-      [i, 1_000_000 + i * 1250, 0.1, 0.2, 1.0, 5, 6, 7, 1100, 500, 510, 520, 530, 1, 2, 3, 1600, 14, 455287000 + gpsStep * 20, 121333000 + gpsStep * 10, 130 + gpsStep, 900, 450].join(','),
+      [i, 1_000_000 + i * 1250, 0.1, 0.2, 1.0, 5, 6, 7, 1100, 500, 510, 520, 530, 1, 2, 3, 1600, 14, 454642000 + gpsStep * 20, 91900000 + gpsStep * 10, 130 + gpsStep, 900, 450].join(','),
     );
   }
   return lines.join('\n');

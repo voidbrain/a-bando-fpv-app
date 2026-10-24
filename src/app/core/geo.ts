@@ -103,7 +103,7 @@ export function turnTowards(pivot: { x: number; z: number }, from: { x: number; 
 }
 
 /**
- * Coordinates typed by the pilot: decimal ("45.6469, 12.3002", "45.6469 12.3002") or degrees, minutes and seconds
+ * Coordinates typed by the pilot: decimal ("45.4642, 9.1900", "45.4642 9.1900") or degrees, minutes and seconds
  * ("45°38'48.8\"N 12°18'00.8\"E"; S and W are negative). Null when it is not a valid latitude and longitude.
  */
 export function parseLatLon(text: string): GeoPoint | null {

@@ -2192,10 +2192,10 @@ export class BandoEditor {
       {
         label,
         act: () => {
-          const text = prompt(tr('Coordinates: latitude, longitude (45.6469, 12.3002 or 45°38\'49"N 12°18\'01"E)'));
+          const text = prompt(tr('Coordinates: latitude, longitude (45.4642, 9.1900 or 45°27\'51"N 9°11\'24"E)'));
           if (text === null) return;
           const g = parseLatLon(text);
-          if (!g) return void this.toast.show('Those are not coordinates: latitude, longitude, e.g. 45.6469, 12.3002.');
+          if (!g) return void this.toast.show('Those are not coordinates: latitude, longitude, e.g. 45.4642, 9.1900.');
           const q = siteFromLatLon(this.ed.draft().origin, g);
           if (Math.max(Math.abs(q.x), Math.abs(q.z)) > this.ed.draft().extent + 500) return void this.toast.show('That point is far outside this bando.');
           use(q);

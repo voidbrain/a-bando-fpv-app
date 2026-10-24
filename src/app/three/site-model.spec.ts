@@ -5,7 +5,7 @@ import { Vec3 } from '../core/math3d';
 
 /** A small but complete site: ground 528 m wide (extent 240), two buildings, a few pads, a tower and a bridge. */
 const spec = (): SiteSpec => {
-  const s = emptySpec({ lat: 45.5, lon: 12.1 }, 'Test site');
+  const s = emptySpec({ lat: 45.46, lon: 9.19 }, 'Test site');
   s.extent = 240;
   const level = { baseY: 0, height: 4, sides: { n: true, s: true, e: true, w: true }, doors: {}, partitions: [], roof: 'gable' as const, roofRise: 2 };
   s.buildings = [

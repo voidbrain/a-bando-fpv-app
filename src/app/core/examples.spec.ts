@@ -4,6 +4,8 @@ import { sanitizeSpec } from './site-spec';
 import index from '../../../public/library/bandos.json';
 import chiari from '../../../public/library/bandos/chiari-e-forti.json';
 import hidden from '../../../public/library/bandos/villetta-no-place.json';
+import playground from '../../../public/library/bandos/playground.json';
+import catalog from '../../../public/library/catalog.json';
 
 describe('example bandos', () => {
   it('keeps only well-formed rows, with files inside bandos/', () => {
@@ -21,7 +23,7 @@ describe('example bandos', () => {
 
   it('every published example is listed and loads as a bando', () => {
     const rows = sanitizeExamples(index);
-    expect(rows.map((r) => r.name)).toEqual(['Chiari e Forti', 'Villetta (place hidden)']);
+    expect(rows.map((r) => r.name)).toEqual(['Chiari e Forti', 'Playground', 'Villetta (place hidden)']);
     expect(rows.find((r) => r.name === 'Villetta (place hidden)')?.privacy).toBe('hidden');
     for (const raw of [hidden, chiari]) {
       const spec = sanitizeSpec(raw);
@@ -46,6 +48,30 @@ describe('example bandos', () => {
     expect(JSON.stringify(hidden)).not.toMatch(/Via |nameFromMap/);
     // nothing near the real place: no coordinates of any kind in the file
     expect(JSON.stringify(hidden)).not.toMatch(/"(lat|lon)": *[1-9]/);
+  });
+});
+
+describe('the Playground', () => {
+  const p = sanitizeSpec(playground)!;
+  it('is a made-up place: hidden, at no coordinates, its ground shaped by brush strokes', () => {
+    expect(p).not.toBeNull();
+    expect(p.privacy).toBe('hidden');
+    expect(p.origin).toEqual({ lat: 0, lon: 0 });
+    expect(JSON.stringify(playground)).not.toMatch(/"(lat|lon)": *[1-9]/);
+    expect(p.terrain?.base).toBeUndefined();
+    expect(p.terrain!.strokes.map((s) => s.op)).toEqual(expect.arrayContaining(['hill', 'ramp', 'crater', 'raise']));
+  });
+  it('has water, a tunnel, a basement under a hole in the floor, ruins, trees and every block of the library', () => {
+    expect(p.waters?.length).toBeGreaterThan(0);
+    expect(p.underground?.length).toBeGreaterThan(0);
+    const wh = p.buildings.find((b) => b.basement)!;
+    expect(wh.levels[0]!.voids?.length).toBeGreaterThan(0);
+    expect(p.buildings.some((b) => b.roofless && b.crenels)).toBe(true);
+    expect(p.trees.length).toBeGreaterThan(40);
+    const placed = new Set([...p.buildings, ...(p.structures ?? []), ...(p.walls ?? []), ...p.trees].map((e) => e.block?.id).filter(Boolean));
+    const patterns = (catalog.blocks as { id: string; kind?: string }[]).filter((b) => b.kind === 'pattern').map((b) => b.id);
+    for (const b of catalog.blocks as { id: string; kind?: string }[]) if (b.kind !== 'pattern') expect(placed.has(b.id), b.id).toBe(true);
+    expect(patterns.length).toBeGreaterThan(0); // patterns write ordinary openings and columns: checked by the builder
   });
 });
 

@@ -2,8 +2,8 @@ import { hasFix, normalizeLive, summarizeLive } from './live-normalizer';
 
 describe('live normaliser', () => {
   it('accepts flat JSON with common names', () => {
-    const m = normalizeLive({ lat: 45.5287, lon: 12.1333, alt: 14, speed: 10, heading: 90, sats: 12, vbat: 16.4, lq: 100, mode: 'ACRO' });
-    expect(m?.lat).toBe(45.5287);
+    const m = normalizeLive({ lat: 45.4642, lon: 9.1900, alt: 14, speed: 10, heading: 90, sats: 12, vbat: 16.4, lq: 100, mode: 'ACRO' });
+    expect(m?.lat).toBe(45.4642);
     expect(m?.speed).toBe(10);
     expect(m?.mode).toBe('ACRO');
   });
@@ -17,9 +17,9 @@ describe('live normaliser', () => {
   });
 
   it('scales latitude / longitude sent as degrees * 1e7', () => {
-    const m = normalizeLive({ lat: 455287000, lon: 121333000 });
-    expect(m?.lat).toBeCloseTo(45.5287, 6);
-    expect(m?.lon).toBeCloseTo(12.1333, 6);
+    const m = normalizeLive({ lat: 454642000, lon: 91900000 });
+    expect(m?.lat).toBeCloseTo(45.4642, 6);
+    expect(m?.lon).toBeCloseTo(9.1900, 6);
   });
 
   it('converts radians to degrees when the field says so', () => {
@@ -39,7 +39,7 @@ describe('live normaliser', () => {
 
   it('knows when there is no GPS fix', () => {
     expect(hasFix(normalizeLive({ lat: 0, lon: 0 })!)).toBe(false);
-    expect(hasFix(normalizeLive({ lat: 45.5, lon: 12.1 })!)).toBe(true);
+    expect(hasFix(normalizeLive({ lat: 45.46, lon: 9.19 })!)).toBe(true);
     expect(hasFix(normalizeLive({ sats: 3 })!)).toBe(false);
   });
 

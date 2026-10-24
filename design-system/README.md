@@ -17,6 +17,7 @@ OpenBando is a dark, dense instrument for FPV pilots: a 3D map and site editor, 
 - **Units are metric and always shown:** m, km/h, °. Put units in field labels ("Height (m)"), not in inputs.
 - **Floors** are named G, L1, L2… (level 0 is G).
 - **Languages.** The interface is written in English and translated through `src/app/i18n/<lang>.ts`; Italian keeps the same voice: short, direct, "tu", no exclamation marks. "Bando" is not translated.
+- **Credit the data where it shows**: map data © OpenStreetMap contributors on the map; the satellite imagery's credit (`SAT_ATTRIBUTION`) at the bottom right of the 3D view while the satellite ground is on, small `text` on a dark wash, never translated.
 - **Say what happened, then what to do.** "Map data is busy (too many requests). Try again in a minute." An AI edit is reported from what actually changed ("3 changes applied"), never from the model's own reply.
 
 ## Visual foundations
@@ -53,7 +54,7 @@ OpenBando is a dark, dense instrument for FPV pilots: a 3D map and site editor, 
 ### States and motion
 
 - Hover: one step lighter (`control-hover`) or a white wash. Disabled: 45% opacity. Selected: `accent` border or fill.
-- Motion is functional only: the toast's 0.2s rise and fade, the 0.8s spinner, and the guided tour's cursor, click ring and target outline (they show where the action is). No decorative animation.
+- Motion is functional only: a panel's 0.7s fade and rise when it opens (where it appears is where it stays), the toast's 0.2s rise and fade, the 0.8s spinner, and the guided tour's cursor, click ring and target outline (they show where the action is). No decorative animation.
 - Focus: the app relies on the browser's default focus ring today. New work should give interactive elements a visible 2px `accent` outline (about 11:1 on `panel-solid`) so it meets WCAG AA.
 
 ### Layering

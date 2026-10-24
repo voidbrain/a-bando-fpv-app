@@ -6,8 +6,9 @@
  * refinements below come from the pilot's photos and survey points (lat / lon of corners, a ladder, passages); each is
  * commented with what it is. Blocks come from the published catalogue (`public/library/catalog.json`).
  *
- * Output: `chiari-e-forti.json`. Generated ids are renumbered the same way on every run, so rebuilding does not churn
- * the file. Then run `node tools/build-catalog.mjs` (the npm script does) to publish it.
+ * Output: `chiari-e-forti.json` and `playground.json` (a made-up place, see below). Generated ids are renumbered the
+ * same way on every run, so rebuilding does not churn the files. Then run `node tools/build-catalog.mjs` (the npm script
+ * does) to publish them.
  *
  * `villetta-no-place.json` is not built here: that place is kept private, so its sources (map data, survey points)
  * are not in the repository. The file is the app's own export with the place hidden; change it in the app and export
@@ -17,9 +18,9 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { stripOutline, unionOutline } from '../../src/app/core/layers';
-import { placeBlock, sanitizeBlock, type BlockSpec } from '../../src/app/core/blocks';
+import { applyPattern, placeBlock, sanitizeBlock, type BlockSpec } from '../../src/app/core/blocks';
 import { toLocalAt } from '../../src/app/core/geo';
-import { sanitizeSpec, type BuildingSpec, type SiteSpec, type Vec2, type LevelSpec } from '../../src/app/core/site-spec';
+import { emptySpec, sanitizeSpec, type BuildingSpec, type SiteSpec, type Vec2, type LevelSpec, type TreeSpec } from '../../src/app/core/site-spec';
 
 const ROOT = process.cwd(); // run from the repository root (npm run examples)
 const DATA = ROOT + '/tools/examples/data';
@@ -229,3 +230,180 @@ function passage(bd: BuildingSpec, a: Vec2, b: Vec2, w: number, h: number): numb
   finish(s, 'example-chiari-e-forti', 'Chiari e Forti', ROOT + '/library/bandos/chiari-e-forti.json', 'The old Chiari e Forti oil factory on the Sile river: brick and ochre blocks with broken roofs, the roofless mill with its battlemented tower by the river, the water tower and the Olio Cuore sign tower.');
 }
 
+
+// ---------- Playground (a made-up place) ----------
+// Nowhere real, so it has no place to hide: an old works on the edge of the fields, made to feel like a bando. The
+// north is industrial (a barrel-vault store, a warehouse with a basement, silos, tanks, a crane over a half-built
+// office); the south is open ground: a pond fed by a canal, hills with a tunnel through one, a crater, a ruined tower
+// and a farmhouse, and a practice course of gates in the field by the take-off pad. Every catalogue block is used once
+// or more, where it would be. Ground: brush strokes on flat land (no downloaded heights). Trees: seeded, the same on
+// every run.
+{
+  const s = emptySpec({ lat: 0, lon: 0 }, 'Playground');
+  s.privacy = 'hidden';
+  s.extent = 160;
+  s.groundColor = '#7f9d55';
+  s.seed = 11;
+  let seed = 20261024;
+  const rnd = (): number => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const used = new Set<string>();
+  const put = (id: string, at: Vec2, rotDeg = 0, params: Record<string, number | string> = {}): void => {
+    placeBlock(s, block(id), params, at, rotDeg);
+    used.add(id);
+  };
+  const pattern = (b: BuildingSpec, li: number, id: string, params: Record<string, number | string> = {}): void => {
+    if (!applyPattern(b, li, block(id), params).length) throw new Error('pattern ' + id + ' did nothing on ' + b.name);
+    used.add(id);
+  };
+  const lastBuilding = (): BuildingSpec => s.buildings.at(-1)!;
+  const ring = (c: Vec2, rx: number, rz: number, n = 16, wobble = 0): Vec2[] =>
+    Array.from({ length: n }, (_, k) => {
+      const a = (k / n) * Math.PI * 2, r = 1 + (wobble ? Math.sin(k * 2.7) * wobble : 0);
+      return { x: c.x + Math.cos(a) * rx * r, z: c.z + Math.sin(a) * rz * r };
+    });
+
+  // the ground: a rail embankment along the north, two hills in the south-east, a ramp up to the lower one, a crater
+  s.terrain = {
+    cell: 2,
+    half: { e: 160, n: 140 },
+    strokes: [
+      { op: 'raise', pts: [{ x: -150, z: -118 }, { x: 150, z: -118 }], radius: 7, strength: 1.4 },
+      { op: 'hill', pts: [{ x: 100, z: 92 }], radius: 36, strength: 11 },
+      { op: 'hill', pts: [{ x: 55, z: 118 }], radius: 20, strength: 5 },
+      { op: 'ramp', pts: [{ x: 22, z: 112 }, { x: 44, z: 117 }], radius: 5, strength: 4 },
+      { op: 'crater', pts: [{ x: 40, z: 45 }], radius: 8, strength: 2.5 },
+      { op: 'raise', pts: [{ x: -150, z: 30 }, { x: -140, z: -20 }, { x: -150, z: -60 }], radius: 14, strength: 2 },
+    ],
+  };
+  // a tunnel through the big hill, east to west: its portals open where the hillside cuts it
+  s.underground = [{ id: 'u-tunnel', name: 'Hill tunnel', outline: [{ x: 66, z: 87 }, { x: 134, z: 87 }, { x: 134, z: 95 }, { x: 66, z: 95 }], floor: 0, ceiling: 4.5, shape: 'vault', wall: 0.6 }];
+
+  // water: the pond in the south-west and the canal that feeds it from the north, a bridge over the canal
+  const pond = ring({ x: -85, z: 80 }, 28, 19, 20, 0.12);
+  s.waters = [{ pts: unionOutline([pond, stripOutline([{ x: -125, z: -45 }, { x: -125, z: 40 }, { x: -108, z: 70 }], 8)], 1), depth: 2 }];
+  put('abando/bridge', { x: -125, z: 10 }, 0, { l: 16, w: 4, h: 2.5, style: 'arch' });
+
+  // roads: the access road from the south gate up to the yard, a track to the hills, a path to the pond, the railway
+  s.roads = [
+    { kind: 'road', width: 6, surface: 'asphalt', pts: [{ x: 0, z: 138 }, { x: 0, z: 60 }, { x: 0, z: -15 }, { x: 112, z: -15 }] },
+    { kind: 'track', width: 3.5, pts: [{ x: 0, z: 62 }, { x: 30, z: 66 }, { x: 62, z: 74 }, { x: 70, z: 90 }] },
+    { kind: 'path', width: 1.6, pts: [{ x: 0, z: 88 }, { x: -30, z: 90 }, { x: -52, z: 86 }] },
+    { kind: 'rail', width: 3.2, pts: [{ x: -158, z: -118 }, { x: 158, z: -118 }] },
+  ];
+  s.surfaces = [
+    { kind: 'concrete', pts: [{ x: 10, z: -96 }, { x: 102, z: -96 }, { x: 102, z: -20 }, { x: 10, z: -20 }] },
+    { kind: 'asphalt', pts: [{ x: 16, z: 96 }, { x: 46, z: 96 }, { x: 46, z: 116 }, { x: 16, z: 116 }] },
+    { kind: 'gravel', pts: ring({ x: -30, z: 128 }, 9, 6, 12) },
+    { kind: 'sand', pts: ring({ x: -85, z: 80 }, 32, 23, 20, 0.12) },
+    { kind: 'rubble', pts: ring({ x: -22, z: 52 }, 10, 7, 12, 0.2) },
+    { kind: 'dirt', pts: ring({ x: 48, z: 70 }, 12, 6, 12, 0.25) }, // worn ground where the track turns up the hill
+  ];
+  s.droneStart = { x: -30, z: 128 };
+
+  // the works: a barrel-vault store (the main store preset inside), a warehouse with a basement under a hole in its
+  // floor, a half-built office under a crane, and the greenhouse frame by the rail
+  put('abando/vault-shed', { x: 55, z: -58 }, 0, { len: 70, hall: 12, h: 5.5 });
+  const store = lastBuilding();
+  store.name = 'Vault store';
+  store.ruin = 0.3;
+  pattern(store, 0, 'abando/main-store');
+  put('abando/small-warehouse', { x: -45, z: -80 }, 0, { l: 24, w: 12, h: 5 });
+  const wh = lastBuilding();
+  wh.ruin = 0.35;
+  wh.basement = { height: 3 };
+  wh.levels[0]!.voids = [{ x0: 16, z0: 3, x1: 20, z1: 7 }]; // the way down to the basement
+  pattern(wh, 0, 'abando/facade-doors');
+  const office: BuildingSpec = { id: 'b-office', name: 'Half-built offices', pos: { x: 70, z: 12 }, rotDeg: 0, length: 30, width: 14, color: '#c9c4b8', ruin: 0.5, levels: floors(3, 3.6, 'flat', { roofRise: 0.6, roofColor: '#8f8d86' }) };
+  office.levels[1]!.voids = [{ x0: 4, z0: 4, x1: 8, z1: 9 }];
+  s.buildings.push(office);
+  pattern(office, 0, 'abando/facade-store');
+  pattern(office, 1, 'abando/facade-panels');
+  pattern(office, 2, 'abando/column-rows', { rows: 2, step: 6, inset: 3 });
+  s.buildings.push({ id: 'b-greenhouse', name: 'Greenhouse frame', pos: { x: -95, z: -85 }, rotDeg: 0, length: 40, width: 14, frame: 'greenhouse', glass: false, levels: [lv(0, 3.5, 'gable', { roofRise: 2 })] });
+  // in the south: the ruined tower (open to the sky, battlements, holes through its floors) and a fallen farmhouse
+  const tower: BuildingSpec = { id: 'b-tower', name: 'Ruined tower', pos: { x: -80, z: 10 }, rotDeg: 0, length: 8, width: 8, color: '#a65d42', ruin: 0.25, roofless: true, crenels: true, levels: floors(6, 4, 'flat', { roofRise: 1 }) };
+  for (const l of tower.levels.slice(1)) l.voids = [{ x0: 2.5, z0: 2.5, x1: 5.5, z1: 5.5 }];
+  tower.levels[0]!.doors = { s: [door(4, 2.2, 3)], e: [door(4, 1.4, 2.4)] };
+  s.buildings.push(tower);
+  s.buildings.push({ id: 'b-farmhouse', name: 'Farmhouse', pos: { x: -30, z: 30 }, rotDeg: 8, length: 13, width: 9, color: '#d9d0bd', ruin: 0.7, levels: floors(2, 3.2, 'gable', { roofRise: 2.5, roofColor: '#a4553b' }) });
+
+  // landmarks and the works' kit
+  put('abando/chimney', { x: 98, z: -44 }, 0, { h: 34 });
+  put('abando/storage-tank', { x: 116, z: -82 }, 0, { h: 8, r: 6 });
+  put('abando/storage-tank', { x: 130, z: -60 }, 0, { h: 6, r: 4.5 });
+  put('abando/silo', { x: -12, z: -96 }, 0, { h: 18, r: 4 });
+  put('abando/silo', { x: 0, z: -96 }, 0, { h: 16, r: 4 });
+  put('abando/water-tower', { x: 138, z: -18 }, 0, { h: 24, r: 4.5 });
+  put('abando/water-tower-legs', { x: -132, z: -88 }, 0, { h: 14, r: 3 });
+  put('abando/lantern-tower', { x: 125, z: -102 }, 0, { h: 30, w: 6 });
+  put('abando/sign-tower', { x: -140, z: 122 }, 25, { h: 38, w: 5 });
+  put('abando/tower-crane', { x: 100, z: 26 }, 200, { h: 40, jib: 45 });
+  put('abando/scaffolding', { x: 70, z: 20.5 }, 0, { levels: 3 });
+  put('abando/stairs', { x: 52, z: 22 }, 90, { h: 3.6, l: 6, w: 1.4 });
+  put('abando/cage-ladder', { x: -75.6, z: 6 }, 90, { h: 20 });
+  put('abando/lattice-tower', { x: -150, z: -106 }, 0, { h: 26, s: 3 });
+  put('abando/lattice-tower', { x: 150, z: -106 }, 0, { h: 26, s: 3 });
+  // the yard: containers, pallets, barrels, a truck and a burnt-out car; barriers closing the road at the end
+  put('abando/container-stack', { x: 30, z: -10 }, 0);
+  put('abando/container', { x: 58, z: -8 }, 90, { l: 12.2 });
+  put('abando/pallet-stack', { x: 72, z: -24 }, 0, { n: 8 });
+  put('abando/barrels', { x: 80, z: -24 }, 0);
+  put('abando/truck', { x: 90, z: -10 }, 0);
+  put('abando/car', { x: 44, z: -24 }, 30);
+  put('abando/jersey-barriers', { x: 116, z: -15 }, 90, { n: 5 });
+  // the road: the south gate, lamps, a bus shelter, a billboard, the old fuel station with a car left under it
+  put('abando/gate-pillars', { x: 0, z: 132 }, 0, { gap: 7 });
+  for (const z of [110, 70, 30]) put('abando/lamp-post', { x: 5, z }, 0, { h: 6 });
+  put('abando/bus-shelter', { x: -7, z: 74 }, 90);
+  put('abando/billboard', { x: 14, z: 124 }, 90, { w: 8, h: 4 });
+  put('abando/fuel-canopy', { x: 31, z: 106 }, 0, { l: 16, w: 10, h: 5 });
+  put('abando/car', { x: 28, z: 106 }, 0);
+  // by the farmhouse: the rubble heap with the excavator, the ruins of a wall
+  put('abando/excavator', { x: -16, z: 56 }, 210);
+  put('abando/ruined-wall', { x: -40, z: 44 }, 15);
+  put('abando/ruined-wall', { x: -60, z: 24 }, 95);
+  // the practice course in the field by the pad: corner flags, gates to fly through, poles, a hurdle and a kicker
+  for (const p of [{ x: -54, z: 62 }, { x: -12, z: 62 }, { x: -12, z: 122 }, { x: -54, z: 122 }]) put('abando/flag-pole', p, 0, { h: 3.5 });
+  put('abando/race-gate', { x: -33, z: 64 }, 0, { w: 2, h: 2 });
+  put('abando/dive-gate', { x: -14, z: 92 }, 90, { h: 3 });
+  put('abando/ladder-gate', { x: -33, z: 120 }, 0);
+  put('abando/double-gate', { x: -52, z: 92 }, 90);
+  put('abando/hurdle', { x: -40, z: 104 }, 0, { h: 1, w: 3 });
+  put('abando/slalom-poles', { x: -46, z: 76 }, 0, { n: 5, gap: 4 });
+  put('abando/ramp', { x: -24, z: 106 }, 0, { h: 2, l: 10, w: 3 });
+
+  // fences: a chain-link fence along the works, the phone line over the rail, a hedge by the road, brambles by the
+  // tower, the brick wall left of the farm
+  s.walls = [
+    { a: { x: 8, z: -100 }, b: { x: 104, z: -100 }, height: 2.2, thick: 0.1, material: 'chainlink' },
+    { a: { x: 104, z: -100 }, b: { x: 104, z: -24 }, height: 2.2, thick: 0.1, material: 'chainlink' },
+    { a: { x: -150, z: -108 }, b: { x: 150, z: -108 }, height: 8, thick: 0.3, material: 'wires' },
+    { a: { x: -6, z: 128 }, b: { x: -6, z: 82 }, height: 1.8, thick: 1, material: 'hedge' },
+    { a: { x: -98, z: 22 }, b: { x: -70, z: 34 }, height: 1.6, thick: 2, material: 'bramble' },
+    { a: { x: -46, z: 18 }, b: { x: -46, z: 44 }, height: 2, thick: 0.4, material: 'brick' },
+  ];
+
+  // trees: a wood in the north-west, around the pond, conifers on the hills (clear of the tunnel line), a row along the road
+  const trees: TreeSpec[] = [];
+  const grove = (c: Vec2, r: number, n: number, kind: 'd' | 'c' | 'mix', keep: (p: Vec2) => boolean = () => true): void => {
+    for (let k = 0, tries = 0; k < n && tries < n * 20; tries++) {
+      const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * r, p = { x: c.x + Math.cos(a) * d, z: c.z + Math.sin(a) * d };
+      if (!keep(p) || trees.some((t) => Math.hypot(t.x - p.x, t.z - p.z) < 4.5)) continue;
+      const k2 = kind === 'mix' ? (rnd() < 0.5 ? 'd' : 'c') : kind, h = 8 + rnd() * 9;
+      trees.push({ x: Math.round(p.x * 10) / 10, z: Math.round(p.z * 10) / 10, h: Math.round(h * 10) / 10, r: Math.round((k2 === 'd' ? h * 0.32 : h * 0.22) * 10) / 10, kind: k2 });
+      k++;
+    }
+  };
+  const inPond = (p: Vec2): boolean => ((p.x + 85) / 34) ** 2 + ((p.z - 80) / 25) ** 2 < 1;
+  grove({ x: -110, z: -30 }, 26, 26, 'mix', (p) => Math.abs(p.x + 125) > 7 && Math.hypot(p.x + 80, p.z - 10) > 12);
+  grove({ x: -85, z: 80 }, 44, 18, 'd', (p) => !inPond(p) && p.x < -58 && p.z < 128);
+  grove({ x: 100, z: 95 }, 40, 22, 'c', (p) => Math.abs(p.z - 91) > 9 && p.z < 136 && p.x < 150);
+  for (let z = 36; z <= 126; z += 9) trees.push({ x: 11, z, h: 12, r: 3.6, kind: 'd' });
+  s.trees = trees;
+  for (const p of [{ x: -58, z: 100 }, { x: -60, z: 66 }, { x: -9, z: 40 }, { x: 8, z: -30 }, { x: -70, z: -60 }, { x: 60, z: 70 }]) put('abando/bush', p, rnd() * 360, { s: 1.2 + rnd() });
+
+  // every block of the catalogue is somewhere in here
+  const missing = cat.map((b) => (b as { id: string }).id).filter((id) => !used.has(id));
+  if (missing.length) throw new Error('Playground does not use ' + missing.join(', '));
+  finish(s, 'example-playground', 'Playground', ROOT + '/library/bandos/playground.json', 'A made-up works on the edge of the fields, with no real place: a barrel-vault store, a warehouse with a basement, a ruined tower and farmhouse, a pond, hills with a tunnel, and every block of the library, from gates to cranes.');
+}

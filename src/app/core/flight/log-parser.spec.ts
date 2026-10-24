@@ -8,15 +8,15 @@ describe('log parser', () => {
   it('reads Betaflight CSV: raw 1e-7 degrees, decimetres, microseconds', () => {
     const { pts, tel } = parseLog(betaflightCsv(1600));
     expect(pts.length).toBe(20);
-    expect(pts[0]?.lat).toBeCloseTo(45.5287, 6);
-    expect(pts[0]?.lon).toBeCloseTo(12.1333, 6);
+    expect(pts[0]?.lat).toBeCloseTo(45.4642, 6);
+    expect(pts[0]?.lon).toBeCloseTo(9.1900, 6);
     expect(pts[0]?.alt).toBeCloseTo(13, 6);
     expect(pts[1]!.t - pts[0]!.t).toBeCloseTo(0.1, 6); // 80 rows x 1250 us
     expect(tel).toBeTruthy();
   });
 
   it('takes heights from the barometer when the log has it (GPS altitude wanders)', () => {
-    const csv = 'time,GPS_coord[0],GPS_coord[1],GPS_altitude,baroAlt\n' + [0, 1, 2].map((i) => `${i * 100000},${455287000 + i * 10},${121333000},${1300 + i * 200},${-60 + i * 200}`).join('\n');
+    const csv = 'time,GPS_coord[0],GPS_coord[1],GPS_altitude,baroAlt\n' + [0, 1, 2].map((i) => `${i * 100000},${454642000 + i * 10},${91900000},${1300 + i * 200},${-60 + i * 200}`).join('\n');
     const { pts } = parseLog(csv);
     expect(pts.map((p) => +p.alt.toFixed(6))).toEqual([-0.6, 1.4, 3.4]); // baroAlt is cm; GPS would have said 130, 150, 170 m
   });
@@ -55,7 +55,7 @@ describe('log parser', () => {
   });
 
   it('reads plain CSV with latitude / longitude / time columns', () => {
-    const text = 'time,lat,lon,alt\n0,45.5287,12.1333,10\n1,45.5288,12.1334,12\n2,45.5289,12.1335,14';
+    const text = 'time,lat,lon,alt\n0,45.4642,9.1900,10\n1,45.4643,9.1901,12\n2,45.4644,9.1902,14';
     const { pts, tel } = parseLog(text);
     expect(pts.length).toBe(3);
     expect(pts[2]?.t).toBe(2);
@@ -63,14 +63,14 @@ describe('log parser', () => {
   });
 
   it('skips duplicate and empty fixes', () => {
-    const text = 'time,lat,lon,alt\n0,45.5287,12.1333,10\n1,45.5287,12.1333,10\n2,0,0,0\n3,45.5289,12.1335,14';
+    const text = 'time,lat,lon,alt\n0,45.4642,9.1900,10\n1,45.4642,9.1900,10\n2,0,0,0\n3,45.4644,9.1902,14';
     expect(parseLog(text).pts.length).toBe(2);
   });
 
   it('reads GPX tracks', () => {
     const gpx = `<gpx><trk><trkseg>
-      <trkpt lat="45.5287" lon="12.1333"><ele>10</ele><time>2026-01-01T10:00:00Z</time></trkpt>
-      <trkpt lat="45.5288" lon="12.1334"><ele>12</ele><time>2026-01-01T10:00:01Z</time></trkpt>
+      <trkpt lat="45.4642" lon="9.1900"><ele>10</ele><time>2026-01-01T10:00:00Z</time></trkpt>
+      <trkpt lat="45.4643" lon="9.1901"><ele>12</ele><time>2026-01-01T10:00:01Z</time></trkpt>
     </trkseg></trk></gpx>`;
     const { pts } = parseLog(gpx);
     expect(pts.length).toBe(2);
@@ -79,9 +79,9 @@ describe('log parser', () => {
   });
 
   it('reads JSON arrays and { points: [] } objects', () => {
-    const arr = JSON.stringify([{ lat: 45.5, lon: 12.1, alt: 5, t: 0 }, { latitude: 45.6, lng: 12.2, altitude: 6, time: 1 }]);
+    const arr = JSON.stringify([{ lat: 45.46, lon: 9.19, alt: 5, t: 0 }, { latitude: 45.47, lng: 9.2, altitude: 6, time: 1 }]);
     expect(parseLog(arr).pts.length).toBe(2);
-    expect(parseLog(JSON.stringify({ points: JSON.parse(arr) as unknown[] })).pts[1]?.lon).toBe(12.2);
+    expect(parseLog(JSON.stringify({ points: JSON.parse(arr) as unknown[] })).pts[1]?.lon).toBe(9.2);
   });
 
   it('rejects logs without usable GPS', () => {
@@ -91,7 +91,7 @@ describe('log parser', () => {
 });
 
 describe('flight preparation', () => {
-  const log = parseLog('time,lat,lon,alt\n0,45.5287,12.1333,10\n1,45.5288,12.1334,12\n2,45.5289,12.1335,14\n3,45.5290,12.1336,14');
+  const log = parseLog('time,lat,lon,alt\n0,45.4642,9.1900,10\n1,45.4643,9.1901,12\n2,45.4644,9.1902,14\n3,45.4645,9.1903,14');
 
   it('puts the lowest fix just above ground and computes the duration', () => {
     const f = createFlight('t', log.pts);

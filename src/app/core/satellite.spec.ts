@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { latToTileY, lonToTileX, satelliteTiles, tileUrl, tileXToLon, tileYToLat } from './satellite';
 
 describe('satellite tiles', () => {
-  const origin = { lat: 45.6469, lon: 12.3002 };
+  const origin = { lat: 45.4642, lon: 9.1900 };
   it('converts between degrees and tile numbers both ways', () => {
-    expect(tileXToLon(lonToTileX(12.3002, 17), 17)).toBeCloseTo(12.3002, 9);
-    expect(tileYToLat(latToTileY(45.6469, 17), 17)).toBeCloseTo(45.6469, 9);
+    expect(tileXToLon(lonToTileX(9.1900, 17), 17)).toBeCloseTo(9.1900, 9);
+    expect(tileYToLat(latToTileY(45.4642, 17), 17)).toBeCloseTo(45.4642, 9);
   });
   it('covers the rectangle with at most `max` tiles at the sharpest zoom', () => {
     const r = { x0: -300, z0: -300, x1: 300, z1: 300 };
