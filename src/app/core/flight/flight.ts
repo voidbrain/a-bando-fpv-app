@@ -103,3 +103,17 @@ export function flightSpeedMax(f: Flight): number {
   speedMaxCache.set(f.spd, m);
   return m;
 }
+
+/**
+ * A point on the smooth curve through the flight's points (Catmull-Rom): between points `i` and `i + 1` at `u` (0..1).
+ * It passes through every point, so a turn reads as a curve instead of a run of straight segments (GPS fixes come
+ * ten times a second, up to 2 m apart at speed). The ends use the end point itself as their outer neighbour.
+ */
+export function curvePoint(out: Vec3, pts: readonly Vec3[], i: number, u: number): Vec3 {
+  const n = pts.length;
+  const a = pts[Math.max(0, i - 1)]!, b = pts[i]!, c = pts[Math.min(n - 1, i + 1)]!, d = pts[Math.min(n - 1, i + 2)]!;
+  const u2 = u * u, u3 = u2 * u;
+  const f = (p0: number, p1: number, p2: number, p3: number): number =>
+    0.5 * (2 * p1 + (p2 - p0) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u2 + (3 * p1 - p0 - 3 * p2 + p3) * u3);
+  return out.set(f(a.x, b.x, c.x, d.x), f(a.y, b.y, c.y, d.y), f(a.z, b.z, c.z, d.z));
+}

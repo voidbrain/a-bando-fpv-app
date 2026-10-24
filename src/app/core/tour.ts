@@ -239,7 +239,7 @@ export const SNIPPETS: readonly Snippet[] = [
     section: 'showcase',
     title: 'Load the flight',
     beats: [
-      { say: 'Drop the Blackbox log and the DVR of the same flight.', actions: [hook('hide', 'studio'), hook('panel', 'flights'), press('upload-log'), hook('demoLog'), wait(900), hook('panel', 'video'), press('load-video'), hook('demoVideo'), wait(900)] },
+      { say: 'Drop the Blackbox log and the DVR of the same flight.', actions: [hook('hide', 'studio'), hook('panel', 'flights'), press('upload-log'), hook('demoLog'), hook('arrange', 'replay'), wait(900), press('load-video'), hook('demoVideo'), wait(900)] },
       { say: 'Auto-sync matches the picture with the gyro: no clapperboard needed.', actions: [hook('show', 'timeline'), press('auto-sync'), hook('fakeSync'), wait(900)] },
     ],
   },

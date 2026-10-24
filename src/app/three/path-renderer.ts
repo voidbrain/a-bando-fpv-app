@@ -4,10 +4,14 @@ import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import type { Flight } from '../core/models';
 import { clamp } from '../core/math';
+import { Vec3 } from '../core/math3d';
+import { curvePoint } from '../core/flight/flight';
 
 /** Speed colour: blue (slow) -> red (fast). */
 const heat = (t: number): THREE.Color => new THREE.Color().setHSL((1 - clamp(t, 0, 1)) * 0.62, 1, 0.5);
 const MAX_POINTS = 1500;
+/** Pieces per path segment: the line follows the smooth curve through the fixes (`curvePoint`), not straight chords. */
+const SUB = 4;
 /** Width of the flown part, screen pixels. */
 const FLOWN_WIDTH = 4;
 
@@ -39,12 +43,20 @@ export class PathRenderer {
       if (!n) continue;
       const step = Math.ceil(n / MAX_POINTS);
       const pos: number[] = [], col: number[] = [], gnd: number[] = [], drop: number[] = [];
+      const q = new Vec3();
       for (let i = 0; i < n; i += step) {
         const p = f.loc[i]!;
         const c = heat((f.spd[i] ?? 0) / speedMax);
-        pos.push(p.x, p.y, p.z);
-        col.push(c.r, c.g, c.b);
-        gnd.push(p.x, 0.12, p.z);
+        const c2 = heat((f.spd[Math.min(n - 1, i + step)] ?? 0) / speedMax);
+        // the fix, then the curve on to the next kept fix (skipped after the last one)
+        for (let k = 0; k < (i + step < n ? SUB : 1); k++) {
+          const u = k / SUB;
+          if (step === 1) curvePoint(q, f.loc, i, u);
+          else q.set(p.x, p.y, p.z).lerp(f.loc[Math.min(n - 1, i + step)]!, u); // thinned paths stay straight
+          pos.push(q.x, q.y, q.z);
+          col.push(c.r + (c2.r - c.r) * u, c.g + (c2.g - c.g) * u, c.b + (c2.b - c.b) * u);
+          gnd.push(q.x, 0.12, q.z);
+        }
         if ((i / step) % 8 === 0) drop.push(p.x, 0.12, p.z, p.x, p.y, p.z);
       }
       const ahead: number[] = [];
@@ -81,7 +93,7 @@ export class PathRenderer {
   /** Draw the thick flown line up to the playhead. Cheap: only the number of drawn segments changes. */
   setProgress(): void {
     for (const t of this.tracks) {
-      const idx = Math.min(t.segments, Math.max(0, Math.floor(t.flight.cursor / t.step)));
+      const idx = Math.min(t.segments, Math.max(0, Math.floor(t.flight.cursor / t.step) * SUB));
       if (idx === t.shown) continue;
       t.flown.instanceCount = idx;
       t.shown = idx;

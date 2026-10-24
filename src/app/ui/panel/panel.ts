@@ -78,15 +78,16 @@ import { CASCADE_STEP, PANEL_BY_ID, cascadeIndex, type PanelId } from '../panel-
       max-height: calc(100vh - 8px);
       min-width: 90px;
       /* a panel that shows (again) eases in instead of popping */
-      animation: panel-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+      animation: panel-in 0.7s cubic-bezier(0.25, 0.6, 0.3, 1) both;
     }
     @keyframes panel-in {
       from {
         opacity: 0;
-        transform: translateY(16px) scale(0.96);
+        transform: translateY(18px) scale(0.97);
       }
-      40% {
-        opacity: 0.9;
+      to {
+        opacity: 1;
+        transform: none;
       }
     }
     @media (prefers-reduced-motion: reduce) {

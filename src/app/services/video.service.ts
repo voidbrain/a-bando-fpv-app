@@ -63,6 +63,16 @@ export class VideoService {
       this.flightStore.activeId();
       untracked(() => this.restoreSync());
     });
+    // A seek of the replay (timeline click, ±10 s, a guide step) moves the video at once: while it plays the video's
+    // clock leads, and it would pull the replay straight back to where the video still was.
+    this.playback.onSeek((t) => {
+      if (this.suspended || !this.loaded() || this.element.readyState < 1) return;
+      const target = Math.max(0, t + this.offset());
+      if (Math.abs(this.element.currentTime - target) < 0.05) return;
+      this.ownSeek = true; // not a seek of the video alone: the replay is already there
+      this.element.currentTime = target;
+      this.lastSeekTarget = target;
+    });
     // Seeking the video's own bar while paused moves the replay with it.
     this.element.addEventListener('seeked', () => {
       if (this.ownSeek) {

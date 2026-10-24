@@ -71,8 +71,10 @@ export class TimelinePanel {
     if (text !== this.caption()) this.caption.set(text);
   };
 
+  /** A click or drag on the chart jumps there and pauses (to look at that moment). */
   protected scrubStart(e: PointerEvent): void {
     if (!this.flights.active) return;
+    if (this.t.playing()) this.playback.pause();
     this.scrubbing = true;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     this.seekFrom(e);

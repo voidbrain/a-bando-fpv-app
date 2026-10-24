@@ -1,5 +1,6 @@
 import { cleanHeights, parseLog } from './log-parser';
-import { createFlight, flightStats, maxSpeed, prepareFlight } from './flight';
+import { createFlight, curvePoint, flightStats, maxSpeed, prepareFlight } from './flight';
+import { Vec3 } from '../math3d';
 import { DEFAULT_CALIBRATION } from '../constants';
 import { betaflightCsv } from '../testing/fixtures';
 
@@ -109,5 +110,16 @@ describe('flight preparation', () => {
     expect(s.distanceKm).toBeGreaterThan(0.01);
     expect(s.maxKmh).toBeGreaterThan(5);
     expect(maxSpeed([f])).toBeGreaterThan(1);
+  });
+});
+
+describe('the smooth flight curve', () => {
+  it('passes through every fix and bends through a corner instead of cutting it', () => {
+    const pts = [new Vec3(0, 0, 0), new Vec3(10, 0, 0), new Vec3(10, 0, 10), new Vec3(10, 0, 20)];
+    const q = new Vec3();
+    expect(curvePoint(q, pts, 1, 0).x).toBeCloseTo(10, 9);
+    expect(curvePoint(q, pts, 1, 1).z).toBeCloseTo(10, 9);
+    curvePoint(q, pts, 1, 0.5); // the corner piece bulges outwards, not along the straight chord (x = 10)
+    expect(q.x).toBeGreaterThan(10);
   });
 });

@@ -25,13 +25,13 @@ describe('path progress', () => {
 
     f.cursor = 5;
     pr.setProgress();
-    expect(pr.flownSegments()).toEqual([5]);
+    expect(pr.flownSegments()).toEqual([20]); // 4 pieces per fix-to-fix segment (the smooth curve)
     f.cursor = 1;
     pr.setProgress();
-    expect(pr.flownSegments()).toEqual([1]);
+    expect(pr.flownSegments()).toEqual([4]);
     f.cursor = 99;
     pr.setProgress();
-    expect(pr.flownSegments()).toEqual([9]); // never past the last segment
+    expect(pr.flownSegments()).toEqual([36]); // never past the last segment
   });
 
   it('the washed-out colour is lighter and greyer than the speed colour', () => {
