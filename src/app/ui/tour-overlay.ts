@@ -31,7 +31,7 @@ import { TourService } from '../services/tour.service';
       </svg>
     }
     @if (tour.state(); as s) {
-      <div #bar class="bar" role="status" aria-live="polite" [attr.data-preparing]="s.preparing || null" [style.left.px]="barAt().left" [style.top.px]="barAt().top">
+      <div #bar class="bar" role="status" aria-live="polite" [attr.data-preparing]="s.preparing || null" [style.left.px]="barAt().left" [style.top.px]="barAt().top" [style.bottom.px]="barAt().bottom">
         <div class="head">
           <span class="grip" title="Drag to move" aria-hidden="true" (pointerdown)="gripDown($event)" (pointermove)="gripMove($event)" (pointerup)="gripUp($event)" (pointercancel)="gripUp($event)">⠿</span>
           <b>{{ s.title }}</b>
@@ -169,14 +169,16 @@ export class TourOverlay {
   private last: Element | null = null;
   protected readonly on = computed(() => this.tour.tips() && !this.tour.state());
   private readonly barEl = viewChild<ElementRef<HTMLElement>>('bar');
-  /** Where the caption was dragged (for this visit); otherwise centred near the bottom, where it never covers the action. */
+  /**
+   * Where the caption was dragged (for this visit); otherwise centred, its bottom edge 40 px above the window's, so a
+   * longer or shorter caption grows upwards and the bar never moves.
+   */
   private readonly dragged = signal<{ left: number; top: number } | null>(null);
-  protected readonly barAt = computed(() => {
-    const h = this.barEl()?.nativeElement.offsetHeight || 110, w = Math.min(520, innerWidth - 32);
-    this.tour.state(); // re-measure when the caption changes
+  protected readonly barAt = computed<{ left: number; top: number | null; bottom: number | null }>(() => {
+    const w = Math.min(520, innerWidth - 32);
     const d = this.dragged();
-    if (d) return { left: Math.max(0, Math.min(innerWidth - w, d.left)), top: Math.max(0, Math.min(innerHeight - 40, d.top)) };
-    return { left: Math.round((innerWidth - w) / 2), top: Math.max(8, innerHeight - h - 40) };
+    if (d) return { left: Math.max(0, Math.min(innerWidth - w, d.left)), top: Math.max(0, Math.min(innerHeight - 40, d.top)), bottom: null };
+    return { left: Math.round((innerWidth - w) / 2), top: null, bottom: 40 };
   });
   private grab: { dx: number; dy: number } | null = null;
   protected gripDown(e: PointerEvent): void {
