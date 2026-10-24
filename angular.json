@@ -6,7 +6,7 @@
   },
   "newProjectRoot": "projects",
   "projects": {
-    "a-bando-fpv-app": {
+    "openbando": {
       "projectType": "application",
       "schematics": {
         "@schematics/angular:component": {
@@ -37,7 +37,7 @@
           },
           "configurations": {
             "production": {
-              "baseHref": "/a-bando-fpv-app/",
+              "baseHref": "/openbando/",
               "budgets": [
                 {
                   "type": "initial",
@@ -71,10 +71,10 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "a-bando-fpv-app:build:production"
+              "buildTarget": "openbando:build:production"
             },
             "development": {
-              "buildTarget": "a-bando-fpv-app:build:development"
+              "buildTarget": "openbando:build:development"
             }
           },
           "defaultConfiguration": "development"

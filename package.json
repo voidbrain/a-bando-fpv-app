@@ -1,5 +1,5 @@
 {
-  "name": "a-bando-fpv-app",
+  "name": "openbando",
   "version": "0.0.0",
   "scripts": {
     "e2e": "playwright test",

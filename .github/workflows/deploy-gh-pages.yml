@@ -50,13 +50,13 @@ jobs:
         run: node tools/build-catalog.mjs
 
       - name: Build
-        # Production build (baseHref /a-bando-fpv-app/ set in angular.json);
-        # artifacts land in dist/a-bando-fpv-app/browser
+        # Production build (baseHref /openbando/ set in angular.json);
+        # artifacts land in dist/openbando/browser
         run: npm run build
 
       - name: Disable Jekyll
         # GitHub Pages must serve the Angular bundle as-is, not process it with Jekyll
-        run: touch dist/a-bando-fpv-app/browser/.nojekyll
+        run: touch dist/openbando/browser/.nojekyll
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -64,7 +64,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist/a-bando-fpv-app/browser
+          path: dist/openbando/browser
 
   deploy:
     needs: build

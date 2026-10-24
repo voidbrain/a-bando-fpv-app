@@ -190,7 +190,7 @@ export class ExportService {
   private finishRealtime(rec: RealtimeRecording): void {
     const type = rec.mime.split(';')[0] ?? 'video/webm';
     const blob = new Blob(rec.chunks, { type });
-    this.publish(blob, `a-bando-render.${type.includes('mp4') ? 'mp4' : 'webm'}`, `Done: ${(blob.size / 1e6).toFixed(1)} MB. Press the download link.`);
+    this.publish(blob, `openbando-render.${type.includes('mp4') ? 'mp4' : 'webm'}`, `Done: ${(blob.size / 1e6).toFixed(1)} MB. Press the download link.`);
   }
 
   // ---- exact renderer ----
@@ -270,7 +270,7 @@ export class ExportService {
       if (encodeError) throw encodeError;
       muxer.finalize();
       const blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
-      this.publish(blob, 'a-bando-render.mp4', `Done in ${Math.round((performance.now() - startedAt) / 1000)} s: exact ${fps} fps, ${W}×${H} H.264, ${f.dur.toFixed(1)} s long. Press the download link.`);
+      this.publish(blob, 'openbando-render.mp4', `Done in ${Math.round((performance.now() - startedAt) / 1000)} s: exact ${fps} fps, ${W}×${H} H.264, ${f.dur.toFixed(1)} s long. Press the download link.`);
     } catch (e) {
       this.status.set(`Render failed: ${(e as Error).message}`);
     } finally {
