@@ -1094,4 +1094,8 @@ export const IT: Readonly<Record<string, string>> = {
   'Side view (looking north)': 'Vista di lato (verso nord)',
   'Front view (looking west)': 'Vista di fronte (verso ovest)',
   '3D view': 'Vista 3D',
+  'camera': 'camera',
+  'view': 'vista',
+  'Main page camera': 'Camera della pagina principale',
+  'View options': 'Opzioni di vista',
 };

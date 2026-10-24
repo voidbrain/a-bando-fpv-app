@@ -99,6 +99,10 @@ function parseCsv(text: string): { pts: GeoSample[]; tel: Telemetry | null } {
   let raw = false;
   let lastKey = '';
   const pts: GeoSample[] = [];
+  // Betaflight logs the barometer (cm): a far steadier height than GPS altitude, which can wander tens of metres in a
+  // minute and put the replayed drone under the ground. Only heights relative to the first fix are used.
+  const baroCol = cols.names.indexOf('baroalt');
+  const baro: number[] = [];
   for (let i = headerRow + 1; i < lines.length; i++) {
     const line = lines[i];
     if (!line) continue;
@@ -118,6 +122,7 @@ function parseCsv(text: string): { pts: GeoSample[]; tel: Telemetry | null } {
       if (isNaN(t)) t = (Date.parse((c[cols.t] as string).replace(/"/g, '')) / 1e3) * unit;
     }
     pts.push({ lat, lon, alt: cols.alt >= 0 ? parseFloat(c[cols.alt] as string) || 0 : 0, t });
+    if (baroCol >= 0) baro.push(parseFloat(c[baroCol] as string));
   }
   // Betaflight "time" has no unit in its header: it is microseconds.
   if (pts.length > 1 && unit === 1 && /^time$/.test(timeHeader) && (pts[pts.length - 1] as GeoSample).t - (pts[0] as GeoSample).t > 1e5) unit = 1e6;
@@ -125,9 +130,31 @@ function parseCsv(text: string): { pts: GeoSample[]; tel: Telemetry | null } {
     p.t = isNaN(p.t) ? i * 0.1 : p.t / unit;
     if (raw) p.alt /= 10; // raw Betaflight GPS_altitude is in decimetres
   });
+  if (baro.length === pts.length && baro.length > 1 && baro.every(isFinite) && baro.some((b) => b !== baro[0])) {
+    const h = cleanHeights(baro.map((b) => b / 100), pts.map((p) => p.t));
+    pts.forEach((p, i) => (p.alt = h[i]!));
+  }
 
   const tel = pts.length > 1 ? parseTelemetry(lines, headerRow, delim, cols, unit, (pts[0] as GeoSample).t) : null;
   return { pts, tel };
+}
+
+/**
+ * A barometer trace made usable: prop wash in flips throws spikes of tens of metres into it. A running median over 7
+ * fixes (~0.7 s at 10 Hz) drops the spikes and keeps real climbs, then no step may be faster than `maxRate` m/s.
+ */
+export function cleanHeights(h: readonly number[], t: readonly number[], maxRate = 25): number[] {
+  const med = h.map((_, i) => {
+    const k = Math.min(3, i, h.length - 1 - i); // a window centred on the fix, narrower at the ends
+    const w = h.slice(i - k, i + k + 1).sort((a, b) => a - b);
+    return w[w.length >> 1]!;
+  });
+  const out = [med[0]!];
+  for (let i = 1; i < med.length; i++) {
+    const lim = maxRate * Math.max(0.02, t[i]! - t[i - 1]!);
+    out.push(out[i - 1]! + Math.max(-lim, Math.min(lim, med[i]! - out[i - 1]!)));
+  }
+  return out;
 }
 
 const TELEMETRY_COLUMNS = [

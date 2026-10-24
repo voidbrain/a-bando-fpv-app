@@ -45,6 +45,9 @@ export interface PickSurface {
  * (roof, model scale, paths, north), places the main camera and every floating view each frame, runs the x-ray and
  * renders. Other services and components never touch three.js directly.
  */
+/** How long the main view stays in a look-around after the last drag or wheel before it hands back to the chase camera. */
+const LOOK_AROUND_IDLE_MS = 2500;
+
 @Injectable({ providedIn: 'root' })
 export class SceneService {
   private readonly view = inject(ViewStore);
@@ -60,6 +63,9 @@ export class SceneService {
   host: SceneHost | null = null;
   readonly ready = signal(false);
   readonly mainOrbit: OrbitState = createOrbitState();
+  /** The main view went from chase to an orbit because the pilot dragged on it (not chosen in Views). */
+  private lookingAround = false;
+  private lastLook = 0;
   /** The main view turns slowly by itself (the empty world of a first visit); any touch on it stops it. */
   readonly autoOrbit = signal(true);
   readonly viewports: Record<ViewportType, Viewport> = {
@@ -229,6 +235,13 @@ export class SceneService {
     orbitFromCamera(this.mainOrbit, cam.position, p);
     if (!this.view.orbitFollow()) this.view.toggleOrbitFollow();
     this.view.setCameraView('orbit');
+    this.lookingAround = true;
+    this.lastLook = performance.now();
+  }
+
+  /** A press, drag or wheel on the main view: keeps a look-around going (it hands back to the chase camera once idle). */
+  noteInput(): void {
+    this.lastLook = performance.now();
   }
 
   /** Back to the default overview and park the drone. */
@@ -338,6 +351,12 @@ export class SceneService {
     host.drones.syncSim(this.sim.state, dt);
     host.drones.syncGhost(this.playback.pose.p, this.playback.pose.q, this.flights.active);
     if (this.autoOrbit() && this.view.cameraView() === 'orbit') this.mainOrbit.th += dt * 0.07;
+    // a look-around the pilot started from the chase camera ends by itself: idle for a moment, back to the chase
+    // (its camera glides from where the orbit left it). A camera chosen in Views ends it too, and stays.
+    if (this.lookingAround && (this.view.cameraView() !== 'orbit' || performance.now() - this.lastLook > LOOK_AROUND_IDLE_MS)) {
+      if (this.view.cameraView() === 'orbit') this.view.setCameraView('chase');
+      this.lookingAround = false;
+    }
     placeCamera(host.mainCamera, this.view.cameraView(), this.mainOrbit, this.subject(), this.placeOptions(), dt);
   }
 
@@ -370,13 +389,31 @@ export class SceneService {
       const h = vp.canvas.clientHeight;
       if (w < 16 || h < 16) continue;
       placeCamera(vp.camera, vp.type, vp.state, subject, opts, dt);
-      host.renderToCanvas(vp.camera, vp.type, ctx, vp.canvas, w, h, PANEL_MAX_PIXELS);
+      const draw = (): void => host.renderToCanvas(vp.camera, vp.type, ctx, vp.canvas!, w, h, PANEL_MAX_PIXELS);
+      if (vp.type === 'fpv') this.solidly(draw);
+      else draw();
     }
     if (this.view.mainSource() === '3d') {
       // The panels above drew into *corners* of the shared canvas and copied out; the full-page view must then be
       // redrawn at full size, or whatever was in the corner last frame stays stretched over the page (black screen).
       host.resizeMain(innerWidth, innerHeight);
-      host.renderMain(this.view.cameraView(), ctx);
+      const draw = (): void => host.renderMain(this.view.cameraView(), ctx);
+      if (this.view.cameraView() === 'fpv') this.solidly(draw);
+      else draw();
+    }
+  }
+
+  /** Draw as the pilot sees it: no x-ray fading, and the roofs and upper floors shown even when "hide roofs" is on. */
+  private solidly(draw: () => void): void {
+    const host = this.host;
+    if (!host) return;
+    const roof = host.site.roof, shown = roof.visible;
+    roof.visible = true;
+    try {
+      if (this.xray) this.xray.solid(draw);
+      else draw();
+    } finally {
+      roof.visible = shown;
     }
   }
 

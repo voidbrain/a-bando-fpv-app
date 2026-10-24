@@ -59,6 +59,22 @@ export class XRay {
     }
   }
 
+  /**
+   * Draw something with everything solid: the faded meshes get their own materials and the hidden trees come back for
+   * the length of `draw` (the FPV camera is the pilot's eye: it never looks through walls), then the x-ray resumes.
+   */
+  solid(draw: () => void): void {
+    if (!this.faded.size && !this.hiddenTrees.size) return draw();
+    this.faded.forEach((st, m) => (m.material = st.original));
+    for (const key of this.hiddenTrees) this.site.trees.setHidden(key[0] as TreeKind, +key.slice(1), false);
+    try {
+      draw();
+    } finally {
+      this.faded.forEach((st, m) => (m.material = st.faded));
+      for (const key of this.hiddenTrees) this.site.trees.setHidden(key[0] as TreeKind, +key.slice(1), true);
+    }
+  }
+
   /** Back to normal (x-ray switched off, or the scene is being torn down). */
   reset(): void {
     this.wanted.clear();
