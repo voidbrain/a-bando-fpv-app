@@ -1,6 +1,7 @@
 import { clamp, lowerBound, wrapPi } from '../math';
 import { Quat, Vec3 } from '../math3d';
 import type { Calibration, Flight } from '../models';
+import { curvePoint } from './flight';
 
 /**
  * The replay time after a frame, following a master clock (the video) that stalls and jumps when its decoder falls
@@ -47,7 +48,7 @@ export class ReplayPose {
     const a = f.pts[i]!;
     const b = f.pts[i + 1]!;
     const u = b.t > a.t ? clamp((ts - a.t) / (b.t - a.t), 0, 1) : 0;
-    this.p.copy(f.loc[i]!).lerp(f.loc[i + 1]!, u);
+    curvePoint(this.p, f.loc, i, u); // along the smooth curve, as the path is drawn
 
     const d = this.tmp.copy(f.loc[Math.min(n - 1, i + 3)]!).sub(f.loc[Math.max(0, i - 1)]!);
     const hz = Math.hypot(d.x, d.z);

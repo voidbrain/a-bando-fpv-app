@@ -3,6 +3,8 @@ import { expect, test, type Page } from '@playwright/test';
 
 /** axe on the page as it is now (WCAG 2 A and AA); the 3D canvases and the map tiles are left out. */
 async function axe(page: Page): Promise<string[]> {
+  // panels fade in: half-transparent text would fail the contrast check, so wait for the entrance animations to end
+  await page.waitForFunction(() => !document.getAnimations().some((a) => a.playState === 'running' && 'animationName' in a && String(a.animationName).includes('panel-in')), null, { timeout: 15_000 }).catch(() => undefined);
   const r = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).exclude('canvas').exclude('.leaflet-tile-pane').analyze();
   return r.violations.map((v) => `${v.id} (${v.impact}): ${v.help} · ${v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(' | ')}`);
 }

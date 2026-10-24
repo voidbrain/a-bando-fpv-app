@@ -1,7 +1,7 @@
 import { Service, inject, signal } from '@angular/core';
 import { AI_SCRIPTS, SNIPPET_BY_ID, backTarget, type At, type Beat, type Hook, type Need, type Snippet, type Tour, type TourAction } from '../core/tour';
 import { sanitizeSpec } from '../core/site-spec';
-import type { PanelId } from '../ui/panel-defs';
+import { PANEL_BY_ID, type PanelId } from '../ui/panel-defs';
 import { LayoutStore } from '../state/layout.store';
 import { AiService } from './ai.service';
 import { FlightService } from './flight.service';
@@ -367,13 +367,16 @@ export class TourService {
    */
   private async open(id: PanelId): Promise<void> {
     const was = this.layout.panels()[id];
+    const centre = (w: number, h: number): void => this.layout.moveTo(id, Math.max(8, Math.round((innerWidth - w) / 2)), Math.max(8, Math.round((innerHeight - h) / 2.4)));
+    // in the middle before it shows (its default width, a guessed height), corrected once it can be measured
+    const def = PANEL_BY_ID[id];
+    if (!was.visible && id !== 'views' && def?.width) centre(was.w ?? def.width, was.h ?? def.height ?? Math.min(def.maxHeight ?? 130, innerHeight - 16));
     this.layout.setVisible(id, true);
     this.layout.raise(id);
     if (was.visible || id === 'views') return;
     await this.sleep(60); // let it render to measure it (a timer: animation frames stop in a background tab)
     const el = document.querySelector<HTMLElement>(`app-panel[data-id="${id}"]`);
-    const r = el?.getBoundingClientRect();
-    if (r && r.width) this.layout.moveTo(id, Math.max(8, Math.round((innerWidth - r.width) / 2)), Math.max(8, Math.round((innerHeight - r.height) / 2.4)));
+    if (el?.offsetWidth) centre(el.offsetWidth, el.offsetHeight); // layout size: the fade-in still scales it
   }
 
   /** Buttons, labels and inputs get a plain click; anything else (the map, the plan) the full pointer sequence. */
@@ -420,6 +423,7 @@ export class TourService {
         // shown where it belongs, on top: not moved to the middle like 'panel'. The timeline gets its place before it
         // appears (centred just above the caption bar, which owns the bottom centre) and keeps it.
         for (const id of (arg ?? '').split(',') as PanelId[]) {
+          if (id === 'timeline') this.timelineAt(560, 148); // its place before it shows (its measured size)
           this.layout.setVisible(id, true);
           this.layout.raise(id);
           if (id === 'timeline') await this.placeTimeline();
@@ -552,39 +556,49 @@ export class TourService {
   }
 
   /**
-   * Place the panels of a showcase screen, measured against the window (the timeline keeps its own place). `replay`:
-   * the video top-left, speed and attitude in the top-right corner, the path and the Blackbox under them, everything
-   * else hidden. `cameras`: the FPV view under the video, as wide as it.
+   * The showcase's replay screen, measured against the window: the video top-left with the FPV view under it, speed and
+   * attitude in the top-right corner, the path and the Blackbox under them; everything else closes (the timeline keeps
+   * its own place). Each panel gets its size and place before it shows and is corrected a moment later, while it is
+   * still fading in, so it appears where it stays. Running it again moves nothing. `cameras` only makes sure the FPV
+   * view is there.
    */
   private async arrange(what: 'replay' | 'cameras'): Promise<void> {
     const W = innerWidth, H = innerHeight, m = 14, gap = 8;
-    const box = (id: PanelId): DOMRect | undefined => document.querySelector<HTMLElement>(`app-panel[data-id="${id}"]`)?.getBoundingClientRect();
-    if (what === 'replay') {
-      const keep: PanelId[] = ['video', 'timeline', 'speed', 'attitude', 'path', 'blackbox'];
-      for (const [id, p] of Object.entries(this.layout.panels()) as [PanelId, { visible: boolean }][]) if (p.visible && !keep.includes(id)) this.layout.setVisible(id, false);
-      for (const id of keep) this.layout.setVisible(id, true);
-      this.layout.setWidth('video', Math.round(Math.min(520, W * 0.34)));
-      await this.sleep(150);
-      const att = box('attitude'), spd = box('speed');
-      const aw = att?.width ?? 270, ah = att?.height ?? 160;
-      this.layout.moveTo('video', m, m);
-      this.layout.moveTo('attitude', W - m - aw, m);
-      this.layout.moveTo('speed', W - m - aw - gap - (spd?.width ?? 170), m);
-      const pathH = Math.max(170, Math.min(260, Math.round((H - ah - 3 * gap - 2 * m) * 0.45)));
-      this.layout.resizeTo('path', 330, pathH);
-      this.layout.moveTo('path', W - m - 330, m + ah + gap);
-      this.layout.moveTo('blackbox', W - m - (box('blackbox')?.width ?? 360), m + ah + gap + pathH + gap);
+    const size = (id: PanelId, w: number, h: number): { w: number; h: number } => {
+      const el = document.querySelector<HTMLElement>(`app-panel[data-id="${id}"]`);
+      return el && !el.hidden && el.offsetWidth ? { w: el.offsetWidth, h: el.offsetHeight } : { w, h };
+    };
+    if (what === 'cameras') {
+      if (!this.layout.panels().vpFpv.visible) this.layout.setVisible('vpFpv', true);
       return this.sleep(300);
     }
-    // under the video, above the timeline (it keeps its place)
-    const vid = box('video'), tl = box('timeline');
-    const x0 = vid?.left ?? m, top = (vid?.bottom ?? 300) + gap, bottom = Math.min(H - m, (tl && tl.left < (vid?.right ?? 0) ? tl.top : H) - gap);
-    const w = Math.round(vid?.width ?? 400), h = Math.max(140, Math.min(Math.round(w * 0.62), bottom - top));
-    this.layout.setVisible('vpChase', false);
-    this.layout.resizeTo('vpFpv', w, h);
-    this.layout.moveTo('vpFpv', x0, top);
-    this.layout.setVisible('vpFpv', true);
-    await this.sleep(650);
+    const keep: PanelId[] = ['video', 'vpFpv', 'speed', 'attitude', 'path', 'blackbox'];
+    const vidW = Math.round(Math.min(520, W * 0.34));
+    // where the timeline will sit (above the caption bar): the FPV view stops above it
+    const tlTop = H - 40 - BAR_TALLEST - 8 - 150;
+    const place = (): void => {
+      // first guesses are the panels' measured sizes, so nothing moves when the real ones come in
+      const att = size('attitude', 270, 184), spd = size('speed', 170, 162), bb = size('blackbox', 360, 344);
+      // the video's height once its film is loaded (16:9 picture and its controls), whatever it shows now
+      const vidH = Math.max(size('video', vidW, 0).h, Math.round(vidW * 0.5625) + 104);
+      const pathH = Math.max(170, Math.min(260, Math.round((H - att.h - 3 * gap - 2 * m) * 0.45)));
+      const fpvTop = m + vidH + gap, fpvH = Math.max(140, Math.min(Math.round(vidW * 0.62), tlTop - gap - fpvTop));
+      this.layout.moveTo('video', m, m);
+      this.layout.moveTo('vpFpv', m, fpvTop);
+      this.layout.resizeTo('vpFpv', vidW, fpvH);
+      this.layout.moveTo('attitude', W - m - att.w, m);
+      this.layout.moveTo('speed', W - m - att.w - gap - spd.w, m);
+      this.layout.resizeTo('path', 330, pathH);
+      this.layout.moveTo('path', W - m - 330, m + att.h + gap);
+      this.layout.moveTo('blackbox', W - m - bb.w, m + att.h + gap + pathH + gap);
+    };
+    for (const [id, p] of Object.entries(this.layout.panels()) as [PanelId, { visible: boolean }][]) if (p.visible && !keep.includes(id) && id !== 'timeline') this.layout.setVisible(id, false);
+    this.layout.setWidth('video', vidW);
+    place(); // with the sizes known so far
+    for (const id of keep) if (!this.layout.panels()[id].visible) this.layout.setVisible(id, true);
+    await this.sleep(60);
+    place(); // with their real sizes, before the fade-in shows them
+    return this.sleep(300);
   }
 
   /**
@@ -592,15 +606,20 @@ export class TourService {
    * caption, so the two never overlap. Measured just after it appears, while it is still fading in: a hidden panel has
    * no size, and the timeline's contents lay out only once shown.
    */
+  /** Put the timeline (w × h) centred with its bottom above the caption bar's tallest caption. */
+  private timelineAt(w: number, h: number, bar = document.querySelector('app-tour-overlay .bar')?.getBoundingClientRect()): void {
+    const barTop = bar ? Math.min(bar.top, bar.bottom - BAR_TALLEST) : innerHeight - 40 - BAR_TALLEST;
+    this.layout.moveTo('timeline', Math.round((innerWidth - w) / 2), Math.max(8, Math.round(barTop - 8 - h)));
+  }
+
   private async placeTimeline(): Promise<void> {
     await this.sleep(60);
     const bar = document.querySelector('app-tour-overlay .bar')?.getBoundingClientRect();
     // layout size, not the on-screen box: the entrance animation still has it scaled down
     const el = document.querySelector<HTMLElement>('app-panel[data-id="timeline"]');
-    const barTop = bar ? Math.min(bar.top, bar.bottom - BAR_TALLEST) : innerHeight - 40 - BAR_TALLEST;
     const place = (): number => {
-      const w = el?.offsetWidth || 560, h = el?.offsetHeight || 150;
-      this.layout.moveTo('timeline', Math.round((innerWidth - w) / 2), Math.max(8, Math.round(barTop - 8 - h)));
+      const h = el?.offsetHeight || 150;
+      this.timelineAt(el?.offsetWidth || 560, h, bar);
       return h;
     };
     // its contents still fill in for a moment: keep its bottom edge where it is, so it grows upwards

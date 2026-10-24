@@ -75,13 +75,14 @@ export class App {
   private readonly flightStore = inject(FlightStore);
   private readonly flights = inject(FlightService);
   private readonly radio = inject(RadioService);
+  private readonly tour = inject(TourService);
   private openedRadio = false;
 
   constructor() {
     // a showcase link (?tour=showcase&lang=it): set the language, then the welcome tour plays by itself
     const link = showcaseLink(location.search, location.hash);
     if (link) {
-      const i18n = inject(I18nService), tour = inject(TourService);
+      const i18n = inject(I18nService), tour = this.tour;
       if (link.lang) i18n.set(link.lang);
       afterNextRender(() => setTimeout(() => void tour.playTour(SHOWCASE), 1200));
     }
@@ -104,6 +105,7 @@ export class App {
         const f = active ? this.flights.active : null;
         if (!f) return;
         const tel = !!f.tel;
+        if (this.tour.state()) return; // a guide lays out its own screen
         if (this.layout.panels().flights.visible) void placer.open(['flights', 'timeline', 'path', 'speed', ...(tel ? (['attitude', 'blackbox'] as const) : [])]);
         else if (tel) this.layout.setVisible('blackbox', true);
       });
