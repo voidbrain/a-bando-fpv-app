@@ -1,3 +1,4 @@
+import { SAT_ATTRIBUTION } from '../../core/satellite';
 import { Component, DestroyRef, ElementRef, afterNextRender, effect, inject, viewChild } from '@angular/core';
 import { attachOrbitControls } from '../../three/orbit-controls';
 import { FlightService } from '../../services/flight.service';
@@ -21,6 +22,10 @@ import { ViewStore } from '../../state/view.store';
         <div class="dim">Main page: video — open the Video panel and load a file</div>
       }
     </div>
+    @if (view.mainSource() === '3d' && view.satGround()) {
+      <!-- the imagery's licence asks for its credit wherever it shows -->
+      <div class="attr" translate="no">{{ satAttribution }}</div>
+    }
     @if (view.mainSource() === '3d' && view.cameraView() === 'fpv') {
       <div class="osd">{{ osd() }}</div>
       <div class="ret"></div>
@@ -37,10 +42,22 @@ import { ViewStore } from '../../state/view.store';
       inset: 0;
       touch-action: none;
     }
+    .attr {
+      position: fixed;
+      right: 8px;
+      bottom: 6px;
+      font-size: 10px;
+      color: var(--text);
+      background: rgba(10, 16, 12, 0.6);
+      padding: 1px 6px;
+      border-radius: 6px;
+      pointer-events: none;
+    }
   `,
 })
 export class Stage {
   protected readonly view = inject(ViewStore);
+  protected readonly satAttribution = SAT_ATTRIBUTION;
   protected readonly scene = inject(SceneService);
   protected readonly video = inject(VideoService);
   private readonly sim = inject(SimulatorService);

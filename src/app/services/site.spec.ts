@@ -16,7 +16,7 @@ describe('SiteService: the pilot\'s path alignment', () => {
 
   it('a pin placed on the path survives Save and further edits (it used to jump back)', () => {
     const lib = TestBed.inject(SiteLibraryService);
-    const spec = emptySpec({ lat: 45.5, lon: 12.1 }, 'Test bando');
+    const spec = emptySpec({ lat: 45.46, lon: 9.19 }, 'Test bando');
     spec.id = 'test-1';
     lib.save(spec);
     const site = TestBed.inject(SiteService);

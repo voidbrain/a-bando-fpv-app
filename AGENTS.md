@@ -112,6 +112,12 @@ npm run check:i18n                        # every UI text has its Italian
 - UI code (templates, pointer handling) is not covered by tests; keep logic in `core/` so it is.
 - Do not leave dead code behind when replacing a feature: a panel removed means its store, helpers and tests go too.
 
+### Testing the joins
+
+- Two bugs reached the live site although every unit had tests: flights on generated bandos were turned 90° (the map's projection and the flight's were each right, but the default alignment between them was not), and a timeline click was undone while the video played (seek and video clock each worked alone). A change that touches how two parts meet gets a test across both: `calibration-default.spec.ts` (a GPS fix lands where the map puts the same point), the seek-with-a-playing-video case in `services.spec.ts`.
+- Test coordinates are neutral (Milan centre, 45.4642, 9.1900, or open sea at 1°N 1°E for flights). Never use a real bando's place, and never the private one's (see Sharing bandos). The map starts at Milan centre (`DEFAULT_START`) until the pilot searches.
+- Typed coordinates are parsed locally (`parseLatLon`) and never sent to the geocoder: a bando's coordinates are the pilot's secret.
+
 ### Known pitfalls
 
 - Angular signals in `effect()` that write other signals are fine in v22, but wrap reads you do not want tracked in
@@ -207,6 +213,7 @@ npm run check:i18n                        # every UI text has its Italian
 
 ## Ruins, example bandos
 - `BuildingSpec.ruin` (0..1, absent = intact) is a property, not a kind (`core/ruin.ts`). The roof goes first: `roofRuns` / `roofCells` leave holes in gable, vault and flat roofs (each kept part has its own collider, so the holes can be flown through), gone from `ROOFLESS` (0.6); upper slabs go from `NO_SLABS` (0.75). Once the building is open to the sky (past `ROOFLESS`, or `roofless`), each wall loses its upper part along one smooth broken line over the whole building height (`wallTop`, seeded per wall; `wallPieces` cuts each stretch to it) and never has holes lower down. `BuildingSpec.ruinWalls` gives single walls of a rectangle their own level (local sides n/s/e/w; inspector "ruin by wall", AI `set_ruin` with `side`). `BuildingSpec.roofless` makes an open shell at any level; `crenels` adds battlements, none where a wall's top has fallen. Inspector: "ruined %", "open shell", "battlements"; AI: `set_ruin` (ruin percent, roofless, crenels).
+- `playground.json` (Playground) is a made-up place built entirely by its section of `build-examples.ts`: hidden, origin 0, 0, ground from brush strokes only (no `terrain.base`), a tunnel, a basement under a floor hole, ruins, seeded trees, and every catalogue block (the script throws if one is unused, so a new block needs a spot there). `core/examples.spec.ts` checks it.
 - Example bandos are generated: `npm run examples` (`tools/examples/build-examples.ts`, inputs in `tools/examples/data/`) rebuilds `library/bandos/*.json` byte for byte (ids are renumbered stably), and CI fails when they differ. Change the script, never the JSON.
 - Examples carry a `release` (raise it when an example changes in a way its copies should hear about; `finish(…, release)` in the builder, by hand for `villetta-no-place.json`). "Open a copy" stamps the copy with `derivedFrom: { example, release }`; the Bandos list then says when a newer release is out and offers a fresh copy (`newerExample`). Copies are never changed under the pilot's edits.
 - Example bandos live in `library/bandos/*.json` (a SiteSpec plus an `about` line); `tools/build-catalog.mjs` copies them to `public/library/bandos/` and lists them in `public/library/bandos.json`. The Bandos list offers them under Examples ("Open a copy" imports them like a file). The blocks they use (`abando/vault-shed`, `abando/sign-tower`, `abando/water-tower`, `abando/cage-ladder`, `abando/bridge`) are ordinary catalogue blocks. `core/examples.spec.ts` checks every published example loads.

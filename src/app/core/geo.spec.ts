@@ -2,11 +2,11 @@ import { DEFAULT_CALIBRATION, setSiteOrigin } from './constants';
 import { courseDegrees, rotateCalibrationAbout, solveCalibration, toGeo, toLocal, toLocalAt, turnTowards, latLonText, parseLatLon, siteFromLatLon, toGeoAt } from './geo';
 
 describe('geo', () => {
-  beforeAll(() => setSiteOrigin({ lat: 45.648698, lon: 12.303305 })); // these cases are written against this site (Chiari e Forti)
+  beforeAll(() => setSiteOrigin({ lat: 45.464198, lon: 9.190005 })); // any site: Milan centre
   afterAll(() => setSiteOrigin({ lat: 0, lon: 0 }));
 
   it('maps the site origin through the default calibration to (dx, dz)', () => {
-    const [x, z] = toLocal(45.648698, 12.303305, DEFAULT_CALIBRATION);
+    const [x, z] = toLocal(45.464198, 9.190005, DEFAULT_CALIBRATION);
     expect(x).toBeCloseTo(DEFAULT_CALIBRATION.dx, 6);
     expect(z).toBeCloseTo(DEFAULT_CALIBRATION.dz, 6);
   });
@@ -22,15 +22,15 @@ describe('geo', () => {
 
   it('north is -Z when the model is not rotated', () => {
     const cal = { rot: 0, dx: 0, dz: 0 };
-    const [x, z] = toLocal(45.648698 + 0.0001, 12.303305, cal);
+    const [x, z] = toLocal(45.464198 + 0.0001, 9.190005, cal);
     expect(Math.abs(x)).toBeLessThan(1e-6);
     expect(z).toBeLessThan(-10);
   });
 
   it('solves a calibration from two corner pairs that match in size', () => {
     // Model corners 40 m apart along +X; real corners due east and ~40 m apart -> rot 0, ratio ~1, tiny corner error.
-    const p1 = { lat: 45.6487, lon: 12.3033 };
-    const p2 = { lat: 45.6487, lon: 12.3033 + 40 / (111320 * Math.cos((45.6487 * Math.PI) / 180)) };
+    const p1 = { lat: 45.4642, lon: 9.1900 };
+    const p2 = { lat: 45.4642, lon: 9.1900 + 40 / (111320 * Math.cos((45.4642 * Math.PI) / 180)) };
     const r = solveCalibration(p1, p2, { x: -20, z: 0 }, { x: 20, z: 0 });
     expect(r).toBeTruthy();
     if (!r) return;
@@ -40,8 +40,8 @@ describe('geo', () => {
   });
 
   it('reports a size mismatch through the ratio (model / real) and splits the error between the corners', () => {
-    const p1 = { lat: 45.6487, lon: 12.3033 };
-    const p2 = { lat: 45.6487, lon: 12.304364 }; // ~83 m east of p1: twice the model's 40 m
+    const p1 = { lat: 45.4642, lon: 9.1900 };
+    const p2 = { lat: 45.4642, lon: 9.191063 }; // ~83 m east of p1: twice the model's 40 m
     const r = solveCalibration(p1, p2, { x: -20, z: 0 }, { x: 20, z: 0 });
     expect(r!.distanceRatio).toBeCloseTo(40 / 82.9, 2);
     expect(r!.cornerError).toBeCloseTo((82.9 - 40) / 2, 0);
@@ -49,7 +49,7 @@ describe('geo', () => {
 
 
   it('refuses corners that are too close to give a rotation', () => {
-    const p = { lat: 45.6487, lon: 12.3033 };
+    const p = { lat: 45.4642, lon: 9.1900 };
     expect(solveCalibration(p, { lat: p.lat + 1e-5, lon: p.lon }, { x: 0, z: 0 }, { x: 1, z: 1 })).toBeNull();
   });
 
@@ -65,7 +65,7 @@ describe('turning a path about its start', () => {
   it('the start stays where it is and the end swings toward the pin', () => {
     const origin = { lat: 45, lon: 12 };
     const cal = { rot: 30, dx: 12, dz: -7 };
-    const a = { lat: 45.0002, lon: 12.0003 }, b = { lat: 45.0011, lon: 12.0001 };
+    const a = { lat: 45.4602, lon: 9.1903 }, b = { lat: 45.4611, lon: 9.1901 };
     const [ax, az] = toLocalAt(origin, a.lat, a.lon, cal), [bx, bz] = toLocalAt(origin, b.lat, b.lon, cal);
     const pin = { x: ax + 40, z: az + 40 };
     const turned = rotateCalibrationAbout(cal, { x: ax, z: az }, turnTowards({ x: ax, z: az }, { x: bx, z: bz }, pin));
@@ -79,11 +79,11 @@ describe('turning a path about its start', () => {
 
 describe('coordinates typed by the pilot', () => {
   it('reads decimal and degrees-minutes-seconds, refuses the rest', () => {
-    expect(parseLatLon('45.6469, 12.3002')).toEqual({ lat: 45.6469, lon: 12.3002 });
+    expect(parseLatLon('45.4642, 9.1900')).toEqual({ lat: 45.4642, lon: 9.19 });
     expect(parseLatLon(' -33.8568 151.2153 ')).toEqual({ lat: -33.8568, lon: 151.2153 });
-    const d = parseLatLon(`45°38'48.8"N 12°18'00.8"E`)!;
-    expect(d.lat).toBeCloseTo(45.64689, 4);
-    expect(d.lon).toBeCloseTo(12.30022, 4);
+    const d = parseLatLon(`45°27'51.1"N 9°11'24.0"E`)!;
+    expect(d.lat).toBeCloseTo(45.46419, 4);
+    expect(d.lon).toBeCloseTo(9.19, 4);
     expect(parseLatLon(`33°51'24"S 151°12'55"E`)!.lat).toBeLessThan(0);
     expect(parseLatLon('95, 12')).toBeNull();
     expect(parseLatLon('Via Roma 3')).toBeNull();
@@ -92,7 +92,7 @@ describe('coordinates typed by the pilot', () => {
 
 describe('bando points and coordinates', () => {
   it('a point goes to degrees and back', () => {
-    const o = { lat: 45.6469, lon: 12.3002 };
+    const o = { lat: 45.4642, lon: 9.19 };
     const p = siteFromLatLon(o, parseLatLon(latLonText(o, { x: 120.5, z: -40.25 }))!);
     expect(p.x).toBeCloseTo(120.5, 1);
     expect(p.z).toBeCloseTo(-40.25, 1);
@@ -103,10 +103,10 @@ describe('bando points and coordinates', () => {
 describe('a flight far from the origin (a bando without its place)', () => {
   it('keeps its true shape: east-west metres at its own latitude', () => {
     const o = { lat: 0, lon: 0 };
-    const a = toLocalAt(o, 45.5, 12.1, { rot: 0, dx: 0, dz: 0 }), b = toLocalAt(o, 45.5, 12.101, { rot: 0, dx: 0, dz: 0 });
-    expect(b[0] - a[0]).toBeCloseTo(0.001 * 111319.49 * Math.cos((45.5 * Math.PI) / 180), 0); // ~78 m, not 111 m
+    const a = toLocalAt(o, 45.46, 9.19, { rot: 0, dx: 0, dz: 0 }), b = toLocalAt(o, 45.46, 9.191, { rot: 0, dx: 0, dz: 0 });
+    expect(b[0] - a[0]).toBeCloseTo(0.001 * 111319.49 * Math.cos((45.46 * Math.PI) / 180), 0); // ~78 m, not 111 m
     const back = toGeoAt(o, b[0], b[1], { rot: 0, dx: 0, dz: 0 });
-    expect(back[0]).toBeCloseTo(45.5, 9);
-    expect(back[1]).toBeCloseTo(12.101, 9);
+    expect(back[0]).toBeCloseTo(45.46, 9);
+    expect(back[1]).toBeCloseTo(9.191, 9);
   });
 });

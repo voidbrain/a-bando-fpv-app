@@ -104,7 +104,7 @@ describe('sharing a bando without its place', () => {
     const { getTerrainBase, setTerrainBase, emptyGrid } = await import('../core/terrain');
     const { autoAlignFlights, takeoffSpot } = await import('../core/takeoff');
     const site = TestBed.inject(SiteService);
-    const spec = emptySpec({ lat: 45.6, lon: 12.2 }, 'Mill');
+    const spec = emptySpec({ lat: 45.47, lon: 9.2 }, 'Mill');
     spec.id = 'mill';
     spec.terrain = { cell: 1, half: { e: 20, n: 20 }, base: { source: 'aws-terrarium', key: 'k-mill', fetchedAt: 1, datum: 18 }, strokes: [] };
     setTerrainBase('k-mill', new Float32Array(emptyGrid(spec.terrain).h.length).fill(2));
@@ -136,5 +136,25 @@ describe('sharing a bando without its place', () => {
     expect(store.get('sites', 'x')).toEqual({ n: 1 });
     expect(store.health().failed).toBe(1);
     expect(store.health().problem).toBe('quota');
+  });
+});
+
+describe('the map search', () => {
+  it('goes straight to typed coordinates: they never reach the geocoder', async () => {
+    const { SiteService } = await import('./site.service');
+    const { GeoService } = await import('./geo.service');
+    const geo = TestBed.inject(GeoService);
+    let asked = 0;
+    geo.geocode = async () => {
+      asked++;
+      return [];
+    };
+    const site = TestBed.inject(SiteService);
+    expect(await site.search('45.4642, 9.1900')).toEqual([{ label: 'Entered position', lat: 45.4642, lon: 9.19 }]);
+    const dms = await site.search(`45°27'51"N 9°11'24"E`);
+    expect(dms[0]!.lat).toBeCloseTo(45.4642, 3);
+    expect(asked).toBe(0); // a bando's coordinates are the pilot's secret
+    await site.search('Piazza del Duomo');
+    expect(asked).toBe(1); // a name is looked up
   });
 });

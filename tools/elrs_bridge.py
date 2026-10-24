@@ -125,7 +125,7 @@ def serial_source(dev, baud, parser, dump):
 
 def simulate(parser):
     """A fake flight: loops around a point of the Chiari e Forti example, fed through real CRSF frames so the whole decode path is exercised."""
-    lat0, lon0, t0, k = 45.64690, 12.30022, time.time(), 0
+    lat0, lon0, t0, k = 45.46420, 9.19000, time.time(), 0
     print('simulating a flight around the site (fake data)')
     while True:
         t = time.time() - t0; ang = t * 0.18

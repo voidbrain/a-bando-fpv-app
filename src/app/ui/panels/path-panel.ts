@@ -262,7 +262,7 @@ export class PathPanel {
   protected typeStart(e: Event): void {
     const p = parseLatLon((e.target as HTMLInputElement).value);
     if (!p) {
-      this.toast.show('Not a latitude, longitude: try 45.6469, 12.3002');
+      this.toast.show('Not a latitude, longitude: try 45.4642, 9.1900');
       (e.target as HTMLInputElement).value = this.startText();
       return;
     }

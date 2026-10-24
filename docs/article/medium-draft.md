@@ -15,7 +15,7 @@ This article walks through building a bando from scratch, the way you would on a
 
 Open the **Bandos** panel and press **＋ New bando**. A map opens with a dashed frame on it.
 
-- Type the place in the search box, or paste its coordinates (`45.6469, 12.3002`, or `45°38'49"N 12°18'01"E`
+- Type the place in the search box, or paste its coordinates (`45.4642, 9.1900`, or `45°27'51"N 9°11'24"E`
   straight from Google Maps), and press **Go**.
 - Pan the map until the frame sits on the place. Drag the frame's edges and corners to size it: the size is written
   under it in metres. Turn it with the yellow knob if the buildings run at an angle.
@@ -103,7 +103,8 @@ or 4K.
 
 ## Try it
 
-Open OpenBando, close the welcome screen, and open **Chiari e Forti** from the examples: an old oil factory on the
+Open OpenBando, close the welcome screen, and open **Playground** from the examples (a made-up works with every block
+of the library) or **Chiari e Forti**: an old oil factory on the
 river Sile with its battlemented mill tower. Or play the welcome tour from the welcome screen.
 
 OpenBando is open source. Build your bando, fly it, and share it only with the people who should know where it is.

@@ -11,7 +11,7 @@ describe('elevation tiles', () => {
   it('finds the tiles of a box and the pixel of a place', () => {
     const p = lonLatToPixel(0, 0, 1);
     expect(p).toEqual({ x: 256, y: 256 });
-    const t = tilesFor(45.66, 12.24, 45.67, 12.25, 15);
+    const t = tilesFor(45.46, 9.18, 45.47, 9.19, 15);
     expect(t.length).toBeGreaterThanOrEqual(1);
     expect(t.length).toBeLessThan(10);
     const box = terrainBox({ half: { e: 100, n: 100 } }, { lat: 45, lon: 12 });
@@ -20,7 +20,7 @@ describe('elevation tiles', () => {
   });
 
   it('round-trips site metres and samples decoded tiles', () => {
-    const o = { lat: 45.6669, lon: 12.2431 };
+    const o = { lat: 45.4669, lon: 9.1931 };
     const q = siteToLonLat(o, 100, -50);
     expect(q.lat).toBeGreaterThan(o.lat);
     expect(q.lon).toBeGreaterThan(o.lon);

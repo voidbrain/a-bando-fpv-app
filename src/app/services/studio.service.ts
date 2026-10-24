@@ -21,7 +21,7 @@ export interface MapStart {
   zoom: number;
 }
 
-const DEFAULT_START: MapStart = { lat: 45.6669, lon: 12.2431, zoom: 17 }; // Treviso, until the user searches somewhere
+const DEFAULT_START: MapStart = { lat: 45.4642, lon: 9.19, zoom: 15 }; // Milan centre, until the pilot searches somewhere (no place of anyone's)
 
 /**
  * The Bandos workflow: pick a bando from the list, or create / edit one on the zone map. The panel shows either the

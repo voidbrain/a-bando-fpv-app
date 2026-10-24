@@ -2,7 +2,7 @@ import { Injectable, computed, effect, inject, signal, untracked, type WritableS
 import { ELEVATION_ATTRIBUTION } from '../core/elevation';
 import type { Calibration, GeoPoint } from '../core/models';
 import { setSiteOrigin } from '../core/constants';
-import { solveCalibration, toGeo } from '../core/geo';
+import { parseLatLon, solveCalibration, toGeo } from '../core/geo';
 import { bounds, edgesOf, recentre, rectilinear, type Pt } from '../core/footprint';
 import type { BuildingSpec, LocationInfo, SiteSpec, StructureSpec, TreeSpec, Vec2, WallOpening, ZoneSpec } from '../core/site-spec';
 import { keepInsideAreas } from '../core/areas';
@@ -244,6 +244,10 @@ export class SiteService {
   async search(query: string, limit = 6): Promise<LocationInfo[]> {
     const q = query.trim();
     if (!q) return [];
+    // typed coordinates (decimal or degrees-minutes-seconds) go straight to the map: a bando's coordinates are the
+    // pilot's secret, never sent to the geocoder
+    const typed = parseLatLon(q);
+    if (typed) return [{ label: 'Entered position', lat: typed.lat, lon: typed.lon }];
     try {
       const hits = await this.geo.geocode(q, limit);
       if (!hits.length) {
@@ -252,14 +256,8 @@ export class SiteService {
       }
       return hits;
     } catch {
-      // offline / rate-limited: accept plain "lat, lon" input so the flow still works
-      const p = parseLatLng(q);
-      if (!p) {
-        this.toast.show('Geocoding unreachable (offline?). Enter lat,lon instead.');
-        return [];
-      }
-      const hit = { label: 'Entered position', lat: p[0], lon: p[1] };
-      return [hit];
+      this.toast.show('Geocoding unreachable (offline?). Enter lat,lon instead.');
+      return [];
     }
   }
 
@@ -575,14 +573,6 @@ export function calibrationForSpec(spec: SiteSpec): Calibration {
   if (!spec.geoCorners) return { rot: -spec.bearingDeg, dx: 0, dz: 0 };
   const r = solveCalibration(spec.geoCorners.p1, spec.geoCorners.p2, spec.calibCorners.p1, spec.calibCorners.p2, spec.origin);
   return r ? r.calibration : { rot: 0, dx: 0, dz: 0 };
-}
-
-/** "45.52,12.13" or "45.52 12.13" -> [lat, lon]; anything else -> null. */
-export function parseLatLng(text: string): [number, number] | null {
-  const m = /^\s*(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)\s*$/.exec(text);
-  if (!m) return null;
-  const lat = +m[1]!, lon = +m[2]!;
-  return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? [lat, lon] : null;
 }
 
 /** Structural equality of two specs (cheap: they are small plain objects). */

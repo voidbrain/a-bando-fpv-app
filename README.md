@@ -34,7 +34,7 @@ stay in the browser (IndexedDB); videos and logs are read from your disk and nev
   works offline, plus your own blocks made from a selection.
 - **Ruins**: any building can be ruined (holes in the roof, then walls broken along their top), an open shell, or carry
   battlements; one wall at a time if needed.
-- **Examples**: ready bandos to open as a copy (Chiari e Forti, and Villetta, shared without its place).
+- **Examples**: ready bandos to open as a copy: Chiari e Forti; Villetta, shared without its place; and Playground, a made-up works with every block of the library, hills, water and a tunnel.
 - **Sharing**: export a bando with its exact place or hidden (no coordinates, no map names; its real
   ground travels inside the file); a bando whose place is hidden stays hidden. Flights on a bando without its place start on its take-off pad; pins fit them.
 - **Backup**: save every bando and your own blocks in one file, and restore it (the newer copy of a bando wins).
