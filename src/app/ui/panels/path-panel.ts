@@ -1,5 +1,8 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { wrapDeg } from '../../core/math';
+import { latLonText, parseLatLon, siteFromLatLon } from '../../core/geo';
+import { SiteService } from '../../services/site.service';
+import { ToastService } from '../../services/toast.service';
 import { createPathView, dragPathView, drawFlightPath, resetPathView, zoomPathView, type PathViewMode } from '../../core/drawing/flight-path';
 import { FlightService } from '../../services/flight.service';
 import { PlaybackService } from '../../services/playback.service';
@@ -16,10 +19,24 @@ import { Panel } from '../panel/panel';
       <div class="col fill">
         <div class="row">
           @for (m of modes; track m.mode) {
-            <button class="btn" [class.on]="mode() === m.mode" (click)="setMode(m.mode)">{{ m.label }}</button>
+            <button class="ico" [class.on]="mode() === m.mode" (click)="setMode(m.mode)" [title]="m.label" [attr.aria-label]="m.label" [attr.aria-pressed]="mode() === m.mode">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path [attr.d]="m.icon" /></svg>
+            </button>
           }
-          <button class="btn" (click)="fit()">Fit</button>
+          <button class="ico" (click)="fit()" title="Fit the path in the view" aria-label="Fit the path in the view">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" /></svg>
+          </button>
         </div>
+        @if (hasFlight()) {
+          <div class="row start">
+            @if (placed()) {
+              <label class="grow">start <input class="ll" type="text" [value]="startText()" (change)="typeStart($event)" title="Where the flight starts, latitude and longitude: type others to move the path there" /></label>
+            } @else {
+              <label>start x m <input class="mini" type="number" step="0.5" [value]="startX()" (change)="typeStartX($event)" title="Where the flight starts in the bando, metres east of its centre" /></label>
+              <label>z m <input class="mini" type="number" step="0.5" [value]="startZ()" (change)="typeStartZ($event)" title="Where the flight starts in the bando, metres south of its centre" /></label>
+            }
+          </div>
+        }
         <div class="body">
           <div class="keep canvas" (pointerdown)="down($event)" (pointermove)="move($event)" (pointerup)="up()" (pointercancel)="up()" (wheel)="wheel($event)">
             <app-canvas panel="path" [draw]="draw" />
@@ -75,6 +92,29 @@ import { Panel } from '../panel/panel';
       touch-action: none;
       cursor: grab;
     }
+    .row .ico {
+      width: 30px;
+      height: 28px;
+    }
+    .ico path {
+      stroke: var(--text);
+    }
+    .start label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .grow {
+      flex: 1;
+    }
+    .ll {
+      flex: 1;
+      min-width: 0;
+      font-family: var(--mono);
+    }
+    .mini {
+      width: 64px;
+    }
     .side {
       display: flex;
       flex-direction: column;
@@ -103,6 +143,9 @@ import { Panel } from '../panel/panel';
       stroke-width: 1.8;
       stroke-linejoin: round;
       stroke-linecap: round;
+    }
+    .ico.on path {
+      stroke: var(--accent);
     }
     .ico .s {
       stroke: var(--accent);
@@ -142,13 +185,21 @@ export class PathPanel {
   private readonly flights = inject(FlightService);
   private readonly playback = inject(PlaybackService);
   private readonly cal = inject(CalibrationStore);
+  private readonly toast = inject(ToastService);
   protected readonly scene = inject(SceneService);
-  protected readonly modes: readonly { mode: PathViewMode; label: string }[] = [
-    { mode: 'top', label: 'Top' },
-    { mode: 'side', label: 'Side' },
-    { mode: 'front', label: 'Front' },
-    { mode: '3d', label: '3D' },
+  private readonly site = inject(SiteService);
+  protected readonly modes: readonly { mode: PathViewMode; label: string; icon: string }[] = [
+    { mode: 'top', label: 'Top view', icon: 'M5 5h14v14H5zM12 9v6M9 12h6' },
+    { mode: 'side', label: 'Side view (looking north)', icon: 'M3 19h18M6 19v-6l4-4 4 3 4-5v12' },
+    { mode: 'front', label: 'Front view (looking west)', icon: 'M3 19h18M6 19V9h12v10M9 19v-5h6v5' },
+    { mode: '3d', label: '3D view', icon: 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5' },
   ];
+  /** The bando has its real place: the start is shown and typed as latitude, longitude (else as site metres). */
+  protected readonly placed = computed(() => this.site.active().privacy !== 'hidden' && !(this.site.active().origin.lat === 0 && this.site.active().origin.lon === 0));
+  protected readonly hasFlight = signal(false);
+  protected readonly startText = signal('');
+  protected readonly startX = signal(0);
+  protected readonly startZ = signal(0);
   protected readonly mode = signal<PathViewMode>('3d');
   protected readonly caption = signal('');
   private readonly view = createPathView();
@@ -181,6 +232,7 @@ export class PathPanel {
     const d = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? step : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -step : 0;
     if (!d) return;
     e.preventDefault();
+    e.stopPropagation(); // the arrow keys also seek the replay (ShortcutsService): not while turning the path
     this.scene.turnPath(d);
   }
 
@@ -197,7 +249,32 @@ export class PathPanel {
     const active = this.flights.active;
     const label = drawFlightPath(g, w, h, all, this.view, this.cal.calibration(), this.flights.speedMax, active ? this.playback.pose.p : null, active);
     if (label !== this.caption()) this.caption.set(label);
+    // the start fields follow pins, the knob and typed values (cheap: the signals only change when the start moves)
+    const s = active?.loc[0];
+    this.hasFlight.set(!!s);
+    if (s) {
+      this.startX.set(Math.round(s.x * 10) / 10);
+      this.startZ.set(Math.round(s.z * 10) / 10);
+      this.startText.set(latLonText(this.site.active().origin, s));
+    }
   };
+
+  protected typeStart(e: Event): void {
+    const p = parseLatLon((e.target as HTMLInputElement).value);
+    if (!p) {
+      this.toast.show('Not a latitude, longitude: try 45.6469, 12.3002');
+      (e.target as HTMLInputElement).value = this.startText();
+      return;
+    }
+    const q = siteFromLatLon(this.site.active().origin, p);
+    this.scene.placeStart(q.x, q.z);
+  }
+  protected typeStartX(e: Event): void {
+    this.scene.placeStart(+(e.target as HTMLInputElement).value, this.startZ());
+  }
+  protected typeStartZ(e: Event): void {
+    this.scene.placeStart(this.startX(), +(e.target as HTMLInputElement).value);
+  }
 
   protected down(e: PointerEvent): void {
     this.last = { x: e.clientX, y: e.clientY };

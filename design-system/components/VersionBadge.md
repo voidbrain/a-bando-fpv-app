@@ -9,6 +9,8 @@ VersionBadge shows the build number bottom-left, above everything (`z-badge`), w
   above it (`panel-solid`, `line` border, `radius-menu`, `shadow-menu`) of flags and language names, written in their
   own language and never translated (`translate="no"`). The current one has an `accent` border. Esc or a click
   outside closes it; focus shows the 2px `accent` outline.
+- While the Views panel is closed, a menu button (three lines, same `badge` background, `badge-ink` strokes) follows
+  the flag and opens Views: the way back to every panel when the screen has none.
 - Flags are pictures: their colours are the national ones, not tokens. This is the one place literal colours are
   allowed outside the token set.
 

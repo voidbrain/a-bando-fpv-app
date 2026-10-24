@@ -11,6 +11,11 @@ export interface ControlTarget {
   onClick?(clientX: number, clientY: number, alt: boolean): void;
   /** Any press or wheel on the surface (the main view stops its idle orbit). */
   onInput?(): void;
+  /**
+   * A drag or wheel on a camera that ignores the mouse (chase): the surface may switch to a view that takes it (the
+   * main view goes to an orbit about the drone, from the same place). After it, the gesture carries on as usual.
+   */
+  takeOver?(): void;
 }
 
 interface Pointer {
@@ -47,7 +52,9 @@ export function attachOrbitControls(el: HTMLElement, target: ControlTarget): () 
   };
   const move = (e: PointerEvent): void => {
     const p = pointers.get(e.pointerId);
-    if (!p || !interactive()) return;
+    if (!p) return;
+    if (!interactive() && target.takeOver && Math.hypot(e.clientX - p.x0, e.clientY - p.y0) > 4) target.takeOver();
+    if (!interactive()) return;
     const dx = e.clientX - p.x;
     const dy = e.clientY - p.y;
     p.x = e.clientX;
@@ -65,6 +72,7 @@ export function attachOrbitControls(el: HTMLElement, target: ControlTarget): () 
     else orbitRotate(st, dx, dy);
   };
   const wheel = (e: WheelEvent): void => {
+    if (!interactive()) target.takeOver?.();
     if (!interactive()) return;
     e.preventDefault();
     orbitZoom(target.state(), e.deltaY);
